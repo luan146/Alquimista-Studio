@@ -1,0 +1,24 @@
+{
+  "schema_version": 3,
+  "project_id": "example-project",
+  "project_name": "Projeto de demonstração",
+  "output_dir": "output",
+  "sources": [
+    {
+      "id": "knowledge-source",
+      "name": "Base de demonstração",
+      "base_url": "",
+      "space_key": "",
+      "space_name": "",
+      "root_mode": "title",
+      "root_value": "",
+      "root_page_id": "",
+      "auth_mode": "public",
+      "username": "",
+      "include_root": false,
+      "enabled": true,
+      "selected_page_ids": [],
+      "consolidation_excluded_page_ids": []
+    }
+  ]
+}

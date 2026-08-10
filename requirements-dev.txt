@@ -1,0 +1,6 @@
+-r requirements-browser.txt
+pytest>=8.3,<10
+pytest-qt>=4.4,<5
+pytest-cov>=6,<8
+ruff>=0.12,<1
+mypy>=1.17,<2
