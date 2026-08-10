@@ -114,7 +114,7 @@ Keep one Markdown file per page or group content into larger packages. Consolida
 Review the selected source, access mode, page count, output format, consolidation rules, and destination folder before starting the operation.
 
 <p align="center">
-  <img src="docs/screenshots/review.png" alt="Final review and extraction screen" width="100%">
+  <img src="docs/screenshots/output.png" alt="Final review and extraction screen" width="100%">
 </p>
 
 ---
