@@ -1,246 +1,398 @@
-# ALQuimista Studio
+<div align="center">
 
-Aplicação desktop para adquirir, selecionar, converter e exportar conteúdo de plataformas de conhecimento por meio de APIs oficiais.
+# 🧪 ALQuimista Studio
 
-O ALQuimista permite configurar fontes, autenticar-se, navegar por espaços e páginas, selecionar o conteúdo desejado, converter documentos para Markdown e gerar arquivos individuais ou consolidados.
+### Turn knowledge bases into clean, portable Markdown — without building scripts or fighting the terminal.
 
-## Principais recursos
+Paste a source URL, connect, choose the pages you want, and export structured content ready for **AI, RAG, NotebookLM, Obsidian, offline archives, or any Markdown-based workflow**.
 
-- Interface desktop em PySide6.
-- Cadastro de múltiplas fontes e detecção de plataforma pela URL.
-- Autenticação pública, Basic, Bearer e navegador.
-- Navegação por contêineres e páginas hierárquicas.
-- Carregamento lazy de páginas e documentos filhos.
-- Seleção granular do conteúdo a extrair.
-- Conversão de HTML para Markdown.
-- Preservação de links, imagens, tabelas e metadados.
-- Frontmatter e URL original no Markdown.
-- SHA-256 e atualização incremental.
-- Extração cancelável, retry e controle de taxa.
-- Relatórios de execução e lista de falhas.
-- Consolidação em arquivo único, pacote ou índice.
-- Cache de discovery contendo apenas metadados.
-- Sessões de navegador protegidas pelo sistema operacional.
+[![ALQuimista quality](https://github.com/luan146/Alquimista-Studio/actions/workflows/quality.yml/badge.svg)](https://github.com/luan146/Alquimista-Studio/actions/workflows/quality.yml)
+![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
+![PySide6](https://img.shields.io/badge/UI-PySide6-41CD52?logo=qt&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-6E7781)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Fluxo de uso
+</div>
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="ALQuimista Studio dashboard" width="100%">
+</p>
+
+> 🌐 **Current interface language:** Portuguese. This README is written in English to make the project easier to discover and evaluate internationally.
+
+---
+
+## ✨ What is ALQuimista Studio?
+
+**ALQuimista Studio is a desktop application for extracting, selecting, converting, and organizing content from knowledge platforms through a visual workflow.**
+
+The goal is simple: make knowledge extraction accessible even to people who do not want to write scripts, remember CLI commands, or manually copy hundreds of pages.
+
+With ALQuimista, the normal workflow is:
 
 ```text
-Dashboard → Fontes → Conexão → Seleção → Revisão → Markdown → Consolidação → Resultados
+Paste a URL
+    ↓
+Connect to the source
+    ↓
+Choose spaces and pages
+    ↓
+Customize the Markdown
+    ↓
+Extract and consolidate
+    ↓
+Use the result anywhere
 ```
 
-1. Crie ou abra um projeto.
-2. Cadastre uma fonte e informe sua URL.
-3. Escolha o método de autenticação.
-4. Teste a conexão.
-5. Carregue os espaços e páginas disponíveis.
-6. Selecione o conteúdo desejado.
-7. Revise as opções de Markdown e extração.
-8. Execute a aquisição.
-9. Gere arquivos individuais ou uma consolidação.
+Your exported content remains portable instead of being locked to a specific AI platform.
 
-A aplicação não possui URLs, contas, credenciais ou páginas predefinidas.
+---
 
-## Plataformas
+## 🚀 Why use it?
 
-| Plataforma | Integração | Status |
-| --- | --- | --- |
-| Confluence Server/Data Center | REST API | Estável |
-| GitBook | REST API v1 | Disponível |
-| Zendesk Guide | Help Center API | Disponível |
-| Notion | API oficial | Em desenvolvimento |
-| SharePoint Online | Microsoft Graph | Em desenvolvimento |
-| Sites genéricos | — | Planejado |
+| | ALQuimista Studio |
+|---|---|
+| 🖥️ **Visual workflow** | Normal usage happens through the desktop interface — no extraction commands required. |
+| 🎯 **Selective extraction** | Choose exactly which spaces, sections, folders, and pages you want. |
+| 📝 **Markdown-first** | Convert knowledge into a portable format that works across many tools. |
+| 🧠 **AI-ready** | Prepare content for AI assistants, RAG pipelines, NotebookLM, and other context-based workflows. |
+| 🗂️ **Knowledge-friendly** | Use exported Markdown in tools such as Obsidian or keep it as an offline archive. |
+| 🔎 **Traceable output** | Preserve source URLs, hierarchy, metadata, timestamps, and SHA-256 hashes. |
+| 🔄 **Incremental workflow** | Hash-based tracking helps identify content changes and avoid unnecessary work. |
+| 🔐 **Security-aware** | API secrets are kept out of project files, and browser sessions are handled separately. |
 
-Os conectores seguem um contrato comum para validar conexão, listar contêineres, listar documentos, buscar conteúdo e consultar páginas filhas quando suportado.
+---
 
-Os estados da matriz significam: **Estável** é o caminho principal validado;
-**Disponível** está implementado para uso conforme suas limitações;
-**Experimental** pode mudar; **Parcial** cobre apenas parte do contrato;
-**Em desenvolvimento** ainda não deve ser tratado como funcional; e
-**Planejado** ainda não está implementado.
+## 🧭 How it works
 
-## Requisitos
+### 1. 📚 Add a knowledge source
 
-- Python 3.12.
-- Windows ou Linux.
-- Acesso à API da plataforma utilizada.
-- Credenciais temporárias quando a fonte exigir autenticação.
+Paste a URL and let ALQuimista identify the platform and prepare the source configuration.
 
-## Instalação no Windows
+<p align="center">
+  <img src="docs/screenshots/sources.png" alt="Adding knowledge sources in ALQuimista Studio" width="95%">
+</p>
 
-Execute:
+### 2. 🔐 Choose how to connect
+
+Use public access or, when required by the platform, configure authentication for the source.
+
+<p align="center">
+  <img src="docs/screenshots/connection.png" alt="Connection and authentication screen" width="88%">
+</p>
+
+### 3. 🗃️ Browse spaces and select only what matters
+
+Navigate through containers and hierarchical pages, then mark the exact content you want to extract.
+
+<p align="center">
+  <img src="docs/screenshots/selection-section.png" alt="Knowledge space selection" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/selection-pages.png" alt="Hierarchical page selection" width="100%">
+</p>
+
+### 4. ✍️ Customize the Markdown
+
+Choose what should be preserved in the generated documents, including titles, original URLs, hierarchy, images, links, tables, code blocks, metadata, and more.
+
+<p align="center">
+  <img src="docs/screenshots/markdown.png" alt="Markdown customization and live preview" width="100%">
+</p>
+
+### 5. 📦 Consolidate for your workflow
+
+Keep one Markdown file per page or group content into larger packages. Consolidation is useful for NotebookLM, RAG ingestion, archives, and other workflows where fewer files are easier to manage.
+
+<p align="center">
+  <img src="docs/screenshots/consolidation.png" alt="Markdown consolidation options" width="100%">
+</p>
+
+### 6. ⚗️ Review and run
+
+Review the selected source, access mode, page count, output format, consolidation rules, and destination folder before starting the operation.
+
+<p align="center">
+  <img src="docs/screenshots/review.png" alt="Final review and extraction screen" width="100%">
+</p>
+
+---
+
+## 🎯 What can I do with the exported content?
+
+ALQuimista does **not** try to become another chatbot or lock your knowledge into one ecosystem. Its job is to turn remote knowledge into content you can keep and reuse.
+
+```text
+Confluence ─┐
+GitBook ────┤
+Zendesk ────┤
+Notion ─────┼──► ALQuimista ───► Markdown / Packages ───► AI & knowledge tools
+SharePoint ─┘
+```
+
+Typical destinations include:
+
+- 🧠 AI assistants and context-based workflows
+- 🔍 RAG ingestion pipelines
+- 📓 NotebookLM source packages
+- 🪨 Obsidian vaults
+- 🗄️ Offline documentation archives
+- 🔁 Documentation migration and reuse workflows
+- 🧰 Custom automation built around Markdown files
+
+---
+
+## 🔌 Supported platforms
+
+| Platform | Integration | Status |
+|---|---|---|
+| **Confluence Server / Data Center** | REST API | 🟢 **Stable** |
+| **GitBook** | REST API v1 | 🟡 **Available** |
+| **Zendesk Guide** | Help Center API | 🟡 **Available** |
+| **Notion** | Official API | 🚧 **In development** |
+| **SharePoint Online** | Microsoft Graph | 🚧 **In development** |
+| **Generic websites** | — | 🗺️ **Planned** |
+
+> Platform capabilities may differ. Some connectors support features such as hierarchical lazy loading or search more completely than others.
+
+---
+
+## 📄 What does ALQuimista generate?
+
+Depending on your configuration, an extraction can produce:
+
+```text
+ALQuimista_Base/
+├── arquivos_soltos/              # Individual Markdown documents
+├── arquivos_consolidados/        # Consolidated packages
+├── manifesto_alquimista.json     # Extraction manifest and hashes
+├── relatorio_execucao.json       # Execution report
+└── ...
+```
+
+A generated Markdown document can preserve information such as:
+
+```markdown
+# How to configure a sale
+
+**Original URL:** https://example.com/...
+**Module:** POS
+**Path:** Product Manual > POS > How to configure a sale
+**Last updated:** 2026-07-26 15:00
+**SHA-256:** 88fe2b8c...
+
+## Technical content
+
+The original page content is converted to Markdown here.
+```
+
+This makes the exported knowledge easier to trace back to its original source and easier to process later.
+
+---
+
+## ⚡ Quick start
+
+### Windows
+
+Clone the repository:
+
+```powershell
+git clone https://github.com/luan146/Alquimista-Studio.git
+cd Alquimista-Studio
+```
+
+Install the application dependencies:
 
 ```bat
 instalar_windows.bat
 ```
 
-Para instalar também o suporte ao login pelo navegador:
+If you also want interactive browser authentication:
 
 ```bat
 instalar_windows.bat --with-browser
 ```
 
-Depois, inicie a aplicação com:
+Then launch ALQuimista:
 
 ```bat
 abrir_completo.bat
 ```
 
-## Instalação no Linux
+After setup, the normal extraction workflow is handled through the graphical interface.
+
+### Linux
 
 ```bash
+git clone https://github.com/luan146/Alquimista-Studio.git
+cd Alquimista-Studio
+chmod +x instalar_linux.sh
 ./instalar_linux.sh
+python alquimista_studio_completo.py
 ```
 
-Para instalar também o navegador usado na autenticação interativa:
+For browser authentication support:
 
 ```bash
 ./instalar_linux.sh --with-browser
 ```
 
-## Execução manual
+---
 
-Após criar o ambiente virtual e instalar as dependências:
+## 🔐 Security and privacy
 
-```bash
-python alquimista_studio_completo.py
+ALQuimista is designed to avoid storing sensitive authentication data inside project files.
+
+- 🔑 API passwords and tokens remain in runtime memory and are not serialized into the project.
+- 🌐 Browser sessions are stored separately from project files and can be deleted by the user.
+- 🛡️ On Windows, persisted browser session data is protected with Windows DPAPI.
+- 🧹 Discovery cache stores metadata only — not document content or credentials.
+- 🚫 URLs containing embedded credentials are rejected.
+- 📝 Logging includes secret redaction for sensitive values such as tokens, passwords, cookies, and authorization headers.
+
+> Always review the access policies and API permissions of the knowledge platform you connect to.
+
+---
+
+## 🧱 Project structure
+
+<details>
+<summary><strong>Show technical architecture</strong></summary>
+
+<br>
+
+```text
+alquimista/
+├── connectors/       # Platform integrations
+├── browser/          # Browser-assisted discovery and metadata cache
+├── ui/               # PySide6 desktop interface
+├── models.py         # Data contracts
+├── services.py       # Extraction and consolidation engine
+├── markdown.py       # HTML → Markdown transformation
+├── storage.py        # Atomic persistence
+├── auth.py           # Authentication workflows
+├── reports.py        # Execution reports
+└── manifest_index.py # Incremental manifest index
+
+tests/                # Automated test suite
+docs/                 # Architecture, connector docs and screenshots
+assets/               # Visual assets and icons
 ```
 
-No Windows, também é possível executar:
+The main application flow is:
 
-```bat
-.venv\Scripts\python.exe alquimista_studio_completo.py
+```text
+Dashboard → Sources → Connection → Selection → Markdown → Consolidation → Review → Results
 ```
 
-## Configuração
+For a deeper code map, see [`MAPA.md`](MAPA.md) and the [`docs/`](docs/) directory.
 
-O arquivo `config.example.json` contém uma configuração sintética para referência.
+</details>
 
-Comece criando ou abrindo um projeto pela interface e configure as fontes diretamente na aplicação.
+---
 
-Não coloque tokens, senhas, cookies ou arquivos de sessão dentro do repositório.
+## 🛠️ Development
 
-## Saída
+<details>
+<summary><strong>Development commands</strong></summary>
 
-O ALQuimista pode gerar:
+<br>
 
-- um arquivo Markdown por documento;
-- um pacote organizado por fonte e contêiner;
-- um arquivo Markdown consolidado;
-- um índice de documentos;
-- manifesto com hashes;
-- relatório de execução;
-- lista estruturada de falhas.
-
-A estrutura de saída pode preservar a hierarquia original dos contêineres e documentos.
-
-## Segurança e privacidade
-
-- Senhas e tokens de API permanecem apenas em memória e não são serializados.
-- Sessões de navegador podem ser persistidas localmente e são protegidas pelo sistema operacional no Windows.
-- Arquivos de sessão permanecem fora da árvore do projeto e não são incluídos no repositório.
-- Segredos não são serializados no projeto exportado.
-- URLs com credenciais embutidas são recusadas.
-- O cache do navegador armazena somente metadados de discovery.
-- Conteúdo de documentos não é armazenado no cache de discovery.
-- Sessões de navegador são mantidas fora da árvore do projeto.
-- Arquivos locais, caches, saídas e credenciais permanecem ignorados pelo Git.
-
-## Desenvolvimento
-
-Instale as dependências de desenvolvimento:
+Install development dependencies on Windows:
 
 ```bat
 .venv\Scripts\python.exe -m pip install -c constraints.txt -r requirements-dev.txt
 ```
 
-Execute os testes:
+Run the test suite:
 
 ```bat
 .venv\Scripts\python.exe -m pytest
 ```
 
-Execute o Ruff:
+Run Ruff:
 
 ```bat
 .venv\Scripts\python.exe -m ruff check alquimista tests
 ```
 
-Execute o mypy:
+Run mypy:
 
 ```bat
 .venv\Scripts\python.exe -m mypy alquimista
 ```
 
-Os testes de integração e os testes que acessam APIs reais permanecem desabilitados por padrão.
-
-## Geração do executável
-
-No Windows, execute:
+Build the Windows executable:
 
 ```bat
 gerar_executavel.bat
 ```
 
-O executável será gerado em:
+The generated executable is written to:
 
 ```text
 dist/ALQuimista Studio.exe
 ```
 
-## Integração contínua
+</details>
 
-O projeto possui uma rotina no GitHub Actions que executa:
+---
 
-- instalação das dependências;
-- Ruff;
-- mypy;
-- compilação;
-- suíte de testes;
-- geração do executável.
+## ✅ Continuous integration
 
-## Arquitetura
+The repository includes a GitHub Actions workflow that automatically runs:
 
-O projeto é organizado em camadas:
+- dependency installation
+- Ruff static checks
+- mypy type checks
+- Python compilation checks
+- pytest
+- PyInstaller executable build
 
-- `alquimista/`: núcleo da aplicação;
-- `alquimista/connectors/`: conectores por plataforma;
-- `alquimista/browser/`: discovery e cache de metadados;
-- `alquimista/ui/`: interface PySide6;
-- `tests/`: testes automatizados;
-- `docs/`: arquitetura, conectores e referências visuais;
-- `assets/`: ícones e recursos visuais.
+This helps catch regressions before changes are merged.
 
-O fluxo principal separa configuração de fontes, autenticação, seleção, extração, transformação Markdown, consolidação e resultados.
+---
 
-Consulte o [índice da documentação](docs/README.md) para detalhes técnicos.
+## 🤝 Contributing
 
-## Limitações
+Contributions, bug reports, connector improvements, and documentation fixes are welcome.
 
-Alguns recursos dependem das capacidades e políticas da plataforma conectada, incluindo:
+Before submitting a change:
 
-- ambientes Cloud;
-- SSO;
-- proxies autenticados;
-- anexos;
-- macros;
-- permissões específicas;
-- limites de API;
-- autenticação OAuth.
+1. Run the relevant tests.
+2. Run Ruff and mypy.
+3. Make sure no credentials, sessions, local output, or private content were added to Git.
+4. Keep changes focused and document behavior changes when necessary.
 
-A disponibilidade de cada recurso pode variar conforme o conector utilizado.
+---
 
-## Licença
+## 📚 Documentation
 
-Este projeto é distribuído sob a licença MIT. Consulte o arquivo [LICENSE](LICENSE).
+More technical information is available in the [`docs/`](docs/) directory, including architecture notes, connector documentation, manifest details, and interface screenshots.
 
-## Contribuição
+For repository navigation and code investigation, see [`MAPA.md`](MAPA.md).
 
-Contribuições são bem-vindas. Antes de enviar alterações:
+---
 
-1. execute os testes;
-2. execute Ruff e mypy;
-3. verifique se nenhuma credencial ou saída local foi incluída;
-4. mantenha as alterações específicas e documentadas.
+## 📜 License
 
-Este é um projeto independente e não possui afiliação oficial com os fornecedores das plataformas suportadas.
+ALQuimista Studio is released under the **MIT License**. See [`LICENSE`](LICENSE) for details.
+
+---
+
+## ⚠️ Disclaimer
+
+ALQuimista Studio is an independent open-source project and is **not officially affiliated with Atlassian, GitBook, Zendesk, Notion, Microsoft, Google, Obsidian, or any other platform mentioned in this repository**.
+
+Platform names and trademarks belong to their respective owners.
+
+---
+
+<div align="center">
+
+### 🧪 Transform knowledge. Keep it portable.
+
+If ALQuimista is useful to you, consider giving the repository a ⭐.
+
+</div>
