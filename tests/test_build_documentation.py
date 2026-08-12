@@ -26,7 +26,7 @@ def test_readmes_expose_both_language_options() -> None:
 
 
 def test_build_script_uses_the_pinned_installer_and_ui_assets() -> None:
-    build = (ROOT / "gerar_executavel.bat").read_text(encoding="utf-8")
+    build = (ROOT / "tools" / "build" / "gerar_executavel.bat").read_text(encoding="utf-8")
 
-    assert "pip install -c constraints.txt pyinstaller" in build
-    assert '"ALQuimista Studio.spec"' in build
+    assert 'pip install -c "%ROOT_DIR%\\config\\constraints.txt" pyinstaller' in build
+    assert '"%ROOT_DIR%\\packaging\\ALQuimista Studio.spec"' in build

@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['alquimista_studio_completo.py'],
+    ['alquimista/__main__.py'],
     pathex=[],
     binaries=[],
     datas=[('alquimista\\ui\\assets', 'alquimista\\ui\\assets'), ('assets', 'assets')],

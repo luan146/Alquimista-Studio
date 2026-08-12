@@ -1,6 +1,7 @@
 @echo off
 setlocal EnableExtensions
-cd /d "%~dp0"
+for %%I in ("%~dp0..\..") do set "ROOT_DIR=%%~fI"
+cd /d "%ROOT_DIR%"
 
 set "PYTHON_CMD="
 where py >nul 2>&1
@@ -23,23 +24,23 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist ".venv\Scripts\python.exe" (
+if not exist "%ROOT_DIR%\.venv\Scripts\python.exe" (
     echo Criando ambiente virtual...
-    %PYTHON_CMD% -m venv .venv
+    %PYTHON_CMD% -m venv "%ROOT_DIR%\.venv"
     if errorlevel 1 goto :erro
 )
 
 echo Instalando o ALQuimista Studio...
-".venv\Scripts\python.exe" -m pip install -c constraints.txt -r requirements.txt
+"%ROOT_DIR%\.venv\Scripts\python.exe" -m pip install -c "%ROOT_DIR%\config\constraints.txt" -r "%ROOT_DIR%\config\requirements.txt"
 if errorlevel 1 goto :erro
 
-if /I "%~1"=="--with-browser" call instalar_navegador.bat
+if /I "%~1"=="--with-browser" call "%~dp0instalar_navegador.bat"
 if errorlevel 1 goto :erro
 
 echo.
 echo Instalacao concluida.
 echo Use abrir_completo.bat para iniciar o ALQuimista diretamente pelo Python.
-echo Para login pelo navegador, execute instalar_navegador.bat.
+echo Para login pelo navegador, execute tools\install\instalar_navegador.bat.
 pause
 exit /b 0
 

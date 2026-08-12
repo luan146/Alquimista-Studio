@@ -256,12 +256,15 @@ def test_file_transaction_creates_target_then_fails_unlinks_published_copy(
 @pytest.mark.build
 def test_install_and_build_scripts_use_constraints_and_bundle_assets() -> None:
     root = Path(__file__).resolve().parents[1]
-    assert "-c constraints.txt" in (root / "instalar_windows.bat").read_text()
-    assert "-c constraints.txt" in (root / "instalar_linux.sh").read_text()
-    assert "-c constraints.txt" in (root / "instalar_navegador.bat").read_text()
-    build = (root / "gerar_executavel.bat").read_text()
-    assert "-c constraints.txt" in build
-    assert '"ALQuimista Studio.spec"' in build
+    install_windows = (root / "tools" / "install" / "instalar_windows.bat").read_text()
+    install_linux = (root / "tools" / "install" / "instalar_linux.sh").read_text()
+    install_browser = (root / "tools" / "install" / "instalar_navegador.bat").read_text()
+    assert "config\\constraints.txt" in install_windows
+    assert "config/constraints.txt" in install_linux
+    assert "config\\constraints.txt" in install_browser
+    build = (root / "tools" / "build" / "gerar_executavel.bat").read_text()
+    assert "config\\constraints.txt" in build
+    assert '"%ROOT_DIR%\\packaging\\ALQuimista Studio.spec"' in build
 
 
 def test_urls_with_embedded_credentials_are_rejected() -> None:

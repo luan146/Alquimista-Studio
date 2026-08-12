@@ -1,4 +1,4 @@
-from alquimista_gui import run_app
+from alquimista.ui import run_app
 
 if __name__ == "__main__":
     run_app("complete")

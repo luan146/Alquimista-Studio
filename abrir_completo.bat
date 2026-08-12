@@ -7,7 +7,7 @@ echo [ALQuimista Studio] Iniciando aplicacao...
 set PYTHON_CMD=python
 if exist ".venv\Scripts\python.exe" set PYTHON_CMD=.venv\Scripts\python.exe
 
-%PYTHON_CMD% "alquimista_studio_completo.py"
+%PYTHON_CMD% -m alquimista
 
 if errorlevel 1 (
     echo.

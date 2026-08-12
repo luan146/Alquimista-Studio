@@ -207,13 +207,13 @@ cd Alquimista-Studio
 Install the application dependencies:
 
 ```bat
-instalar_windows.bat
+tools\install\instalar_windows.bat
 ```
 
 If you also want interactive browser authentication:
 
 ```bat
-instalar_windows.bat --with-browser
+tools\install\instalar_windows.bat --with-browser
 ```
 
 Then launch ALQuimista:
@@ -229,15 +229,15 @@ After setup, the normal extraction workflow is handled through the graphical int
 ```bash
 git clone https://github.com/luan146/Alquimista-Studio.git
 cd Alquimista-Studio
-chmod +x instalar_linux.sh
-./instalar_linux.sh
-python alquimista_studio_completo.py
+chmod +x tools/install/instalar_linux.sh
+./tools/install/instalar_linux.sh
+python -m alquimista
 ```
 
 For browser authentication support:
 
 ```bash
-./instalar_linux.sh --with-browser
+./tools/install/instalar_linux.sh --with-browser
 ```
 
 ---
@@ -282,6 +282,14 @@ docs/                 # Architecture, connector docs and screenshots
 assets/               # Visual assets and icons
 ```
 
+Project configuration and maintenance tools are grouped separately:
+
+```text
+config/               # Ruff, pytest, Python version and dependencies
+packaging/            # PyInstaller specification
+tools/                # Installation, build and legacy compatibility scripts
+```
+
 The main application flow is:
 
 ```text
@@ -318,31 +326,31 @@ sessions are stored under `%LOCALAPPDATA%\ALQuimista Studio`.
 Install development dependencies on Windows:
 
 ```bat
-.venv\Scripts\python.exe -m pip install -c constraints.txt -r requirements-dev.txt
+.venv\Scripts\python.exe -m pip install -c config\constraints.txt -r config\requirements-dev.txt
 ```
 
 Run the test suite:
 
 ```bat
-.venv\Scripts\python.exe -m pytest
+.venv\Scripts\python.exe -m pytest -c config\pytest.ini
 ```
 
 Run Ruff:
 
 ```bat
-.venv\Scripts\python.exe -m ruff check alquimista tests
+.venv\Scripts\python.exe -m ruff check --config config\pyproject.toml alquimista tests
 ```
 
 Run mypy:
 
 ```bat
-.venv\Scripts\python.exe -m mypy alquimista
+.venv\Scripts\python.exe -m mypy --config-file config\pyproject.toml alquimista
 ```
 
 Build the Windows executable:
 
 ```bat
-gerar_executavel.bat
+tools\build\gerar_executavel.bat
 ```
 
 The generated executable is written to:

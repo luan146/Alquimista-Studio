@@ -67,7 +67,7 @@ def browser_login(
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise AuthenticationError(
-            "O suporte ao navegador não está instalado. Execute instalar_navegador.bat."
+            "O suporte ao navegador não está instalado. Execute tools\\install\\instalar_navegador.bat."
         ) from exc
     if timeout_seconds <= 0:
         raise AuthenticationError("O tempo limite do login deve ser positivo.")

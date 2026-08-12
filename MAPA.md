@@ -950,37 +950,39 @@ A `MainWindow` herda dos mixins (grande parte da lógica de comportamento) e orq
 
 ---
 
-## ENTRY POINTS E SCRIPTS RAIZ
-Arquivos na raiz do projeto. Úteis para entender builds e ambientes.
+## ENTRY POINTS, CONFIGURAÇÃO E SCRIPTS
+Arquivos de entrada, configuração e manutenção do projeto, organizados por responsabilidade.
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `alquimista_core.py` | Facade de compatibilidade. Re-exporta `ConfluenceClient`, modelos, serviços, storage, erros. Mantém nomes históricos p/ scripts antigos. **Detalhe:** docstring diz "Studio 5" mas o projeto é "3.0" — inconsistência a corrigir. |
-| `alquimista_gui.py` | Entry point da UI PySide6. Importa e expõe `run_app` de `alquimista.ui`. |
-| `alquimista_studio_completo.py` | Launcher do fluxo completo: `run_app("complete")`. |
-| `alquimista_studio_extrator.py` | Launcher legado → agora chama `run_app("complete")`. |
-| `alquimista_studio_consolidador.py` | Launcher legado → agora chama `run_app("complete")`. |
-| `ALQuimista Studio.spec` | Spec do PyInstaller p/ gerar `.exe`. |
-| `gerar_executavel.bat` | Script de build do executável. |
-| `instalar_windows.bat` / `instalar_linux.sh` | Scripts de instalação de dependências. |
-| `instalar_navegador.bat` | Instala browsers Playwright. |
-| `test_alquimista_studio.py` | Launcher legado de pytest (apenas delega para `pytest`). Os testes reais ficam em `tests/` (19 arquivos, ver seção abaixo). |
-| `config.example.json` | Config de exemplo. |
+| `tools/legacy/alquimista_core.py` | Facade de compatibilidade. Re-exporta `ConfluenceClient`, modelos, serviços, storage, erros. Mantém nomes históricos p/ scripts antigos. **Detalhe:** docstring diz "Studio 5" mas o projeto é "3.0" — inconsistência a corrigir. |
+| `tools/legacy/alquimista_gui.py` | Entry point legado da UI PySide6. Importa e expõe `run_app` de `alquimista.ui`. |
+| `alquimista/__main__.py` | Entry point oficial: `python -m alquimista` inicia o fluxo completo. |
+| `tools/legacy/alquimista_studio_completo.py` | Launcher legado do fluxo completo, mantido fora da raiz. |
+| `tools/legacy/alquimista_studio_extrator.py` | Launcher legado → agora chama `run_app("complete")`. |
+| `tools/legacy/alquimista_studio_consolidador.py` | Launcher legado → agora chama `run_app("complete")`. |
+| `packaging/ALQuimista Studio.spec` | Spec do PyInstaller p/ gerar `.exe`. |
+| `tools/build/gerar_executavel.bat` | Script de build do executável. |
+| `tools/build/gerar_pacote_portatil.bat` | Script de build do pacote portátil. |
+| `tools/install/instalar_windows.bat` / `tools/install/instalar_linux.sh` | Scripts de instalação de dependências. |
+| `tools/install/instalar_navegador.bat` | Instala browsers Playwright. |
+| `tools/legacy/test_alquimista_studio.py` | Launcher legado de pytest (apenas delega para `pytest`). Os testes reais ficam em `tests/` (19 arquivos, ver seção abaixo). |
+| `docs/examples/config.example.json` | Config de exemplo. |
 | `projeto_alquimista.json` | Projeto de demonstração. |
-| `REFACTORING_SUMMARY.md` | Documento do refactoring recente. |
+| `docs/archive/REFACTORING_SUMMARY.md` | Documento histórico do refactoring recente. |
 | `tests/` | Suíte de testes (19 arquivos `test_*.py` + `conftest.py`): `test_auth`, `test_browser_cache`, `test_client`, `test_confluence_url`, `test_connectors`, `test_lazy_confluence`, `test_markdown`, `test_models_storage`, `test_process_workers`, `test_services`, `test_session_store`, `test_source_detection`, `test_ui*`, `test_fixes_regression`, `test_build_documentation`. Marker `integration` p/ APIs reais. |
 | `docs/` | `architecture.md` + `connectors/<plataforma>.md` + `manifest-index.md` + `screenshots/` (PNGs das 9 telas). |
 | `tools/` | `capture_ui.py` (gerar screenshots) e `normalize_utf8.py` (corrigir mojibake ASCII/UTF-8). |
 | `assets/icons/` | `alchemist_icon_atlas.png` usado por `components.py:AlchemistIconAtlas`. |
 | `ALQuimista_Base/` | Diretório reservado (vazio por padrão). Excluído do ruff/mypy. |
-| `pyproject.toml` | Configuração ruff (py312, line 120, F/I/B) + mypy. |
-| `pytest.ini` | `qt_api=pyside6`, `testpaths=tests`, markers (`real_confluence`, `integration`, `build`, `slow`). |
-| `constraints.txt` | Versões fixas validadas p/ Python 3.12/Windows (reprodutível). |
-| `requirements*.txt` | `requirements.txt` (runtime) + `-browser` + `-dev` + `.freeze`. |
-| `python-version.txt` | `Python 3.12` ( usado por gerenciadores de versão). |
+| `config/pyproject.toml` | Configuração ruff (py312, line 120, F/I/B) + mypy. |
+| `config/pytest.ini` | `qt_api=pyside6`, `testpaths=tests`, markers (`real_confluence`, `integration`, `build`, `slow`). |
+| `config/constraints.txt` | Versões fixas validadas p/ Python 3.12/Windows (reprodutível). |
+| `config/requirements*.txt` | `requirements.txt` (runtime) + `-browser` + `-dev` + `.freeze`. |
+| `config/python-version.txt` | `Python 3.12` ( usado por gerenciadores de versão). |
 | `abrir_completo.bat` | Atalho Windows p/ abrir o fluxo completo. |
 
-**Regra:** código novo vai em `alquimista/`. Facades raiz (`alquimista_*.py`) são só p/ scripts antigos.
+**Regra:** código novo vai em `alquimista/`. Facades e launchers legados ficam em `tools/legacy/`.
 
 ## DUPLICAÇÕES E ARMADILHAS (ATALHO DE EDIÇÃO)
 Alguns módulos definem a MESMA função duas vezes. A segunda definição sobrescreve a primeira, que fica órfã/morta no arquivo. **Antes de editar uma dessas funções, localize todas as definições com `rg -n "^def <nome>" <arquivo>` e edite apenas a última (a ativa).**

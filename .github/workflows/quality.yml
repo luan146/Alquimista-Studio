@@ -14,19 +14,19 @@ jobs:
           python-version: "3.12"
       - name: Install pinned development dependencies
         shell: pwsh
-        run: python -m pip install -c constraints.txt -r requirements-dev.txt
+        run: python -m pip install -c config/constraints.txt -r config/requirements-dev.txt
       - name: Static checks
         shell: pwsh
         run: |
-          python -m ruff check alquimista tests
-          python -m mypy alquimista --follow-imports=skip --ignore-missing-imports
+          python -m ruff check --config config/pyproject.toml alquimista tests
+          python -m mypy --config-file config/pyproject.toml alquimista --follow-imports=skip --ignore-missing-imports
       - name: Compile and test
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          python -m compileall -q alquimista alquimista_core.py alquimista_gui.py tests
-          python -m pytest -q
+          python -m compileall -q alquimista tools/legacy tests
+          python -m pytest -c config/pytest.ini -q
       - name: Build executable
         shell: pwsh
-        run: python -m PyInstaller --noconfirm --clean "ALQuimista Studio.spec"
+        run: python -m PyInstaller --noconfirm --clean "packaging/ALQuimista Studio.spec"

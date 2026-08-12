@@ -1,0 +1,28 @@
+ALQUIMISTA STUDIO - VERSAO PORTATIL
+
+Como iniciar
+------------
+1. Extraia todos os arquivos desta pasta para um local de sua escolha.
+2. Execute "ALQuimista Studio.exe".
+
+Os arquivos de configuracao, logs e sessoes do usuario ficam em:
+%LOCALAPPDATA%\ALQuimista Studio
+
+Isso permite substituir o executavel por uma versao nova sem perder as
+preferencias e sessoes salvas. Os projetos e arquivos extraidos continuam
+sendo gravados nas pastas escolhidas dentro do aplicativo.
+
+Observacoes
+-----------
+- Esta distribuicao e para Windows 10/11 64-bit.
+- O Windows pode exibir um aviso do SmartScreen porque o executavel ainda
+  nao possui assinatura digital.
+- O acesso publico e as conexoes por API funcionam diretamente pelo aplicativo.
+- O login interativo pelo navegador pode exigir o Google Chrome instalado.
+  O navegador Chromium nao e incluido neste primeiro pacote portatil.
+- Nunca compartilhe a pasta de sessoes ou arquivos de projeto que contenham
+  informacoes sensiveis.
+
+Suporte
+-------
+Repositorio: https://github.com/luan146/Alquimista-Studio

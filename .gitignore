@@ -1,19 +1,35 @@
+# Ambientes locais
 .venv/
+.env
+.env.*
+!.env.example
+
+# Python e caches
+__pycache__/
+*.py[cod]
+*$py.class
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
-__pycache__/
-*.py[cod]
-__pycache__/
-*.py[cod]
-.pytest_cache/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
+.tox/
+.nox/
+
+# Build, distribuição e metadados gerados
 build/
 dist/
-!*.spec
+*.egg-info/
+pip-wheel-metadata/
+
+# Execução local e dados potencialmente sensíveis
 sessions/
 *.session.json
+credentials.json
+secrets.json
+settings.local.json
 *.log
 *.jsonl
 *.db
@@ -26,25 +42,29 @@ temp/
 output/
 exports/
 downloads/
-credentials.json
-secrets.json
-settings.local.json
-!.env.example
 ALQuimista_Base*/
 manifesto_alquimista.json
 falhas_alquimista.json
 relatorio_execucao_alquimista.json
+*.backup
 .backup_pre_pyside_*.zip
 
-# Adicionados para o commit inicial
+# Arquivos temporários e locais do projeto
 .tmp/
 nul
 .claude/
-
-# Arquivos internos e cópias de trabalho
 .agents/
 AGENTS.md
 *.bak*
 *.priority1
 *.refactor
 requirements.freeze.txt
+
+# Configurações de editor e sistema operacional
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
