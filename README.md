@@ -20,6 +20,8 @@ Paste a source URL, connect, choose the pages you want, and export structured co
 
 > 🌐 **Current interface language:** Portuguese. This README is written in English to make the project easier to discover and evaluate internationally.
 
+**Read this in:** [English](README.md) · [Português (Brasil)](README.pt-BR.md)
+
 ---
 
 ## ✨ What is ALQuimista Studio?
@@ -292,6 +294,20 @@ For a deeper code map, see [`MAPA.md`](MAPA.md) and the [`docs/`](docs/) directo
 
 ---
 
+## 📦 Download the portable version
+
+Release **0.9** is available as a portable Windows package. Download the ZIP,
+extract it, and run `ALQuimista Studio.exe`; Python installation is not
+required.
+
+[Download ALQuimista Studio 0.9 portable](https://github.com/luan146/Alquimista-Studio/releases/download/v0.9/ALQuimista-Studio-portatil-win64-v0.9.zip)
+
+The package is intended for Windows 10/11 (64-bit). Browser-assisted
+authentication may require Google Chrome. User preferences, logs, and browser
+sessions are stored under `%LOCALAPPDATA%\ALQuimista Studio`.
+
+---
+
 ## 🛠️ Development
 
 <details>
@@ -334,6 +350,19 @@ The generated executable is written to:
 ```text
 dist/ALQuimista Studio.exe
 ```
+
+To create a portable ZIP for Windows 10/11 (64-bit), use:
+
+```bat
+gerar_pacote_portatil.bat
+```
+
+The package is created at `dist/ALQuimista-Studio-portatil-win64.zip`. It does
+not require Python on the target computer. User preferences, logs, and browser
+sessions are stored under `%LOCALAPPDATA%\ALQuimista Studio`, so replacing the
+executable does not remove them. Browser-assisted authentication may require
+Google Chrome installed; the Chromium browser is not bundled in this first
+portable package.
 
 </details>
 
