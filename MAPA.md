@@ -961,10 +961,11 @@ Arquivos de entrada, configuração e manutenção do projeto, organizados por r
 | `tools/legacy/alquimista_studio_completo.py` | Launcher legado do fluxo completo, mantido fora da raiz. |
 | `tools/legacy/alquimista_studio_extrator.py` | Launcher legado → agora chama `run_app("complete")`. |
 | `tools/legacy/alquimista_studio_consolidador.py` | Launcher legado → agora chama `run_app("complete")`. |
-| `packaging/ALQuimista Studio.spec` | Spec do PyInstaller p/ gerar `.exe`. |
-| `tools/build/gerar_executavel.bat` | Script de build do executável. |
-| `tools/build/gerar_pacote_portatil.bat` | Script de build do pacote portátil. |
-| `tools/install/instalar_windows.bat` / `tools/install/instalar_linux.sh` | Scripts de instalação de dependências. |
+| `packaging/ALQuimista Studio.spec` | Spec do PyInstaller; inclui assets e catálogos `.qm`. |
+| `packaging/ALQuimista Studio.iss` | Instalador Windows com idiomas e atalhos. |
+| `tools/build/gerar_distribuicoes.ps1` | Gera Portable Windows e chama o instalador Inno Setup. |
+| `tools/build/gerar_portable_linux.sh` | Gera o pacote Portable Linux `.tar.gz`. |
+| `tools/install/instalar_windows.bat` / `tools/install/instalar_linux.sh` | Dependências de desenvolvimento; Linux também suporta `--install`. |
 | `tools/install/instalar_navegador.bat` | Instala browsers Playwright. |
 | `tools/legacy/test_alquimista_studio.py` | Launcher legado de pytest (apenas delega para `pytest`). Os testes reais ficam em `tests/` (19 arquivos, ver seção abaixo). |
 | `docs/examples/config.example.json` | Config de exemplo. |
@@ -972,7 +973,8 @@ Arquivos de entrada, configuração e manutenção do projeto, organizados por r
 | `docs/archive/REFACTORING_SUMMARY.md` | Documento histórico do refactoring recente. |
 | `tests/` | Suíte de testes (19 arquivos `test_*.py` + `conftest.py`): `test_auth`, `test_browser_cache`, `test_client`, `test_confluence_url`, `test_connectors`, `test_lazy_confluence`, `test_markdown`, `test_models_storage`, `test_process_workers`, `test_services`, `test_session_store`, `test_source_detection`, `test_ui*`, `test_fixes_regression`, `test_build_documentation`. Marker `integration` p/ APIs reais. |
 | `docs/` | `architecture.md` + `connectors/<plataforma>.md` + `manifest-index.md` + `screenshots/` (PNGs das 9 telas). |
-| `tools/` | `capture_ui.py` (gerar screenshots) e `normalize_utf8.py` (corrigir mojibake ASCII/UTF-8). |
+| `tools/` | `capture_ui.py`, `normalize_utf8.py` e scripts de distribuição/instalação. |
+| `alquimista/ui/i18n.py` | Idiomas PT-BR/EN/ES, preferência portable/instalada e troca em runtime. |
 | `assets/icons/` | `alchemist_icon_atlas.png` usado por `components.py:AlchemistIconAtlas`. |
 | `ALQuimista_Base/` | Diretório reservado (vazio por padrão). Excluído do ruff/mypy. |
 | `config/pyproject.toml` | Configuração ruff (py312, line 120, F/I/B) + mypy. |

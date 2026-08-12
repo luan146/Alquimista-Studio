@@ -1,11 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+
+ROOT_DIR = os.path.abspath(os.path.join(SPECPATH, os.pardir))
+
 
 a = Analysis(
-    ['alquimista/__main__.py'],
-    pathex=[],
+    [os.path.join(ROOT_DIR, 'alquimista', '__main__.py')],
+    pathex=[ROOT_DIR],
     binaries=[],
-    datas=[('alquimista\\ui\\assets', 'alquimista\\ui\\assets'), ('assets', 'assets')],
+    datas=[
+        (os.path.join(ROOT_DIR, 'alquimista', 'ui', 'assets'), os.path.join('alquimista', 'ui', 'assets')),
+        (os.path.join(ROOT_DIR, 'alquimista', 'ui', 'translations'), os.path.join('alquimista', 'ui', 'translations')),
+        (os.path.join(ROOT_DIR, 'assets'), 'assets'),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

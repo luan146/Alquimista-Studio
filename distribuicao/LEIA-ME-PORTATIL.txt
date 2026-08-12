@@ -1,20 +1,23 @@
-ALQUIMISTA STUDIO - VERSAO PORTATIL
+ALQUIMISTA STUDIO - PORTABLE / PORTATIL
 
-Como iniciar
-------------
-1. Extraia todos os arquivos desta pasta para um local de sua escolha.
+Como iniciar / How to start / Como iniciar
+------------------------------------------
+1. Extraia todos os arquivos para um local de sua escolha.
 2. Execute "ALQuimista Studio.exe".
+3. Na primeira execução, escolha Português, English ou Español.
 
-Os arquivos de configuracao, logs e sessoes do usuario ficam em:
-%LOCALAPPDATA%\ALQuimista Studio
+As preferências ficam na pasta "data" ao lado do executável. O pacote pode
+ser movido para outro computador sem perder o idioma escolhido.
 
 Isso permite substituir o executavel por uma versao nova sem perder as
 preferencias e sessoes salvas. Os projetos e arquivos extraidos continuam
 sendo gravados nas pastas escolhidas dentro do aplicativo.
 
-Observacoes
------------
-- Esta distribuicao e para Windows 10/11 64-bit.
+Observacoes / Notes / Notas
+---------------------------
+- No Windows, esta distribuicao suporta Windows 10/11 64-bit.
+- No Linux, use o pacote `.tar.gz` correspondente e execute o binario
+  `ALQuimista Studio`.
 - O Windows pode exibir um aviso do SmartScreen porque o executavel ainda
   nao possui assinatura digital.
 - O acesso publico e as conexoes por API funcionam diretamente pelo aplicativo.
@@ -22,6 +25,9 @@ Observacoes
   O navegador Chromium nao e incluido neste primeiro pacote portatil.
 - Nunca compartilhe a pasta de sessoes ou arquivos de projeto que contenham
   informacoes sensiveis.
+
+The portable package does not modify the system or require an installer.
+El paquete portable no modifica el sistema ni requiere instalador.
 
 Suporte
 -------

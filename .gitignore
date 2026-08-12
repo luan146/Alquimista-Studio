@@ -20,6 +20,8 @@ htmlcov/
 
 # Build, distribuição e metadados gerados
 build/
+!tools/build/
+!tools/build/**
 dist/
 *.egg-info/
 pip-wheel-metadata/
@@ -36,6 +38,7 @@ settings.local.json
 *.sqlite
 *.sqlite3
 logs/
+data/
 cache/
 tmp/
 temp/

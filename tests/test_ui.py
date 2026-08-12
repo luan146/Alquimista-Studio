@@ -952,6 +952,7 @@ def test_consolidation_preview_is_dispatched_to_worker(
         captured["done"] = done
 
     monkeypatch.setattr(window, "_start_worker", capture)
+    monkeypatch.setattr(window, "_validated_project_snapshot", lambda: window.project)
     window.preview_consolidation()
 
     assert callable(captured["function"])

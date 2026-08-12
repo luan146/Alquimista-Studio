@@ -18,7 +18,7 @@ Paste a source URL, connect, choose the pages you want, and export structured co
   <img src="docs/screenshots/dashboard.png" alt="ALQuimista Studio dashboard" width="100%">
 </p>
 
-> 🌐 **Current interface language:** Portuguese. This README is written in English to make the project easier to discover and evaluate internationally.
+> 🌐 **Interface languages:** Português (Brasil), English and Español. The README is written in English to make the project easier to discover and evaluate internationally.
 
 **Read this in:** [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
@@ -194,6 +194,28 @@ This makes the exported knowledge easier to trace back to its original source an
 ---
 
 ## ⚡ Quick start
+
+### Portable and installed distributions
+
+ALQuimista Studio is distributed in two formats. The Portable package can be
+extracted and launched without installation; its preferences are stored in
+the package `data/` folder. The Windows Installer creates shortcuts and keeps
+preferences in the user profile so updates do not remove them. Both formats
+contain Portuguese (Brazil), English and Spanish. On first launch, choose the
+interface language; it can be changed later in **Settings**.
+
+The portable packages are named `ALQuimista-Studio-windows-portable.zip` and
+`ALQuimista-Studio-linux-portable.tar.gz`. The Windows installer is named
+`ALQuimista-Studio-windows-installer-<version>.exe`. Linux source installation
+remains available through `tools/install/instalar_linux.sh --install`, which
+creates a launcher under `~/.local/opt/alquimista-studio` and a desktop entry.
+
+The Linux portable package is generated in CI with
+`tools/build/gerar_portable_linux.sh <version>`. It contains the same three
+interface languages and stores portable preferences in its `data/` folder.
+
+Integration status vocabulary: Estável, Disponível, Experimental, Parcial,
+Em desenvolvimento and Planejado.
 
 ### Windows
 

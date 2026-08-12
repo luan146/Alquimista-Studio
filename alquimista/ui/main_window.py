@@ -9,7 +9,6 @@ from typing import Any, cast
 
 from PySide6.QtCore import (
     QPropertyAnimation,
-    QSettings,
     QSignalBlocker,
     QSize,
     Qt,
@@ -86,6 +85,12 @@ from .execution_controller import (
     run_extraction,
     validated_project_snapshot,
 )
+from .i18n import (
+    LANGUAGE_NAMES,
+    LanguageManager,
+    create_settings,
+    retranslate_widget_tree,
+)
 from .mixins.connection_mixin import ConnectionMixin
 from .mixins.selection_mixin import SelectionMixin
 from .mixins.source_mixin import SourceMixin
@@ -126,7 +131,11 @@ from .workers import Worker
 
 
 class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
-    def __init__(self, mode: str = "complete") -> None:
+    def __init__(
+        self,
+        mode: str = "complete",
+        language_manager: LanguageManager | None = None,
+    ) -> None:
         super().__init__()
         # Os antigos lançadores "extrator" e "consolidador" continuam aceitos
         # apenas por compatibilidade com scripts existentes. A interface sempre
@@ -148,7 +157,14 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         self.token: CancellationToken | None = None
         self.started_at = 0.0
         self.operation_controller = WorkerOperationController(self, self.thread_pool)
-        self.ui_settings = QSettings("ALQuimista Studio", "ALQuimista Studio")
+        app = QApplication.instance()
+        if app is None:
+            raise RuntimeError("MainWindow requires an active QApplication")
+        self.i18n = language_manager or LanguageManager(app, create_settings())
+        if language_manager is None:
+            self.i18n.set_language(self.i18n.preferred_language or "pt-BR", persist=False)
+        self.i18n.language_changed.connect(self._language_changed)
+        self.ui_settings = self.i18n.settings
         self._loading_source_form = False
         self._page_render_limits: dict[tuple[str, str], int] = {}
         self._selection_render_limits: dict[tuple[str, str], int] = {}
@@ -168,6 +184,26 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         self._load_project_ui()
         self._update_load_context()
         self._show_page("dashboard")
+        self.retranslate_ui()
+
+    def _language_changed(self, _language: str) -> None:
+        self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        """Refresh the visible UI while keeping internal combo data stable."""
+        language_combo = getattr(self, "language_combo", None)
+        excluded = (language_combo,) if language_combo is not None else ()
+        retranslate_widget_tree(self, exclude=excluded)
+        if language_combo is not None:
+            selected = self.i18n.language
+            index = language_combo.findData(selected)
+            if index >= 0 and language_combo.currentIndex() != index:
+                blocker = QSignalBlocker(language_combo)
+                language_combo.setCurrentIndex(index)
+                del blocker
+
+    def _change_language(self, language: str) -> None:
+        self.i18n.set_language(language)
 
     @property
     def trees(self) -> dict[str, dict[str, Any]]:
@@ -1149,6 +1185,18 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             lambda value: apply_theme(QApplication.instance(), value)
         )
         appearance_layout.addWidget(self.theme_combo)
+        language_label = QLabel("🌐 Idioma da interface")
+        appearance_layout.addWidget(language_label)
+        self.language_combo = QComboBox()
+        for code, label in LANGUAGE_NAMES.items():
+            self.language_combo.addItem(label, code)
+        self.language_combo.setCurrentIndex(
+            max(0, self.language_combo.findData(self.i18n.language))
+        )
+        self.language_combo.currentIndexChanged.connect(
+            lambda _index: self._change_language(str(self.language_combo.currentData()))
+        )
+        appearance_layout.addWidget(self.language_combo)
         layout.addWidget(appearance)
         network, network_layout = card()
         network_layout.addWidget(QLabel("⚙ Rede (avançado)"))
@@ -2936,7 +2984,10 @@ def run_app(mode: str = "complete") -> None:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("ALQuimista Studio")
     app.setOrganizationName("ALQuimista")
+    from .i18n import initialize_language
+
+    language_manager = initialize_language(app)
     apply_theme(app, "system")
-    window = MainWindow(mode)
+    window = MainWindow(mode, language_manager)
     window.show()
     raise SystemExit(app.exec())
