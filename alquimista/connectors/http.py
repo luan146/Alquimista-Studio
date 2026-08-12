@@ -55,7 +55,7 @@ class ApiHttpClient:
         self.session.headers.update(
             {
                 "Accept": "application/json",
-                "User-Agent": "ALQuimista-Studio/5.0 (+official-knowledge-connector)",
+                "User-Agent": "ALQuimista-Studio/0.9 (+official-knowledge-connector)",
                 **(headers or {}),
             }
         )

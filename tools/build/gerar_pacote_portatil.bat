@@ -16,7 +16,7 @@ if errorlevel 1 goto :erro
 echo.
 echo =========================================================
 echo [SUCESSO] Arquivos criados:
-echo %ROOT_DIR%\dist\releases\ALQuimista-Studio-windows-portable-5.0.0.zip
+echo %ROOT_DIR%\dist\releases\ALQuimista-Studio-windows-portable-0.9.zip
 echo =========================================================
 exit /b 0
 

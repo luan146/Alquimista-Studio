@@ -32,7 +32,7 @@ jobs:
         run: choco install innosetup --no-progress -y
       - name: Build portable and installer distributions
         shell: pwsh
-        run: ./tools/build/gerar_distribuicoes.ps1 -Version 5.0.0
+        run: ./tools/build/gerar_distribuicoes.ps1 -Version 0.9
       - name: Upload Windows distributions
         uses: actions/upload-artifact@v4
         with:
@@ -48,12 +48,12 @@ jobs:
       - name: Install pinned dependencies
         run: python -m pip install -c config/constraints.txt -r config/requirements-dev.txt
       - name: Build Linux portable package
-        run: bash tools/build/gerar_portable_linux.sh 5.0.0
+        run: bash tools/build/gerar_portable_linux.sh 0.9
       - name: Validate Linux portable package
         shell: bash
         run: |
           set -euo pipefail
-          archive="dist/releases/ALQuimista-Studio-linux-portable-5.0.0.tar.gz"
+          archive="dist/releases/ALQuimista-Studio-linux-portable-0.9.tar.gz"
           test -s "$archive"
           tar -tzf "$archive" | grep -Fx 'ALQuimista-Studio-linux-portable/ALQuimista Studio'
           tar -tzf "$archive" | grep -Fx 'ALQuimista-Studio-linux-portable/portable.flag'

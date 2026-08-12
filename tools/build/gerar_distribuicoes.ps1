@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "5.0.0"
+    [string]$Version = "0.9"
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,4 +47,5 @@ if ($iscc) {
     Write-Warning "iscc.exe não encontrado; o pacote Portable foi gerado e o instalador pode ser criado com packaging/ALQuimista Studio.iss."
 }
 
+Remove-Item -LiteralPath $buildRoot, $portableRoot -Recurse -Force -ErrorAction SilentlyContinue
 Write-Output "Portable: $portableZip"
