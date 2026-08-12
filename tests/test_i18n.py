@@ -92,3 +92,40 @@ def test_main_window_switches_major_pages_without_changing_internal_ids(
     assert window.nav_buttons["sources"].text() == "Fuentes"
     assert window.selection_filter.itemText(0) == "📋 Todas las páginas"
     window.close()
+
+
+def test_main_window_retranslates_dashboard_cards_after_pt_br_to_english(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    manager = LanguageManager(qapp, settings)
+    manager.set_language("pt-BR", persist=False)
+    window = MainWindow(language_manager=manager)
+
+    dashboard = window.pages["dashboard"]
+    assert any(
+        "Selecione a origem do conhecimento que você deseja usar." in label.text()
+        for label in dashboard.findChildren(QLabel)
+    )
+
+    manager.set_language("en", persist=False)
+
+    assert any(
+        "Select the knowledge source you want to use." in label.text()
+        for label in dashboard.findChildren(QLabel)
+    )
+    assert any(
+        label.text() == "Connect and extract Zendesk Guide articles,\ntickets and solutions."
+        for label in dashboard.findChildren(QLabel)
+    )
+    assert "Your connection is secure" in window.dashboard_status.text()
+    window._show_page("sources")
+    assert (
+        window.source_url_input.placeholderText()
+        == "Paste the Confluence, Notion, SharePoint, GitBook or Zendesk URL here"
+    )
+    assert (
+        "Add page URLs so ALQuimista can extract and consolidate information automatically."
+        in window.sources_empty_label.text()
+    )
+    window.close()

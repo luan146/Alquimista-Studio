@@ -58,6 +58,15 @@
     <message><source>❓ Páginas desconhecidas</source><translation>❓ Páginas desconocidas</translation></message>
     <message><source>Selecione a origem do conhecimento que você deseja usar.</source><translation>Selecciona la fuente de conocimiento que quieres usar.</translation></message>
     <message><source>Você poderá configurar os detalhes da conexão na próxima etapa.</source><translation>Podrás configurar los detalles de conexión en el siguiente paso.</translation></message>
+    <message><source>Selecione a origem do conhecimento que você deseja usar.&#10;Você poderá configurar os detalhes da conexão na próxima etapa.</source><translation>Selecciona la fuente de conocimiento que quieres usar.&#10;Podrás configurar los detalles de conexión en el siguiente paso.</translation></message>
+    <message><source>Conecte e extraia artigos,&#10;tickets e soluções do Zendesk Guide.</source><translation>Conecta y extrae artículos,&#10;tickets y soluciones de Zendesk Guide.</translation></message>
+    <message><source>Acesse páginas, espaços&#10;e documentos do Atlassian Confluence.</source><translation>Accede a páginas, espacios&#10;y documentos de Atlassian Confluence.</translation></message>
+    <message><source>Importe páginas, bases de dados&#10;e conteúdos do Notion.</source><translation>Importa páginas, bases de datos&#10;y contenido de Notion.</translation></message>
+    <message><source>Explore sites, bibliotecas e documentos&#10;do Microsoft SharePoint.</source><translation>Explora sitios, bibliotecas y documentos&#10;de Microsoft SharePoint.</translation></message>
+    <message><source>Importe documentação e conteúdos&#10;disponíveis na sua base do GitBook.</source><translation>Importa documentación y contenido&#10;disponibles en tu espacio de GitBook.</translation></message>
+    <message><source>Cole uma URL e o ALQuimista identifica a plataforma e prepara a conexão automaticamente.</source><translation>Pega una URL y ALQuimista identifica la plataforma y prepara la conexión automáticamente.</translation></message>
+    <message><source>Cole aqui a URL do Confluence, Notion, SharePoint, GitBook ou Zendesk</source><translation>Pega aquí la URL de Confluence, Notion, SharePoint, GitBook o Zendesk</translation></message>
+    <message><source>A plataforma, a API e os detalhes iniciais serão identificados pela URL.</source><translation>La plataforma, la API y los detalles iniciales se identificarán mediante la URL.</translation></message>
     <message><source>🔒  Sua conexão é segura. Nenhum dado é armazenado sem o seu consentimento.</source><translation>🔒  Tu conexión es segura. No se almacena ningún dato sin tu consentimiento.</translation></message>
     <message><source>Extração e atualização</source><translation>Extracción y actualización</translation></message>
     <message><source>Revisão final e pasta de saída</source><translation>Revisión final y carpeta de salida</translation></message>
@@ -169,6 +178,7 @@
     <message><source>O log ainda não foi criado.</source><translation>El registro aún no se ha creado.</translation></message>
     <message><source>Executando</source><translation>Ejecutando</translation></message>
     <message><source>Pronto</source><translation>Listo</translation></message>
+    <message><source>🛡  Sua conexão é segura. {sources} fonte(s) ativa(s), {selected} página(s) selecionada(s) — {state}.</source><translation>🛡  Tu conexión es segura. {sources} fuente(s) activa(s), {selected} página(s) seleccionada(s) — {state}.</translation></message>
     <message><source>🔌 {sources} fontes ativas    •    📄 {selected} páginas selecionadas&#10;📁 Saída: {output}&#10;🛡 A versão anterior será preservada se uma atualização falhar.</source><translation>🔌 {sources} fuentes activas    •    📄 {selected} páginas seleccionadas&#10;📁 Salida: {output}&#10;🛡 La versión anterior se conservará si una actualización falla.</translation></message>
     <message><source>Estrutura prevista&#10;{execution}&#10;  ├─ {pages_subdir}  (arquivos Markdown individuais)&#10;  ├─ {output_subdir}  (pacotes consolidados)&#10;  ├─ manifesto_alquimista.json&#10;  └─ relatorio_execucao.json</source><translation>Estructura prevista&#10;{execution}&#10;  ├─ {pages_subdir}  (archivos Markdown individuales)&#10;  ├─ {output_subdir}  (paquetes consolidados)&#10;  ├─ manifesto_alquimista.json&#10;  └─ relatorio_execucao.json</translation></message>
     <message><source>Como ficará no nível {level}:&#10;{lines}</source><translation>Cómo quedará en el nivel {level}:&#10;{lines}</translation></message>

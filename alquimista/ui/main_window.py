@@ -189,6 +189,10 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
 
     def _language_changed(self, _language: str) -> None:
         self.retranslate_ui()
+        # The dashboard summary is written after the initial widget tree is
+        # created. Refresh only this aggregate here; refreshing form controls
+        # would emit editing signals while the language selector changes.
+        self._refresh_dashboard()
 
     def retranslate_ui(self) -> None:
         """Refresh the visible UI while keeping internal combo data stable."""
