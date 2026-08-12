@@ -251,5 +251,21 @@
     <message><source>Exportar perfil da fonte</source><translation>Export source profile</translation></message>
     <message><source>Importar perfil da fonte</source><translation>Import source profile</translation></message>
     <message><source>Perfil JSON (*.json)</source><translation>JSON profile (*.json)</translation></message>
+    <message><source>{count} espaços encontrados. Escolha um para carregar.</source><translation>{count} spaces found. Choose one to load.</translation></message>
+    <message><source>Descobrindo espaços</source><translation>Discovering spaces</translation></message>
+    <message><source>{count} espaços encontrados</source><translation>{count} spaces found</translation></message>
+    <message><source>{count} filhos carregados{suffix}.</source><translation>{count} children loaded{suffix}.</translation></message>
+    <message><source>Alterar fonte {name}</source><translation>Change source {name}</translation></message>
+    <message><source>⚠ {error}</source><translation>⚠ {error}</translation></message>
+    <message><source>🔎 pageId {page_id} identificado. Consultando título e espaço…</source><translation>🔎 pageId {page_id} identified. Looking up title and space…</translation></message>
+    <message><source>✅ pageId {page_id} identificado. Teste a conexão para confirmar o título e o espaço.</source><translation>✅ pageId {page_id} identified. Test the connection to confirm the title and space.</translation></message>
+    <message><source>✅ Espaço {space} identificado. A árvore inteira será carregada.</source><translation>✅ Space {space} identified. The full tree will be loaded.</translation></message>
+    <message><source>✅ Espaço {space} e página “{title}” identificados.</source><translation>✅ Space {space} and page “{title}” identified.</translation></message>
+    <message><source>não informado</source><translation>not provided</translation></message>
+    <message><source>ℹ URL válida, mas ela não contém título nem pageId. Preencha a página raiz.</source><translation>ℹ Valid URL, but it contains neither a title nor a pageId. Fill in the root page.</translation></message>
+    <message><source>✅ pageId {identifier} confirmado: “{title}”{space}</source><translation>✅ pageId {identifier} confirmed: “{title}”{space}</translation></message>
+    <message><source> · espaço {key}</source><translation> · space {key}</translation></message>
+    <message><source>sem título</source><translation>untitled</translation></message>
+    <message><source>⚠ pageId {identifier} foi preenchido, mas título e espaço não puderam ser consultados: {message}</source><translation>⚠ pageId {identifier} was filled in, but the title and space could not be retrieved: {message}</translation></message>
   </context>
 </TS>

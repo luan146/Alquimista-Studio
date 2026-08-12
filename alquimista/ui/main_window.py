@@ -1557,17 +1557,23 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             self._refresh_pages_home()
             self._refresh_selection_home()
             self._set_tree_loading(
-                False, f"{len(data['containers'])} espaços encontrados. Escolha um para carregar."
+                False,
+                translate_text(
+                    "{count} espaços encontrados. Escolha um para carregar."
+                ).format(count=len(data["containers"])),
             )
             self.statusBar().showMessage(
-                f"{len(data['containers'])} espaços encontrados. Escolha um para carregar.", 5000
+                translate_text(
+                    "{count} espaços encontrados. Escolha um para carregar."
+                ).format(count=len(data["containers"])),
+                5000,
             )
 
         self._start_worker(work, done)
 
     def _load_tree_via_connector(self, source: SourceConfig) -> None:
         def work(token: CancellationToken, progress: Any, log: Any) -> dict[str, Any]:
-            progress(0, 1, "Descobrindo espaços")
+            progress(0, 1, translate_text("Descobrindo espaços"))
             connector = self.connector_registry.create(
                 source,
                 options=self.project.extraction,
@@ -1583,7 +1589,13 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                 filtered = [item for item in containers if item.id == source.space_key]
                 if filtered:
                     containers = filtered
-            progress(1, 1, f"{len(containers)} espaços encontrados")
+            progress(
+                1,
+                1,
+                translate_text("{count} espaços encontrados").format(
+                    count=len(containers)
+                ),
+            )
             return {
                 "root": {"id": "__all_containers__", "title": "Contêineres"},
                 "containers": [
@@ -1610,10 +1622,15 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             self._refresh_selection_home()
             self._set_tree_loading(
                 False,
-                f"{len(data['containers'])} espaços encontrados. Escolha um para carregar.",
+                translate_text(
+                    "{count} espaços encontrados. Escolha um para carregar."
+                ).format(count=len(data["containers"])),
             )
             self.statusBar().showMessage(
-                f"{len(data['containers'])} espaços encontrados. Escolha um para carregar.", 5000
+                translate_text(
+                    "{count} espaços encontrados. Escolha um para carregar."
+                ).format(count=len(data["containers"])),
+                5000,
             )
 
         self._start_worker(work, done)
@@ -2098,7 +2115,12 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             self._refresh_pages_home()
             self._refresh_selection_home()
             suffix = " (cache local)" if result.get("from_cache") else ""
-            self._set_tree_loading(False, f"{len(result['pages'])} filhos carregados{suffix}.")
+            self._set_tree_loading(
+                False,
+                translate_text("{count} filhos carregados{suffix}.").format(
+                    count=len(result["pages"]), suffix=suffix
+                ),
+            )
             if result.get("from_cache"):
                 self.statusBar().showMessage(
                     translate_text("Filhos reutilizados do cache local."), 7000

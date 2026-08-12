@@ -250,5 +250,21 @@
     <message><source>Exportar perfil da fonte</source><translation>Exportar perfil de fuente</translation></message>
     <message><source>Importar perfil da fonte</source><translation>Importar perfil de fuente</translation></message>
     <message><source>Perfil JSON (*.json)</source><translation>Perfil JSON (*.json)</translation></message>
+    <message><source>{count} espaços encontrados. Escolha um para carregar.</source><translation>Se encontraron {count} espacios. Elige uno para cargar.</translation></message>
+    <message><source>Descobrindo espaços</source><translation>Descubriendo espacios</translation></message>
+    <message><source>{count} espaços encontrados</source><translation>Se encontraron {count} espacios</translation></message>
+    <message><source>{count} filhos carregados{suffix}.</source><translation>{count} elementos hijos cargados{suffix}.</translation></message>
+    <message><source>Alterar fonte {name}</source><translation>Cambiar fuente {name}</translation></message>
+    <message><source>⚠ {error}</source><translation>⚠ {error}</translation></message>
+    <message><source>🔎 pageId {page_id} identificado. Consultando título e espaço…</source><translation>🔎 pageId {page_id} identificado. Consultando título y espacio…</translation></message>
+    <message><source>✅ pageId {page_id} identificado. Teste a conexão para confirmar o título e o espaço.</source><translation>✅ pageId {page_id} identificado. Prueba la conexión para confirmar el título y el espacio.</translation></message>
+    <message><source>✅ Espaço {space} identificado. A árvore inteira será carregada.</source><translation>✅ Espacio {space} identificado. Se cargará todo el árbol.</translation></message>
+    <message><source>✅ Espaço {space} e página “{title}” identificados.</source><translation>✅ Espacio {space} y página “{title}” identificados.</translation></message>
+    <message><source>não informado</source><translation>no indicado</translation></message>
+    <message><source>ℹ URL válida, mas ela não contém título nem pageId. Preencha a página raiz.</source><translation>ℹ URL válida, pero no contiene título ni pageId. Completa la página raíz.</translation></message>
+    <message><source>✅ pageId {identifier} confirmado: “{title}”{space}</source><translation>✅ pageId {identifier} confirmado: “{title}”{space}</translation></message>
+    <message><source> · espaço {key}</source><translation> · espacio {key}</translation></message>
+    <message><source>sem título</source><translation>sin título</translation></message>
+    <message><source>⚠ pageId {identifier} foi preenchido, mas título e espaço não puderam ser consultados: {message}</source><translation>⚠ pageId {identifier} se completó, pero no se pudieron consultar el título y el espacio: {message}</translation></message>
   </context>
 </TS>

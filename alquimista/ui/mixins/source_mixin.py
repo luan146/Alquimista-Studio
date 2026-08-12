@@ -161,7 +161,9 @@ class SourceMixin:
 
             menu = QPushButton("⋮")
             menu.setToolTip(translate_text("Alterar nome, URL ou configurações da fonte"))
-            menu.setAccessibleName(f"Alterar fonte {source.name}")
+            menu.setAccessibleName(
+                translate_text("Alterar fonte {name}").format(name=source.name)
+            )
             menu.clicked.connect(
                 lambda _checked=False, row=table_row: self._edit_source_row(row)
             )
@@ -208,7 +210,9 @@ class SourceMixin:
         try:
             detected = detect_source_url(raw)
         except ValueError as exc:
-            self.source_detection_status.setText(f"⚠ {exc}")
+            self.source_detection_status.setText(
+                translate_text("⚠ {error}").format(error=exc)
+            )
             return
         descriptor = self.connector_registry.get(detected.source_type)
         if descriptor.operational:
@@ -512,7 +516,9 @@ class SourceMixin:
         try:
             parsed = parse_confluence_url(raw)
         except ValueError as exc:
-            self.src_autofill_status.setText(f"⚠ {exc}")
+            self.src_autofill_status.setText(
+                translate_text("⚠ {error}").format(error=exc)
+            )
             return
         self._loading_source_form = True
         try:
@@ -534,26 +540,38 @@ class SourceMixin:
             source = self.current_source()
             if source and source.id in self.connected_sources:
                 self.src_autofill_status.setText(
-                    f"🔎 pageId {parsed.page_id} identificado. Consultando título e espaço…"
+                    translate_text(
+                        "🔎 pageId {page_id} identificado. Consultando título e espaço…"
+                    ).format(page_id=parsed.page_id)
                 )
                 self._lookup_page_details(parsed.page_id)
             else:
                 self.src_autofill_status.setText(
-                    f"✅ pageId {parsed.page_id} identificado. Teste a conexão para "
-                    "confirmar o título e o espaço."
+                    translate_text(
+                        "✅ pageId {page_id} identificado. Teste a conexão para "
+                        "confirmar o título e o espaço."
+                    ).format(page_id=parsed.page_id)
                 )
         elif parsed.root_mode == "space":
             self.src_autofill_status.setText(
-                f"✅ Espaço {parsed.space_key} identificado. A árvore inteira será carregada."
+                translate_text(
+                    "✅ Espaço {space} identificado. A árvore inteira será carregada."
+                ).format(space=parsed.space_key)
             )
         elif parsed.title:
             self.src_autofill_status.setText(
-                f"✅ Espaço {parsed.space_key or 'não informado'} e página "
-                f"“{parsed.title}” identificados."
+                translate_text(
+                    "✅ Espaço {space} e página “{title}” identificados."
+                ).format(
+                    space=parsed.space_key or translate_text("não informado"),
+                    title=parsed.title,
+                )
             )
         else:
             self.src_autofill_status.setText(
-                "ℹ URL válida, mas ela não contém título nem pageId. Preencha a página raiz."
+                translate_text(
+                    "ℹ URL válida, mas ela não contém título nem pageId. Preencha a página raiz."
+                )
             )
 
 
@@ -606,14 +624,25 @@ class SourceMixin:
                 self.src_space_name.setText(str(space["name"]))
             self.apply_source(silent=True)
             self.src_autofill_status.setText(
-                f"✅ pageId {identifier} confirmado: “{page.get('title', 'sem título')}”"
-                + (f" · espaço {space['key']}" if space.get("key") else "")
+                translate_text(
+                    "✅ pageId {identifier} confirmado: “{title}”{space}"
+                ).format(
+                    identifier=identifier,
+                    title=page.get("title", translate_text("sem título")),
+                    space=(
+                        translate_text(" · espaço {key}").format(key=space["key"])
+                        if space.get("key")
+                        else ""
+                    ),
+                )
             )
 
         def failed(message: str, _details: str) -> None:
             self.src_autofill_status.setText(
-                f"⚠ pageId {identifier} foi preenchido, mas título e espaço não puderam "
-                f"ser consultados: {message}"
+                translate_text(
+                    "⚠ pageId {identifier} foi preenchido, mas título e espaço não puderam "
+                    "ser consultados: {message}"
+                ).format(identifier=identifier, message=message)
             )
 
         worker.signals.succeeded.connect(done)
