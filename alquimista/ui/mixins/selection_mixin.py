@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QTreeWidgetItem
 from ...models import SourceConfig
 from ...selection import SelectionStore
 from ..components import SortableTreeItem, SourceCard, VisibilityBadgeDelegate, timestamp_sort_value
+from ..i18n import translate_text
 from ..tree_models import ordered_pages, page_parent_id, parent_ids_in_list
 
 
@@ -157,7 +158,9 @@ class SelectionMixin:
         if not source or data is None:
             return
         if self.worker is not None:
-            self.statusBar().showMessage("Aguarde a operação atual terminar…", 4000)
+            self.statusBar().showMessage(
+                translate_text("Aguarde a operação atual terminar…"), 4000
+            )
             return
         self._active_selection_container = container_id
         container = next(
@@ -175,7 +178,7 @@ class SelectionMixin:
             self._populate_selection_tree(source, data, container_id=container_id)
             return
         self.selection_tree.clear()
-        self.selection_count.setText("Carregando páginas deste espaço…")
+        self.selection_count.setText(translate_text("Carregando páginas deste espaço…"))
         self._load_container_for_source(
             source, str(container_id), target="selection", load_all=True
         )
@@ -272,7 +275,9 @@ class SelectionMixin:
             total = len(leaves)
         visible = sum(not item.isHidden() for item in leaves)
         self.selection_count.setText(
-            f"… {checked} de {total} páginas carregadas selecionadas · {visible} visíveis"
+            translate_text(
+                "… {checked} de {total} páginas carregadas selecionadas · {visible} visíveis"
+            ).format(checked=checked, total=total, visible=visible)
         )
         self._update_extraction_summary()
 
@@ -501,8 +506,10 @@ class SelectionMixin:
             self.selection_tree.expandToDepth(1)
         self._update_selection_count()
         self.selection_render_status.setText(
-            f"Mostrando {len(pages):,} de {len(all_pages):,} paginas. "
-            "Use a pesquisa ou carregue mais para navegar pelo restante."
+            translate_text(
+                "Mostrando {visible:,} de {total:,} páginas. "
+                "Use a pesquisa ou carregue mais para navegar pelo restante."
+            ).format(visible=len(pages), total=len(all_pages))
         )
         self.selection_load_more_button.setVisible(len(pages) < len(all_pages))
         if container_id is None and hasattr(self, "selection_home_layout"):

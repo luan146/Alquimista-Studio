@@ -12,6 +12,7 @@ from ...client import session_path
 from ...models import AuthMode, SourceConfig
 from ...runtime import CancellationToken
 from ..connector_forms import form_spec
+from ..i18n import translate_text
 
 
 class ConnectionMixin:
@@ -80,7 +81,9 @@ class ConnectionMixin:
                 self.project.sources[self.project.sources.index(source)] = updated
                 self.mark_dirty()
             except Exception as exc:
-                QMessageBox.warning(self, "Configuração de acesso inválida", str(exc))
+                QMessageBox.warning(
+                    self, translate_text("Configuração de acesso inválida"), str(exc)
+                )
                 public_index = self.auth_mode.findData(AuthMode.BROWSER.value)
                 with QSignalBlocker(self.auth_mode):
                     self.auth_mode.setCurrentIndex(public_index)
@@ -91,18 +94,24 @@ class ConnectionMixin:
     def test_connection(self) -> None:
         source = self._store_runtime_secret() or self.source_by_combo(getattr(self, "tree_source", getattr(self, "selection_source", None)))
         if not source:
-            QMessageBox.information(self, "Fonte", "Adicione uma fonte primeiro.")
+            QMessageBox.information(
+                self, translate_text("Fonte"), translate_text("Adicione uma fonte primeiro.")
+            )
             return
         descriptor = self.connector_registry.get(source.source_type)
         if not descriptor.implemented:
-            self.connection_states[source.id] = f"{descriptor.display_name}: em desenvolvimento"
+            self.connection_states[source.id] = translate_text(
+                "{name}: em desenvolvimento"
+            ).format(name=descriptor.display_name)
             self.connection_state.setText(self.connection_states[source.id])
             return
-        self.connection_states[source.id] = f"Conectando via {descriptor.integration_name}…"
+        self.connection_states[source.id] = translate_text(
+            "Conectando via {name}…"
+        ).format(name=descriptor.integration_name)
         self.connection_state.setText(self.connection_states[source.id])
 
         def work(token: CancellationToken, progress: Any, log: Any) -> dict[str, Any]:
-            progress(0, 1, "Conectando…")
+            progress(0, 1, translate_text("Conectando…"))
             with self.connector_registry.create(
                 source,
                 options=self.project.extraction,
@@ -111,33 +120,42 @@ class ConnectionMixin:
                 log=log,
             ) as connector:
                 result = connector.validate_connection()
-            progress(1, 1, "Conexão concluída")
+            progress(1, 1, translate_text("Conexão concluída"))
             return result
 
         def done(result: dict[str, Any]) -> None:
             self.connected_sources.add(source.id)
             if source.auth_mode == AuthMode.PUBLIC:
                 state = (
-                    "Conexão pública válida — somente páginas públicas serão consideradas"
+                    translate_text(
+                        "Conexão pública válida — somente páginas públicas serão consideradas"
+                    )
                 )
                 success_message = (
-                    "Conexão pública válida. Sem login, somente páginas públicas poderão "
-                    "ser localizadas e extraídas."
+                    translate_text(
+                        "Conexão pública válida. Sem login, somente páginas públicas poderão "
+                        "ser localizadas e extraídas."
+                    )
                 )
             else:
                 identity = source.username or "conta autenticada"
-                state = f"Conexão autenticada válida — conectado como: {identity}"
+                state = translate_text(
+                    "Conexão autenticada válida — conectado como: {identity}"
+                ).format(identity=identity)
                 success_message = (
-                    "Login realizado. A extração poderá acessar as páginas disponíveis "
-                    "para esta conta."
+                    translate_text(
+                        "Login realizado. A extração poderá acessar as páginas disponíveis "
+                        "para esta conta."
+                    )
                 )
             self.connection_states[source.id] = state
             self.connection_state.setText(state)
             QMessageBox.information(
                 self,
-                "Conexão concluída",
-                f"✅ {success_message}\n"
-                f"Espaços disponíveis para sua conta: {result['spaces_visible']}",
+                translate_text("Conexão concluída"),
+                translate_text(
+                    "✅ {message}\nEspaços disponíveis para sua conta: {spaces}"
+                ).format(message=success_message, spaces=result["spaces_visible"]),
             )
             if self.current_source() is source and self.src_root_mode.currentData() == "id":
                 QTimer.singleShot(100, self._lookup_page_details)
@@ -151,25 +169,29 @@ class ConnectionMixin:
         source = self._store_runtime_secret()
         if not source:
             return
-        self.connection_states[source.id] = "Aguardando autenticação no navegador…"
+        self.connection_states[source.id] = translate_text(
+            "Aguardando autenticação no navegador…"
+        )
         self.connection_state.setText(self.connection_states[source.id])
 
         def work(token: CancellationToken, progress: Any, log: Any) -> bool:
-            progress(0, 1, "Aguardando login no navegador")
+            progress(0, 1, translate_text("Aguardando login no navegador"))
             browser_login(source, token=token)
-            progress(1, 1, "Sessão salva")
+            progress(1, 1, translate_text("Sessão salva"))
             return True
 
         def done(_result: bool) -> None:
             self.connection_states[source.id] = (
-                "Login concluído — carregando os espaços disponíveis…"
+                translate_text("Login concluído — carregando os espaços disponíveis…")
             )
             self._connection_source_changed()
             QMessageBox.information(
                 self,
-                "Login",
-                "✅ Login realizado. A sessão foi salva com seu consentimento. "
-                "O acesso será limitado às permissões desta conta.",
+                translate_text("Login"),
+                translate_text(
+                    "✅ Login realizado. A sessão foi salva com seu consentimento. "
+                    "O acesso será limitado às permissões desta conta."
+                ),
             )
             self._show_page("selection")
             self.load_tree()
@@ -183,8 +205,8 @@ class ConnectionMixin:
         if (
             QMessageBox.question(
                 self,
-                "Apagar sessão",
-                "Apagar os cookies salvos para esta fonte?",
+                translate_text("Apagar sessão"),
+                translate_text("Apagar os cookies salvos para esta fonte?"),
             )
             != QMessageBox.StandardButton.Yes
         ):
@@ -192,7 +214,9 @@ class ConnectionMixin:
         delete_session(source)
         self.secrets.pop(source.id)
         self.connected_sources.discard(source.id)
-        self.connection_states[source.id] = "○ Sessão removida — escolha um modo de acesso"
+        self.connection_states[source.id] = translate_text(
+            "○ Sessão removida — escolha um modo de acesso"
+        )
         self.auth_secret.clear()
         self._connection_source_changed()
 
@@ -219,29 +243,46 @@ class ConnectionMixin:
         self.auth_user.setText(source.username)
         self.auth_secret.setText(self.secrets.get(source.id, ""))
         self.session_status.setText(
-            "Sessão disponível" if session_path(source.id).exists()
-            else "Nenhuma sessão salva"
+            translate_text("Sessão disponível")
+            if session_path(source.id).exists()
+            else translate_text("Nenhuma sessão salva")
         )
         self._auth_mode_changed(source.auth_mode.value)
         if source.id in self.connection_states:
             self.connection_state.setText(self.connection_states[source.id])
         elif source.auth_mode == AuthMode.PUBLIC:
-            self.connection_state.setText("Acesso público selecionado — ainda não testado")
+            self.connection_state.setText(
+                translate_text("Acesso público selecionado — ainda não testado")
+            )
         elif session_path(source.id).exists():
             self.connection_state.setText(
-                f"Sessão disponível para {source.username or 'esta fonte'} — teste a conexão"
+                translate_text(
+                    "Sessão disponível para {source} — teste a conexão"
+                ).format(source=source.username or translate_text("esta fonte"))
             )
         else:
-            self.connection_state.setText("Modo autenticado selecionado — não conectado")
+            self.connection_state.setText(
+                translate_text("Modo autenticado selecionado — não conectado")
+            )
         if hasattr(self, "login_button"):
             if source.auth_mode == AuthMode.PUBLIC:
-                self.login_button.setText("Testar acesso público")
+                self.login_button.setText(translate_text("Testar acesso público"))
             elif bearer_only:
-                self.login_button.setText(f"Informar token do {descriptor.display_name}")
+                self.login_button.setText(
+                    translate_text("Informar token do {name}").format(
+                        name=descriptor.display_name
+                    )
+                )
             else:
-                self.login_button.setText(f"Entrar no {descriptor.display_name}")
+                self.login_button.setText(
+                    translate_text("Entrar no {name}").format(
+                        name=descriptor.display_name
+                    )
+                )
             self.login_button.setToolTip(
-                f"Validar o acesso à fonte usando {descriptor.display_name}."
+                translate_text("Validar o acesso à fonte usando {name}.").format(
+                    name=descriptor.display_name
+                )
             )
             self.remove_session_button.setEnabled(session_path(source.id).exists())
 
@@ -249,12 +290,16 @@ class ConnectionMixin:
         """Dispatch the action according to the currently selected auth mode."""
         source = self.source_by_combo(self.connection_source)
         if not source:
-            QMessageBox.information(self, "Fonte", "Adicione uma fonte primeiro.")
+            QMessageBox.information(
+                self, translate_text("Fonte"), translate_text("Adicione uma fonte primeiro.")
+            )
             return
         descriptor = self.connector_registry.get(source.source_type)
         if not descriptor.operational:
             self.connection_states[source.id] = (
-                f"{descriptor.display_name}: o conector ainda está em desenvolvimento"
+                translate_text(
+                    "{name}: o conector ainda está em desenvolvimento"
+                ).format(name=descriptor.display_name)
             )
             self.connection_state.setText(self.connection_states[source.id])
             return
@@ -271,7 +316,9 @@ class ConnectionMixin:
             self.test_connection()
             return
         if mode == AuthMode.BROWSER:
-            self.connection_states[source.id] = "Login iniciado — aguardando autenticação"
+            self.connection_states[source.id] = translate_text(
+                "Login iniciado — aguardando autenticação"
+            )
             self.connection_state.setText(self.connection_states[source.id])
             self.mark_dirty()
             self.start_browser_login()
@@ -279,37 +326,47 @@ class ConnectionMixin:
         if mode == AuthMode.BASIC:
             if not self.auth_user.text().strip():
                 self.auth_user.setFocus()
-                self.connection_states[source.id] = "Informe o usuário antes de entrar"
+                self.connection_states[source.id] = translate_text(
+                    "Informe o usuário antes de entrar"
+                )
                 self.connection_state.setText(self.connection_states[source.id])
                 return
         if mode in {AuthMode.BASIC, AuthMode.BEARER}:
             if not self.auth_secret.text().strip():
                 self.auth_secret.setFocus()
-                self.connection_states[source.id] = "Informe o token antes de entrar"
+                self.connection_states[source.id] = translate_text(
+                    "Informe o token antes de entrar"
+                )
                 self.connection_state.setText(self.connection_states[source.id])
                 return
             self.test_connection()
             return
-        self.connection_state.setText("Selecione um método de autenticação válido")
+        self.connection_state.setText(
+            translate_text("Selecione um método de autenticação válido")
+        )
 
     def continue_without_login(self) -> None:
         """Select public access for the current source without starting a login."""
         source = self.source_by_combo(self.connection_source)
         if not source:
-            QMessageBox.information(self, "Fonte", "Adicione uma fonte primeiro.")
+            QMessageBox.information(
+                self, translate_text("Fonte"), translate_text("Adicione uma fonte primeiro.")
+            )
             return
         public_index = self.auth_mode.findData(AuthMode.PUBLIC.value)
         with QSignalBlocker(self.auth_mode):
             self.auth_mode.setCurrentIndex(public_index)
         self._auth_mode_changed(AuthMode.PUBLIC.value)
         updated = self.source_by_combo(self.connection_source) or source
-        state = "Sem login — somente páginas públicas serão consideradas"
+        state = translate_text("Sem login — somente páginas públicas serão consideradas")
         self.connection_states[updated.id] = state
         self.connection_state.setText(state)
         QMessageBox.information(
             self,
-            "Acesso público",
-            "A conexão continuará sem login; somente páginas públicas serão consideradas.",
+            translate_text("Acesso público"),
+            translate_text(
+                "A conexão continuará sem login; somente páginas públicas serão consideradas."
+            ),
         )
         self.mark_dirty()
 
@@ -332,5 +389,7 @@ class ConnectionMixin:
             self.secrets.set(updated.id, self.auth_secret.text())
             return updated
         except Exception as exc:
-            QMessageBox.warning(self, "Configuração de acesso inválida", str(exc))
+            QMessageBox.warning(
+                self, translate_text("Configuração de acesso inválida"), str(exc)
+            )
             return None

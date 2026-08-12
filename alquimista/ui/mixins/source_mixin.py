@@ -19,6 +19,7 @@ from ...models import AuthMode, SourceConfig, now_iso
 from ...runtime import CancellationToken
 from ...source_detection import DetectedSource, detect_source_url
 from ..connector_forms import form_spec
+from ..i18n import translate_text
 from ..source_controller import source_by_combo as resolve_source_by_combo
 from ..source_controller import source_by_index as resolve_source_by_index
 from ..workers import Worker
@@ -159,7 +160,7 @@ class SourceMixin:
             self.source_table.setItem(table_row, 4, QTableWidgetItem(added_at))
 
             menu = QPushButton("⋮")
-            menu.setToolTip("Alterar nome, URL ou configurações da fonte")
+            menu.setToolTip(translate_text("Alterar nome, URL ou configurações da fonte"))
             menu.setAccessibleName(f"Alterar fonte {source.name}")
             menu.clicked.connect(
                 lambda _checked=False, row=table_row: self._edit_source_row(row)
@@ -167,7 +168,9 @@ class SourceMixin:
             self.source_table.setCellWidget(table_row, 5, menu)
             self.source_table.setRowHeight(table_row, 44)
 
-        self.source_count_label.setText(f"{len(visible_rows)} itens")
+        self.source_count_label.setText(
+            translate_text("{count} itens").format(count=len(visible_rows))
+        )
         self.sources_empty_label.setVisible(not visible_rows)
 
 
@@ -197,7 +200,9 @@ class SourceMixin:
         raw = self.source_url_input.text().strip()
         if not raw:
             self.source_detection_status.setText(
-                "A plataforma, a API e os detalhes iniciais serão identificados pela URL."
+                translate_text(
+                    "A plataforma, a API e os detalhes iniciais serão identificados pela URL."
+                )
             )
             return
         try:
@@ -208,13 +213,17 @@ class SourceMixin:
         descriptor = self.connector_registry.get(detected.source_type)
         if descriptor.operational:
             message = (
-                f"✓ Detectado: {detected.display_name} · {detected.api_name}. "
-                "A descoberta de espaços e páginas acontece após a autenticação."
+                translate_text(
+                    "✓ Detectado: {display} · {api}. "
+                    "A descoberta de espaços e páginas acontece após a autenticação."
+                ).format(display=detected.display_name, api=detected.api_name)
             )
         else:
             message = (
-                f"✓ URL reconhecida: {detected.display_name} · {detected.api_name}. "
-                "O conector desta plataforma ainda está em desenvolvimento e não fará chamadas."
+                translate_text(
+                    "✓ URL reconhecida: {display} · {api}. "
+                    "O conector desta plataforma ainda está em desenvolvimento e não fará chamadas."
+                ).format(display=detected.display_name, api=detected.api_name)
             )
         self.source_detection_status.setText(message)
 
@@ -264,7 +273,11 @@ class SourceMixin:
     def _commit_source_from_form(self) -> None:
         raw_url = self.source_url_input.text().strip()
         if not raw_url:
-            QMessageBox.warning(self, "URL obrigatória", "Cole a URL da fonte antes de adicionar.")
+            QMessageBox.warning(
+                self,
+                translate_text("URL obrigatória"),
+                translate_text("Cole a URL da fonte antes de adicionar."),
+            )
             return
         try:
             detected = detect_source_url(raw_url)
@@ -278,7 +291,7 @@ class SourceMixin:
             )
             if row is not None:
                 self.project.sources[row] = updated
-                message = f"Fonte {updated.name} alterada."
+                message = translate_text("Fonte {name} alterada.").format(name=updated.name)
             elif (
                 len(self.project.sources) == 1
                 and not self.project.sources[0].base_url
@@ -289,11 +302,11 @@ class SourceMixin:
                 )
                 row = 0
                 updated = self.project.sources[0]
-                message = f"Fonte {updated.name} adicionada."
+                message = translate_text("Fonte {name} adicionada.").format(name=updated.name)
             else:
                 self.project.sources.append(updated)
                 row = len(self.project.sources) - 1
-                message = f"Fonte {updated.name} adicionada."
+                message = translate_text("Fonte {name} adicionada.").format(name=updated.name)
             self._source_added_at[updated.id] = self._source_added_at.get(
                 updated.id, datetime.now().astimezone().strftime("%d/%m/%Y %H:%M")
             )
@@ -304,7 +317,7 @@ class SourceMixin:
             self.mark_dirty()
             self.statusBar().showMessage(message, 3500)
         except ValueError as exc:
-            QMessageBox.warning(self, "URL não reconhecida", str(exc))
+            QMessageBox.warning(self, translate_text("URL não reconhecida"), str(exc))
 
 
     def _edit_source_row(self, table_row: int) -> None:
@@ -318,10 +331,12 @@ class SourceMixin:
             str(source.connector_options.get("source_url") or source.base_url)
         )
         self.source_name_input.setText(source.name)
-        self.source_add_button.setText("💾 Salvar alterações")
+        self.source_add_button.setText(translate_text("💾 Salvar alterações"))
         self.source_cancel_button.setEnabled(True)
         self.source_detection_status.setText(
-            f"Editando {source.name}. Altere a URL ou o nome e salve para atualizar a fonte."
+            translate_text(
+                "Editando {name}. Altere a URL ou o nome e salve para atualizar a fonte."
+            ).format(name=source.name)
         )
 
 
@@ -329,7 +344,7 @@ class SourceMixin:
         self._editing_source_row = None
         self.source_url_input.clear()
         self.source_name_input.clear()
-        self.source_add_button.setText("＋ Adicionar")
+        self.source_add_button.setText(translate_text("＋ Adicionar"))
         self.source_cancel_button.setEnabled(False)
         self._preview_detected_source()
 
@@ -341,14 +356,16 @@ class SourceMixin:
     def remove_selected_sources(self) -> None:
         rows = self._selected_source_rows()
         if not rows:
-            self.statusBar().showMessage("Selecione uma fonte para remover.", 3000)
+            self.statusBar().showMessage(
+                translate_text("Selecione uma fonte para remover."), 3000
+            )
             return
         names = ", ".join(self.project.sources[row].name for row in rows)
         if (
             QMessageBox.question(
                 self,
-                "Remover fontes",
-                f"Remover {names} do projeto?",
+                translate_text("Remover fontes"),
+                translate_text("Remover {names} do projeto?").format(names=names),
             )
             != QMessageBox.StandardButton.Yes
         ):
@@ -361,7 +378,7 @@ class SourceMixin:
         self._reset_source_form()
         self._refresh_source_widgets()
         self.mark_dirty()
-        self.statusBar().showMessage("Fonte(s) removida(s).", 3000)
+        self.statusBar().showMessage(translate_text("Fonte(s) removida(s)."), 3000)
 
 
     def current_source(self) -> SourceConfig | None:
@@ -398,7 +415,9 @@ class SourceMixin:
                     "" if source.name == "Nova fonte" and not source.base_url else source.name
                 )
             self.src_autofill_status.setText(
-                "💡 Cole uma URL completa para preencher estes campos automaticamente."
+                translate_text(
+                    "💡 Cole uma URL completa para preencher estes campos automaticamente."
+                )
             )
         finally:
             self._loading_source_form = False
@@ -428,48 +447,60 @@ class SourceMixin:
         if spec.bearer_only and source.auth_mode != AuthMode.BEARER:
             source.auth_mode = AuthMode.BEARER
         if gitbook:
-            self.src_url_label.setText("URL da API GitBook (opcional)")
+            self.src_url_label.setText(translate_text("URL da API GitBook (opcional)"))
             self.src_url.setPlaceholderText("https://api.gitbook.com/v1")
-            self.src_space_label.setText("ID da organização GitBook")
+            self.src_space_label.setText(translate_text("ID da organização GitBook"))
             self.src_space.setPlaceholderText("organizationId")
-            self.src_space_name_label.setText("Nome da organização (opcional)")
+            self.src_space_name_label.setText(translate_text("Nome da organização (opcional)"))
             self.src_root_mode.setCurrentIndex(self.src_root_mode.findData("space"))
             self.src_autofill_status.setText(
-                "GitBook usa o ID da organização e um Personal Access Token; o conteúdo é descoberto pela API oficial."
+                translate_text(
+                    "GitBook usa o ID da organização e um Personal Access Token; "
+                    "o conteúdo é descoberto pela API oficial."
+                )
             )
         elif zendesk:
             if source.auth_mode != AuthMode.BEARER:
                 source.auth_mode = AuthMode.BEARER
-            self.src_url_label.setText("URL da API Zendesk (opcional)")
+            self.src_url_label.setText(translate_text("URL da API Zendesk (opcional)"))
             self.src_url.setPlaceholderText("https://subdominio.zendesk.com/api/v2")
-            self.src_space_label.setText("Subdomínio Zendesk")
+            self.src_space_label.setText(translate_text("Subdomínio Zendesk"))
             self.src_space.setPlaceholderText("subdominio")
-            self.src_space_name_label.setText("Locale (opcional)")
+            self.src_space_name_label.setText(translate_text("Locale (opcional)"))
             self.src_autofill_status.setText(
-                "Zendesk Guide usa um access token OAuth em modo Bearer e acessa somente o Help Center."
+                translate_text(
+                    "Zendesk Guide usa um access token OAuth em modo Bearer e acessa "
+                    "somente o Help Center."
+                )
             )
         elif confluence:
-            self.src_url_label.setText("URL do Confluence")
-            self.src_url.setPlaceholderText("Cole a URL completa da página do Confluence")
-            self.src_space_label.setText("Chave do espaço")
+            self.src_url_label.setText(translate_text("URL do Confluence"))
+            self.src_url.setPlaceholderText(
+                translate_text("Cole a URL completa da página do Confluence")
+            )
+            self.src_space_label.setText(translate_text("Chave do espaço"))
             self.src_space.setPlaceholderText("")
-            self.src_space_name_label.setText("Nome do espaço")
+            self.src_space_name_label.setText(translate_text("Nome do espaço"))
         if implemented:
             self.src_autofill_status.setText(
-                f"Integração: {descriptor.integration_name}. As capacidades serão descobertas após a conexão."
+                translate_text(
+                    "Integração: {name}. As capacidades serão descobertas após a conexão."
+                ).format(name=descriptor.integration_name)
             )
         else:
             self.src_autofill_status.setText(
-                f"{descriptor.display_name}: Em desenvolvimento. Nenhuma chamada será realizada."
+                translate_text(
+                    "{name}: Em desenvolvimento. Nenhuma chamada será realizada."
+                ).format(name=descriptor.display_name)
             )
 
         if implemented:
-            self.src_url_label.setText(spec.url_label)
-            self.src_url.setPlaceholderText(spec.url_placeholder)
-            self.src_space_label.setText(spec.scope_label)
-            self.src_space.setPlaceholderText(spec.scope_placeholder)
-            self.src_space_name_label.setText(spec.scope_name_label)
-            self.src_autofill_status.setText(spec.help_text)
+            self.src_url_label.setText(translate_text(spec.url_label))
+            self.src_url.setPlaceholderText(translate_text(spec.url_placeholder))
+            self.src_space_label.setText(translate_text(spec.scope_label))
+            self.src_space.setPlaceholderText(translate_text(spec.scope_placeholder))
+            self.src_space_name_label.setText(translate_text(spec.scope_name_label))
+            self.src_autofill_status.setText(translate_text(spec.help_text))
 
 
     def _autofill_source_url(self) -> None:
@@ -627,7 +658,9 @@ class SourceMixin:
             return
         if (
             QMessageBox.question(
-                self, "Remover fonte", f"Remover “{source.name}” do projeto?"
+                self,
+                translate_text("Remover fonte"),
+                translate_text("Remover “{name}” do projeto?").format(name=source.name),
             )
             != QMessageBox.StandardButton.Yes
         ):
@@ -645,9 +678,9 @@ class SourceMixin:
             return
         selected, _ = QFileDialog.getSaveFileName(
             self,
-            "Exportar perfil da fonte",
+            translate_text("Exportar perfil da fonte"),
             f"{source.source_slug}.json",
-            "Perfil JSON (*.json)",
+            translate_text("Perfil JSON (*.json)"),
         )
         if not selected:
             return
@@ -663,7 +696,10 @@ class SourceMixin:
 
     def import_source_profile(self) -> None:
         selected, _ = QFileDialog.getOpenFileName(
-            self, "Importar perfil da fonte", "", "Perfil JSON (*.json)"
+            self,
+            translate_text("Importar perfil da fonte"),
+            "",
+            translate_text("Perfil JSON (*.json)"),
         )
         if not selected:
             return
@@ -678,7 +714,7 @@ class SourceMixin:
             self.sources_list.setCurrentRow(len(self.project.sources) - 1)
             self.mark_dirty()
         except Exception as exc:
-            QMessageBox.warning(self, "Perfil inválido", str(exc))
+            QMessageBox.warning(self, translate_text("Perfil inválido"), str(exc))
 
 
     def apply_source(self, *, silent: bool = False) -> bool:
@@ -704,11 +740,11 @@ class SourceMixin:
             self._refresh_source_widgets()
             self.mark_dirty()
             if not silent:
-                self.statusBar().showMessage("Fonte atualizada.", 3000)
+                self.statusBar().showMessage(translate_text("Fonte atualizada."), 3000)
             return True
         except Exception as exc:
             if not silent:
-                QMessageBox.warning(self, "Fonte inválida", str(exc))
+                QMessageBox.warning(self, translate_text("Fonte inválida"), str(exc))
             return False
 
 

@@ -47,10 +47,7 @@
     <message><source>Código Markdown</source><translation>Código Markdown</translation></message>
     <message><source>Visualização de leitura</source><translation>Vista de lectura</translation></message>
     <message><source>Operação concluída.</source><translation>Operación completada.</translation></message>
-    <message><source>Alterações não salvas</source><translation>Cambios sin guardar</translation></message>
-    <message><source>Descartar as alterações que ainda não foram salvas?</source><translation>¿Descartar los cambios que aún no se han guardado?</translation></message>
     <message><source>Escolha uma pasta no computador</source><translation>Elige una carpeta del ordenador</translation></message>
-    <message><source>Já existe uma operação em andamento…</source><translation>Ya hay una operación en curso…</translation></message>
     <message><source>🔎 Pesquisar por nome do espaço…</source><translation>🔎 Buscar por nombre del espacio…</translation></message>
     <message><source>🔎 Pesquisar por título, caminho ou pageId…</source><translation>🔎 Buscar por título, ruta o pageId…</translation></message>
     <message><source>📋 Todas as páginas</source><translation>📋 Todas las páginas</translation></message>
@@ -132,5 +129,126 @@
     <message><source>Falha de autenticação — credenciais inválidas ou sessão expirada</source><translation>Error de autenticación — credenciales no válidas o sesión expirada</translation></message>
     <message><source>Acesso restrito — a conta não possui permissão para este conteúdo</source><translation>Acceso restringido — la cuenta no tiene permiso para este contenido</translation></message>
     <message><source>Deseja interromper a operação atual? Arquivos concluídos serão preservados.</source><translation>¿Quieres detener la operación actual? Los archivos completados se conservarán.</translation></message>
+    <message><source>Falhas</source><translation>Fallos</translation></message>
+    <message><source>Não há páginas com falha para repetir.</source><translation>No hay páginas fallidas para reintentar.</translation></message>
+    <message><source>Escolha uma operação válida antes de executar.</source><translation>Elige una operación válida antes de ejecutar.</translation></message>
+    <message><source>Defina uma pasta de saída antes de executar.</source><translation>Define una carpeta de salida antes de ejecutar.</translation></message>
+    <message><source>Não foi possível consolidar porque o manifesto da consolidação ainda não foi criado. Execute primeiro a extração ou gere uma prévia.</source><translation>No se puede consolidar porque el manifiesto aún no se ha creado. Ejecuta primero la extracción o genera una vista previa.</translation></message>
+    <message><source>Adicione e ative ao menos uma fonte antes de executar.</source><translation>Añade y activa al menos una fuente antes de ejecutar.</translation></message>
+    <message><source>Nenhuma fonte ativa possui documentos selecionados. Volte à seleção, marque ao menos uma página e tente novamente.</source><translation>Ninguna fuente activa tiene documentos seleccionados. Vuelve a la selección, marca al menos una página e inténtalo de nuevo.</translation></message>
+    <message><source>Configure o formato Markdown antes de executar.</source><translation>Configura el formato Markdown antes de ejecutar.</translation></message>
+    <message><source>Configuração inválida</source><translation>Configuración no válida</translation></message>
+    <message><source>1 = primeiro módulo abaixo da raiz; 2 = módulo e submódulo; e assim por diante.</source><translation>1 = primer módulo bajo la raíz; 2 = módulo y submódulo; y así sucesivamente.</translation></message>
+    <message><source>Inclui os níveis do caminho como títulos antes de cada documento.</source><translation>Incluye los niveles de la ruta como títulos antes de cada documento.</translation></message>
+    <message><source>Executa a extração das páginas selecionadas e depois cria os pacotes consolidados.</source><translation>Extrae las páginas seleccionadas y después crea los paquetes consolidados.</translation></message>
+    <message><source>Busca somente as páginas selecionadas e atualiza os arquivos Markdown individuais.</source><translation>Busca solo las páginas seleccionadas y actualiza los archivos Markdown individuales.</translation></message>
+    <message><source>Usa os arquivos e o manifesto já extraídos para criar os pacotes consolidados.</source><translation>Usa los archivos y el manifiesto extraídos para crear los paquetes consolidados.</translation></message>
+    <message><source>Alterações não salvas</source><translation>Cambios sin guardar</translation></message>
+    <message><source>Descartar as alterações que ainda não foram salvas?</source><translation>¿Descartar los cambios que aún no se han guardado?</translation></message>
+    <message><source>Projeto inválido</source><translation>Proyecto no válido</translation></message>
+    <message><source>Falha ao salvar</source><translation>Error al guardar</translation></message>
+    <message><source>● Salvo em {path}</source><translation>● Guardado en {path}</translation></message>
+    <message><source>Carregar páginas</source><translation>Cargar páginas</translation></message>
+    <message><source>Carregar espaços</source><translation>Cargar espacios</translation></message>
+    <message><source>⏳ Carregando…</source><translation>⏳ Cargando…</translation></message>
+    <message><source>Carregando espaços e páginas…</source><translation>Cargando espacios y páginas…</translation></message>
+    <message><source>Pronto para carregar espaços.</source><translation>Listo para cargar espacios.</translation></message>
+    <message><source>Cancelamento solicitado. Finalizando a requisição atual…</source><translation>Cancelación solicitada. Finalizando la solicitud actual…</translation></message>
+    <message><source>Já existe uma operação em andamento…</source><translation>Ya hay una operación en curso…</translation></message>
+    <message><source>Mostrando {count:,} páginas carregadas. Expanda uma pasta ou página-pai para buscar os filhos.</source><translation>Mostrando {count:,} páginas cargadas. Expande una carpeta o página principal para buscar sus hijos.</translation></message>
+    <message><source>Mostrando {visible:,} de {total:,} páginas. O carregamento legado mantém apenas os metadados já descobertos.</source><translation>Mostrando {visible:,} de {total:,} páginas. La carga heredada conserva solo los metadatos ya descubiertos.</translation></message>
+    <message><source>Aguardando uma pasta. Use “Escolher pasta” para evitar erros de digitação.</source><translation>Esperando una carpeta. Usa “Elegir carpeta” para evitar errores de escritura.</translation></message>
+    <message><source>Pasta disponível para gravação · {free:.1f} GB livres</source><translation>Carpeta disponible para escritura · {free:.1f} GB libres</translation></message>
+    <message><source>Pasta disponível para gravação.</source><translation>Carpeta disponible para escritura.</translation></message>
+    <message><source>Não foi possível confirmar permissão de gravação. Escolha outra pasta ou verifique o acesso no Windows.</source><translation>No se pudo confirmar el permiso de escritura. Elige otra carpeta o comprueba el acceso en Windows.</translation></message>
+    <message><source>Concluído</source><translation>Completado</translation></message>
+    <message><source>Operação concluída com sucesso.</source><translation>Operación completada correctamente.</translation></message>
+    <message><source>Relatório copiado.</source><translation>Informe copiado.</translation></message>
+    <message><source>Caminho da pasta copiado.</source><translation>Ruta de carpeta copiada.</translation></message>
+    <message><source>O manifesto ainda não foi criado.</source><translation>El manifiesto aún no se ha creado.</translation></message>
+    <message><source>O log ainda não foi criado.</source><translation>El registro aún no se ha creado.</translation></message>
+    <message><source>Executando</source><translation>Ejecutando</translation></message>
+    <message><source>Pronto</source><translation>Listo</translation></message>
+    <message><source>🔌 {sources} fontes ativas    •    📄 {selected} páginas selecionadas&#10;📁 Saída: {output}&#10;🛡 A versão anterior será preservada se uma atualização falhar.</source><translation>🔌 {sources} fuentes activas    •    📄 {selected} páginas seleccionadas&#10;📁 Salida: {output}&#10;🛡 La versión anterior se conservará si una actualización falla.</translation></message>
+    <message><source>Estrutura prevista&#10;{execution}&#10;  ├─ {pages_subdir}  (arquivos Markdown individuais)&#10;  ├─ {output_subdir}  (pacotes consolidados)&#10;  ├─ manifesto_alquimista.json&#10;  └─ relatorio_execucao.json</source><translation>Estructura prevista&#10;{execution}&#10;  ├─ {pages_subdir}  (archivos Markdown individuales)&#10;  ├─ {output_subdir}  (paquetes consolidados)&#10;  ├─ manifesto_alquimista.json&#10;  └─ relatorio_execucao.json</translation></message>
+    <message><source>Como ficará no nível {level}:&#10;{lines}</source><translation>Cómo quedará en el nivel {level}:&#10;{lines}</translation></message>
+    <message><source>Exemplo no nível {level}: os pacotes serão agrupados por {level} nível(is) da árvore.&#10;{lines}</source><translation>Ejemplo en el nivel {level}: los paquetes se agruparán por {level} nivel(es) del árbol.&#10;{lines}</translation></message>
+    <message><source>Define quais páginas ficam juntas e como os arquivos serão distribuídos.</source><translation>Define qué páginas se agrupan y cómo se distribuyen los archivos.</translation></message>
+    <message><source>Separa os pacotes pelos módulos da árvore. Use a profundidade abaixo para escolher quantos níveis entram em cada grupo.</source><translation>Separa los paquetes por módulos del árbol. Usa la profundidad para elegir cuántos niveles entran en cada grupo.</translation></message>
+    <message><source>Separa pelo primeiro e segundo níveis da árvore, sem depender do campo de profundidade.</source><translation>Separa por el primer y segundo nivel del árbol sin depender del campo de profundidad.</translation></message>
+    <message><source>Separa por fonte e primeiro módulo; útil para várias fontes.</source><translation>Separa por fuente y primer módulo; útil para varias fuentes.</translation></message>
+    <message><source>pacote</source><translation>paquete</translation></message>
+    <message><source>calculada na prévia</source><translation>calculada en la vista previa</translation></message>
+    <message><source>Exemplo de arquivo: {prefix}-01.md, {prefix}-02.md</source><translation>Ejemplo de archivo: {prefix}-01.md, {prefix}-02.md</translation></message>
+    <message><source>📋 Resumo antes de gerar: {selected} páginas · {group} · até {pages} páginas · até {chars:,} caracteres · profundidade {depth} · saída Markdown (.md) · quantidade de arquivos: {estimate}</source><translation>📋 Resumen antes de generar: {selected} páginas · {group} · hasta {pages} páginas · hasta {chars:,} caracteres · profundidad {depth} · salida Markdown (.md) · cantidad de archivos: {estimate}</translation></message>
+    <message><source>○ Regras alteradas · atualize a prévia</source><translation>○ Reglas cambiadas · actualiza la vista previa</translation></message>
+    <message><source>Distribuição por grupo ({count} grupos)</source><translation>Distribución por grupo ({count} grupos)</translation></message>
+    <message><source>⚠  Prévia atualizada · {count} pacote(s) acima do limite</source><translation>⚠  Vista previa actualizada · {count} paquete(s) sobre el límite</translation></message>
+    <message><source>● Prévia atualizada agora</source><translation>● Vista previa actualizada</translation></message>
+    <message><source>{count} itens</source><translation>{count} elementos</translation></message>
+    <message><source>Fonte {name} alterada.</source><translation>Fuente {name} actualizada.</translation></message>
+    <message><source>Fonte {name} adicionada.</source><translation>Fuente {name} añadida.</translation></message>
+    <message><source>💾 Salvar alterações</source><translation>💾 Guardar cambios</translation></message>
+    <message><source>Editando {name}. Altere a URL ou o nome e salve para atualizar a fonte.</source><translation>Editando {name}. Cambia la URL o el nombre y guarda para actualizar la fuente.</translation></message>
+    <message><source>Selecione uma fonte para remover.</source><translation>Selecciona una fuente para eliminar.</translation></message>
+    <message><source>Remover {names} do projeto?</source><translation>¿Eliminar {names} del proyecto?</translation></message>
+    <message><source>💡 Cole uma URL completa para preencher estes campos automaticamente.</source><translation>💡 Pega una URL completa para rellenar estos campos automáticamente.</translation></message>
+    <message><source>Remover fonte</source><translation>Eliminar fuente</translation></message>
+    <message><source>Remover “{name}” do projeto?</source><translation>¿Eliminar “{name}” del proyecto?</translation></message>
+    <message><source>Perfil inválido</source><translation>Perfil no válido</translation></message>
+    <message><source>Configuração de acesso inválida</source><translation>Configuración de acceso no válida</translation></message>
+    <message><source>Adicione uma fonte primeiro.</source><translation>Añade primero una fuente.</translation></message>
+    <message><source>{name}: em desenvolvimento</source><translation>{name}: en desarrollo</translation></message>
+    <message><source>Conectando via {name}…</source><translation>Conectando mediante {name}…</translation></message>
+    <message><source>Conectando…</source><translation>Conectando…</translation></message>
+    <message><source>Conexão pública válida — somente páginas públicas serão consideradas</source><translation>Conexión pública válida — solo se considerarán páginas públicas</translation></message>
+    <message><source>Conexão pública válida. Sem login, somente páginas públicas poderão ser localizadas e extraídas.</source><translation>Conexión pública válida. Sin iniciar sesión, solo se podrán localizar y extraer páginas públicas.</translation></message>
+    <message><source>Conexão autenticada válida — conectado como: {identity}</source><translation>Conexión autenticada válida — conectado como: {identity}</translation></message>
+    <message><source>Login realizado. A extração poderá acessar as páginas disponíveis para esta conta.</source><translation>Inicio de sesión completado. La extracción podrá acceder a las páginas disponibles para esta cuenta.</translation></message>
+    <message><source>✅ {message}&#10;Espaços disponíveis para sua conta: {spaces}</source><translation>✅ {message}&#10;Espacios disponibles para tu cuenta: {spaces}</translation></message>
+    <message><source>Aguardando autenticação no navegador…</source><translation>Esperando la autenticación del navegador…</translation></message>
+    <message><source>Login concluído — carregando os espaços disponíveis…</source><translation>Inicio de sesión completado — cargando los espacios disponibles…</translation></message>
+    <message><source>✅ Login realizado. A sessão foi salva com seu consentimento. O acesso será limitado às permissões desta conta.</source><translation>✅ Inicio de sesión completado. La sesión se guardó con tu consentimiento. El acceso se limitará a los permisos de esta cuenta.</translation></message>
+    <message><source>Apagar sessão</source><translation>Eliminar sesión</translation></message>
+    <message><source>Apagar os cookies salvos para esta fonte?</source><translation>¿Eliminar las cookies guardadas para esta fuente?</translation></message>
+    <message><source>○ Sessão removida — escolha um modo de acesso</source><translation>○ Sesión eliminada — elige un modo de acceso</translation></message>
+    <message><source>Sessão disponível</source><translation>Sesión disponible</translation></message>
+    <message><source>Nenhuma sessão salva</source><translation>No hay ninguna sesión guardada</translation></message>
+    <message><source>Acesso público selecionado — ainda não testado</source><translation>Acceso público seleccionado — aún no probado</translation></message>
+    <message><source>Modo autenticado selecionado — não conectado</source><translation>Modo autenticado seleccionado — no conectado</translation></message>
+    <message><source>Testar acesso público</source><translation>Probar acceso público</translation></message>
+    <message><source>Informar token do {name}</source><translation>Introducir el token de {name}</translation></message>
+    <message><source>Entrar no {name}</source><translation>Iniciar sesión en {name}</translation></message>
+    <message><source>Validar o acesso à fonte usando {name}.</source><translation>Validar el acceso a la fuente usando {name}.</translation></message>
+    <message><source>{name}: o conector ainda está em desenvolvimento</source><translation>{name}: el conector aún está en desarrollo</translation></message>
+    <message><source>Login iniciado — aguardando autenticação</source><translation>Inicio de sesión iniciado — esperando autenticación</translation></message>
+    <message><source>Informe o usuário antes de entrar</source><translation>Introduce el usuario antes de iniciar sesión</translation></message>
+    <message><source>Informe o token antes de entrar</source><translation>Introduce el token antes de iniciar sesión</translation></message>
+    <message><source>Selecione um método de autenticação válido</source><translation>Selecciona un método de autenticación válido</translation></message>
+    <message><source>Sem login — somente páginas públicas serão consideradas</source><translation>Sin iniciar sesión — solo se considerarán páginas públicas</translation></message>
+    <message><source>Acesso público</source><translation>Acceso público</translation></message>
+    <message><source>Conexão concluída</source><translation>Conexión completada</translation></message>
+    <message><source>Login</source><translation>Inicio de sesión</translation></message>
+    <message><source>Manifesto</source><translation>Manifiesto</translation></message>
+    <message><source>Log técnico</source><translation>Registro técnico</translation></message>
+    <message><source>A conexão continuará sem login; somente páginas públicas serão consideradas.</source><translation>La conexión continuará sin iniciar sesión; solo se considerarán páginas públicas.</translation></message>
+    <message><source>Organização padrão das colunas restaurada.</source><translation>Organización predeterminada de columnas restaurada.</translation></message>
+    <message><source>{count} páginas-raiz carregadas em {name}.</source><translation>{count} páginas raíz cargadas en {name}.</translation></message>
+    <message><source>{count} páginas carregadas em {name}.</source><translation>{count} páginas cargadas en {name}.</translation></message>
+    <message><source>Resultado reutilizado do cache local.</source><translation>Resultado reutilizado de la caché local.</translation></message>
+    <message><source>Aguarde o carregamento atual terminar.</source><translation>Espera a que termine la carga actual.</translation></message>
+    <message><source>Filhos reutilizados do cache local.</source><translation>Elementos hijos reutilizados de la caché local.</translation></message>
+    <message><source>Valores recomendados restaurados. Salve o projeto.</source><translation>Valores recomendados restaurados. Guarda el proyecto.</translation></message>
+    <message><source>Restaurar valores recomendados</source><translation>Restaurar valores recomendados</translation></message>
+    <message><source>Restaurar timeout, tentativas e intervalo para os valores seguros padrão?</source><translation>¿Restaurar el tiempo de espera, los reintentos y el intervalo a los valores seguros predeterminados?</translation></message>
+    <message><source>Abrir projeto</source><translation>Abrir proyecto</translation></message>
+    <message><source>Salvar projeto</source><translation>Guardar proyecto</translation></message>
+    <message><source>Projeto ALQuimista (*.json)</source><translation>Proyecto ALQuimista (*.json)</translation></message>
+    <message><source>Exportar relatório</source><translation>Exportar informe</translation></message>
+    <message><source>Texto (*.txt)</source><translation>Texto (*.txt)</translation></message>
+    <message><source>Escolher pasta da base</source><translation>Elegir carpeta base</translation></message>
+    <message><source>Exportar perfil da fonte</source><translation>Exportar perfil de fuente</translation></message>
+    <message><source>Importar perfil da fonte</source><translation>Importar perfil de fuente</translation></message>
+    <message><source>Perfil JSON (*.json)</source><translation>Perfil JSON (*.json)</translation></message>
   </context>
 </TS>

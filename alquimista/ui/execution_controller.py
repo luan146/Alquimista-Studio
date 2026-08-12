@@ -9,6 +9,7 @@ from ..runtime import CancellationToken
 from ..services import ConsolidationService, ExtractionService, SourceRuntime
 from ..storage import MANIFEST_NAME, ManifestStore
 from .controllers import RuntimeBuilder
+from .i18n import translate_text
 from .project_controller import validate_project_snapshot
 
 
@@ -67,7 +68,11 @@ def retry_failures(window: Any) -> None:
             if entry.status.value in {"failed", "preserved_after_error"}:
                 failed.setdefault(entry.source_id, []).append(entry.page_id)
         if not any(failed.values()):
-            QMessageBox.information(window, "Falhas", "Não há páginas com falha para repetir.")
+            QMessageBox.information(
+                window,
+                translate_text("Falhas"),
+                translate_text("Não há páginas com falha para repetir."),
+            )
             return
         original = {
             source.id: list(source.selected_page_ids)
@@ -92,7 +97,7 @@ def retry_failures(window: Any) -> None:
                 source.selected_page_ids = original[source.id]
             window.project.extraction.force_reprocess = False
     except Exception as exc:
-        QMessageBox.warning(window, "Falhas", str(exc))
+        QMessageBox.warning(window, translate_text("Falhas"), str(exc))
 
 def run_complete(window: Any) -> None:
     snapshot = window._validated_project_snapshot()
@@ -137,31 +142,35 @@ def validated_project_snapshot(window: Any) -> ProjectConfig | None:
             else "complete"
         )
         if operation not in {"complete", "extract", "consolidate"}:
-            raise ValueError("Escolha uma operação válida antes de executar.")
+            raise ValueError(translate_text("Escolha uma operação válida antes de executar."))
         if not snapshot.output_dir.strip():
-            raise ValueError("Defina uma pasta de saída antes de executar.")
+            raise ValueError(translate_text("Defina uma pasta de saída antes de executar."))
         if operation == "consolidate":
             manifest = window._base_path() / MANIFEST_NAME
             if not manifest.is_file():
                 raise ValueError(
-                    "Não foi possível consolidar porque o manifesto da consolidação "
-                    "ainda não foi criado. Execute primeiro a extração ou gere uma prévia."
+                    translate_text(
+                        "Não foi possível consolidar porque o manifesto da consolidação "
+                        "ainda não foi criado. Execute primeiro a extração ou gere uma prévia."
+                    )
                 )
             return snapshot
         active = [source for source in snapshot.sources if source.enabled]
         if not active:
-            raise ValueError("Adicione e ative ao menos uma fonte antes de executar.")
+            raise ValueError(translate_text("Adicione e ative ao menos uma fonte antes de executar."))
         selected = sum(
             len(snapshot.selected_keys_for(source.id)) for source in active
         )
         if selected == 0:
             raise ValueError(
-                "Nenhuma fonte ativa possui documentos selecionados. "
-                "Volte à seleção, marque ao menos uma página e tente novamente."
+                translate_text(
+                    "Nenhuma fonte ativa possui documentos selecionados. "
+                    "Volte à seleção, marque ao menos uma página e tente novamente."
+                )
             )
         if not snapshot.markdown.metadata_style.strip():
-            raise ValueError("Configure o formato Markdown antes de executar.")
+            raise ValueError(translate_text("Configure o formato Markdown antes de executar."))
         return snapshot
     except Exception as exc:
-        QMessageBox.warning(window, "Configuração inválida", str(exc))
+        QMessageBox.warning(window, translate_text("Configuração inválida"), str(exc))
         return None

@@ -90,6 +90,7 @@ from .i18n import (
     LanguageManager,
     create_settings,
     retranslate_widget_tree,
+    translate_text,
 )
 from .mixins.connection_mixin import ConnectionMixin
 from .mixins.selection_mixin import SelectionMixin
@@ -468,7 +469,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                 header.moveSection(visual, logical)
             tree.setColumnWidth(logical, widths[logical])
         self.ui_settings.remove(f"tables/{settings_key}")
-        self.statusBar().showMessage("Organização padrão das colunas restaurada.", 3500)
+        self.statusBar().showMessage(
+            translate_text("Organização padrão das colunas restaurada."), 3500
+        )
 
     def _move_page_column(self, direction: int) -> None:
         logical = self.page_column_choice.currentData()
@@ -838,7 +841,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         if not source or data is None:
             return
         if self.worker is not None:
-            self.tree_load_status.setText("Aguarde a operação atual terminar…")
+            self.tree_load_status.setText(translate_text("Aguarde a operação atual terminar…"))
             return
         self._active_page_container = str(container_id)
         container = next(
@@ -964,7 +967,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         self.con_depth = QSpinBox()
         self.con_depth.setRange(1, 10)
         self.con_depth.setToolTip(
-            "1 = primeiro módulo abaixo da raiz; 2 = módulo e submódulo; e assim por diante."
+            translate_text(
+                "1 = primeiro módulo abaixo da raiz; 2 = módulo e submódulo; e assim por diante."
+            )
         )
         self.con_depth_choice = QComboBox()
         for level in range(1, 11):
@@ -977,7 +982,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         self.con_prefix = QLineEdit()
         self.con_hierarchy = QCheckBox("Repetir a árvore no arquivo consolidado")
         self.con_hierarchy.setToolTip(
-            "Inclui os níveis do caminho como títulos antes de cada documento."
+            translate_text("Inclui os níveis do caminho como títulos antes de cada documento.")
         )
         form.addRow("Agrupamento", self.con_group)
         self.con_group_help = QLabel(
@@ -1139,9 +1144,15 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             return
         self.execution_mode_help.setText(
             {
-                "complete": "Executa a extração das páginas selecionadas e depois cria os pacotes consolidados.",
-                "extract": "Busca somente as páginas selecionadas e atualiza os arquivos Markdown individuais.",
-                "consolidate": "Usa os arquivos e o manifesto já extraídos para criar os pacotes consolidados.",
+                "complete": translate_text(
+                    "Executa a extração das páginas selecionadas e depois cria os pacotes consolidados."
+                ),
+                "extract": translate_text(
+                    "Busca somente as páginas selecionadas e atualiza os arquivos Markdown individuais."
+                ),
+                "consolidate": translate_text(
+                    "Usa os arquivos e o manifesto já extraídos para criar os pacotes consolidados."
+                ),
             }.get(str(self.execution_mode.currentData()), "")
         )
 
@@ -1228,7 +1239,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
 
     def mark_dirty(self) -> None:
         self.dirty = True
-        self.project_badge.setText("● Alterações não salvas")
+        self.project_badge.setText(translate_text("● Alterações não salvas"))
 
     def _confirm_discard(self) -> bool:
         if not self.dirty:
@@ -1236,8 +1247,8 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         return (
             QMessageBox.question(
                 self,
-                "Alterações não salvas",
-                "Descartar as alterações que ainda não foram salvas?",
+                translate_text("Alterações não salvas"),
+                translate_text("Descartar as alterações que ainda não foram salvas?"),
             )
             == QMessageBox.StandardButton.Yes
         )
@@ -1258,7 +1269,10 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         if not self._confirm_discard():
             return
         selected, _ = QFileDialog.getOpenFileName(
-            self, "Abrir projeto", "", "Projeto ALQuimista (*.json)"
+            self,
+            translate_text("Abrir projeto"),
+            "",
+            translate_text("Projeto ALQuimista (*.json)"),
         )
         if not selected:
             return
@@ -1274,7 +1288,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             self._load_project_ui()
             self._append_log(f"Projeto aberto: {self.project_path}")
         except Exception as exc:
-            QMessageBox.critical(self, "Projeto inválido", str(exc))
+            QMessageBox.critical(self, translate_text("Projeto inválido"), str(exc))
 
     def save_project(self) -> bool:
         if self.project_path is None:
@@ -1284,19 +1298,21 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             self._sync_project_ui()
             save_project_file(self.project_path, self.project)
             self.dirty = False
-            self.project_badge.setText(f"● Salvo em {self.project_path.name}")
+            self.project_badge.setText(
+                translate_text("● Salvo em {path}").format(path=self.project_path.name)
+            )
             self.top_project.setText(self.project.project_name)
             return True
         except Exception as exc:
-            QMessageBox.critical(self, "Falha ao salvar", str(exc))
+            QMessageBox.critical(self, translate_text("Falha ao salvar"), str(exc))
             return False
 
     def save_project_as(self) -> None:
         selected, _ = QFileDialog.getSaveFileName(
             self,
-            "Salvar projeto",
+            translate_text("Salvar projeto"),
             "projeto_alquimista.json",
-            "Projeto ALQuimista (*.json)",
+            translate_text("Projeto ALQuimista (*.json)"),
         )
         if selected:
             previous_path = self.project_path
@@ -1311,9 +1327,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         self.selection_store = SelectionStore.from_selections(self.project.selections)
         self.top_project.setText(self.project.project_name)
         self.project_badge.setText(
-            f"● Salvo em {self.project_path.name}"
+            translate_text("● Salvo em {path}").format(path=self.project_path.name)
             if self.project_path
-            else "● Projeto não salvo"
+            else translate_text("● Projeto não salvo")
         )
         self.project_name.setText(self.project.project_name)
         self.output_dir.setText(self.project.output_dir)
@@ -1330,9 +1346,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         # Loading values may emit Qt signals; they do not represent user edits.
         self.dirty = False
         self.project_badge.setText(
-            f"● Salvo em {self.project_path.name}"
+            translate_text("● Salvo em {path}").format(path=self.project_path.name)
             if self.project_path
-            else "● Projeto não salvo"
+            else translate_text("● Projeto não salvo")
         )
 
     def _sync_project_ui(self, *, strict: bool = True) -> bool:
@@ -1381,9 +1397,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             and self.selection_stack.currentIndex() == 1
             and self._active_selection_container
         )
-        page_text = "Carregar páginas" if page_detail else "Carregar espaços"
+        page_text = translate_text("Carregar páginas" if page_detail else "Carregar espaços")
         selection_text = (
-            "Carregar páginas" if selection_detail else "Carregar espaços"
+            translate_text("Carregar páginas" if selection_detail else "Carregar espaços")
         )
         if hasattr(self, "tree_load_button"):
             self.tree_load_button.setText(page_text)
@@ -1399,13 +1415,19 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         buttons = [
             (
                 getattr(self, "tree_load_button", None),
-                "Carregar páginas" if self._active_page_container else "Carregar espaços",
+                translate_text(
+                    "Carregar páginas"
+                    if self._active_page_container
+                    else "Carregar espaços"
+                ),
             ),
             (
                 getattr(self, "selection_load_button", None),
-                "Carregar páginas"
-                if self._active_selection_container
-                else "Carregar espaços",
+                translate_text(
+                    "Carregar páginas"
+                    if self._active_selection_container
+                    else "Carregar espaços"
+                ),
             ),
         ]
         for current, idle_text in buttons:
@@ -1413,7 +1435,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                 continue
             current.setEnabled(not loading)
             if loading:
-                current.setText("⏳ Carregando…")
+                current.setText(translate_text("⏳ Carregando…"))
                 current.setIcon(AlchemistIconAtlas.icon(7, 20))
             else:
                 current.setText(idle_text)
@@ -1427,11 +1449,12 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                 current.setEnabled(loading)
         if hasattr(self, "tree_load_status"):
             self.tree_load_status.setText(
-                message
-                or (
-                    "Carregando espaços e páginas…"
+                translate_text(message)
+                if message
+                else (
+                    translate_text("Carregando espaços e páginas…")
                     if loading
-                    else "Pronto para carregar espaços."
+                    else translate_text("Pronto para carregar espaços.")
                 )
             )
         if hasattr(self, "tree_load_progress"):
@@ -1439,14 +1462,14 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             if loading:
                 self.tree_load_progress.setRange(0, 0)
         if loading:
-            self.statusBar().showMessage("Carregando espaços e páginas…")
+            self.statusBar().showMessage(translate_text("Carregando espaços e páginas…"))
 
     def _cancel_tree_operation(self) -> None:
         """Cancel a tree/space load immediately, without a confirmation dialog."""
         if not self._tree_loading or self.token is None:
             return
         self.token.cancel()
-        message = "Cancelamento solicitado. Finalizando a requisição atual…"
+        message = translate_text("Cancelamento solicitado. Finalizando a requisição atual…")
         if hasattr(self, "tree_load_status"):
             self.tree_load_status.setText(message)
         self.statusBar().showMessage(message)
@@ -1485,7 +1508,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             return
         if self.worker is not None:
             if hasattr(self, "tree_load_status"):
-                self.tree_load_status.setText("Já existe uma operação em andamento…")
+                self.tree_load_status.setText(
+                    translate_text("Já existe uma operação em andamento…")
+                )
             return
         self._set_tree_loading(True)
         if source.source_type in {"confluence_rest", "gitbook_api", "zendesk_guide"}:
@@ -1830,18 +1855,29 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             self._set_tree_loading(
                 False,
                 (
-                    f"{len(result['pages'])} páginas-raiz carregadas em {container['name']}."
+                    translate_text(
+                        "{count} páginas-raiz carregadas em {name}."
+                    ).format(count=len(result["pages"]), name=container["name"])
                     if result.get("lazy_enabled") and not result.get("full_loaded")
-                    else f"{len(result['pages'])} páginas carregadas em {container['name']}."
+                    else translate_text(
+                        "{count} páginas carregadas em {name}."
+                    ).format(count=len(result["pages"]), name=container["name"])
                 ),
             )
             self.statusBar().showMessage(
-                str(result.get("fallback_reason") or f"{len(result['pages'])} páginas carregadas em {container['name']}."),
+                str(
+                    result.get("fallback_reason")
+                    or translate_text("{count} páginas carregadas em {name}.").format(
+                        count=len(result["pages"]), name=container["name"]
+                    )
+                ),
                 7000,
             )
 
             if result.get("from_cache"):
-                self.statusBar().showMessage("Resultado reutilizado do cache local.", 7000)
+                self.statusBar().showMessage(
+                    translate_text("Resultado reutilizado do cache local."), 7000
+                )
 
         self._start_worker(work, done)
 
@@ -1968,7 +2004,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         if not state.get("enabled") or document_id in state.get("loaded_parents", []):
             return
         if self.worker is not None:
-            self.statusBar().showMessage("Aguarde o carregamento atual terminar.", 3000)
+            self.statusBar().showMessage(
+                translate_text("Aguarde o carregamento atual terminar."), 3000
+            )
             return
         self._load_document_children(
             source,
@@ -2062,7 +2100,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             suffix = " (cache local)" if result.get("from_cache") else ""
             self._set_tree_loading(False, f"{len(result['pages'])} filhos carregados{suffix}.")
             if result.get("from_cache"):
-                self.statusBar().showMessage("Filhos reutilizados do cache local.", 7000)
+                self.statusBar().showMessage(
+                    translate_text("Filhos reutilizados do cache local."), 7000
+                )
 
         self._start_worker(work, done)
 
@@ -2138,8 +2178,10 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         self.tree_empty.setVisible(False)
         self._refresh_page_summary(source, {**data, "pages": pages})
         self.page_render_status.setText(
-            f"Mostrando {len(pages):,} páginas carregadas. "
-            "Expanda uma pasta ou página-pai para buscar os filhos."
+            translate_text(
+                "Mostrando {count:,} páginas carregadas. "
+                "Expanda uma pasta ou página-pai para buscar os filhos."
+            ).format(count=len(pages))
         )
         self.page_load_more_button.setVisible(False)
 
@@ -2293,8 +2335,10 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         self.tree_empty.setVisible(False)
         self._refresh_page_summary(source, {**data, "pages": pages})
         self.page_render_status.setText(
-            f"Mostrando {len(pages):,} de {len(all_pages):,} páginas. "
-            "O carregamento legado mantém apenas os metadados já descobertos."
+            translate_text(
+                "Mostrando {visible:,} de {total:,} páginas. "
+                "O carregamento legado mantém apenas os metadados já descobertos."
+            ).format(visible=len(pages), total=len(all_pages))
         )
         self.page_load_more_button.setVisible(len(pages) < len(all_pages))
 
@@ -2382,9 +2426,11 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         active = [source for source in self.project.sources if source.enabled]
         selected = sum(len(source.selected_page_ids) for source in active)
         self.extraction_summary.setText(
-            f"🔌 {len(active)} fontes ativas    •    📄 {selected} páginas selecionadas\n"
-            f"📁 Saída: {self.project.output_dir}\n"
-            "🛡 A versão anterior será preservada se uma atualização falhar."
+            translate_text(
+                "🔌 {sources} fontes ativas    •    📄 {selected} páginas selecionadas\n"
+                "📁 Saída: {output}\n"
+                "🛡 A versão anterior será preservada se uma atualização falhar."
+            ).format(sources=len(active), selected=selected, output=self.project.output_dir)
         )
 
     def _update_output_preview(self, *_args: Any) -> None:
@@ -2393,7 +2439,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         raw = self.output_dir.text().strip()
         if not raw:
             self.output_path_status.setText(
-                "Aguardando uma pasta. Use “Escolher pasta” para evitar erros de digitação."
+                translate_text(
+                    "Aguardando uma pasta. Use “Escolher pasta” para evitar erros de digitação."
+                )
             )
             self.output_structure.setText("")
             return
@@ -2404,24 +2452,36 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             try:
                 free_gb = shutil.disk_usage(nearest).free / (1024**3)
                 self.output_path_status.setText(
-                    f"Pasta disponível para gravação · {free_gb:.1f} GB livres"
+                    translate_text("Pasta disponível para gravação · {free:.1f} GB livres").format(
+                        free=free_gb
+                    )
                 )
             except OSError:
-                self.output_path_status.setText("Pasta disponível para gravação.")
+                self.output_path_status.setText(
+                    translate_text("Pasta disponível para gravação.")
+                )
         else:
             self.output_path_status.setText(
-                "Não foi possível confirmar permissão de gravação. Escolha outra pasta "
-                "ou verifique o acesso no Windows."
+                translate_text(
+                    "Não foi possível confirmar permissão de gravação. Escolha outra pasta "
+                    "ou verifique o acesso no Windows."
+                )
             )
         root = path.name or "ALQuimista"
         execution = "Extracao-AAAA-MM-DD" if self.output_subfolder.isChecked() else root
         self.output_structure.setText(
-            "Estrutura prevista\n"
-            f"{execution}\n"
-            f"  ├─ {self.project.extraction.pages_subdir}  (arquivos Markdown individuais)\n"
-            f"  ├─ {self.project.consolidation.output_subdir}  (pacotes consolidados)\n"
-            "  ├─ manifesto_alquimista.json\n"
-            "  └─ relatorio_execucao.json"
+            translate_text(
+                "Estrutura prevista\n"
+                "{execution}\n"
+                "  ├─ {pages_subdir}  (arquivos Markdown individuais)\n"
+                "  ├─ {output_subdir}  (pacotes consolidados)\n"
+                "  ├─ manifesto_alquimista.json\n"
+                "  └─ relatorio_execucao.json"
+            ).format(
+                execution=execution,
+                pages_subdir=self.project.extraction.pages_subdir,
+                output_subdir=self.project.consolidation.output_subdir,
+            )
         )
 
     def _refresh_review_legacy(self) -> None:
@@ -2580,29 +2640,42 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             hierarchy = path[:-1] or path[:1]
             group = " › ".join(hierarchy[:level])
             lines.append(f"• {group}  →  {path[-1]}")
-        text = (
-            f"Exemplo no nível {level}: os pacotes serão agrupados por "
-            f"{level} nível(is) da árvore.\n" + "\n".join(lines)
+        self.con_depth_example.setText(
+            translate_text(
+                "Exemplo no nível {level}: os pacotes serão agrupados por "
+                "{level} nível(is) da árvore.\n{lines}"
+            ).format(level=level, lines="\n".join(lines))
         )
-        self.con_depth_example.setText(text)
-        self.con_depth_preview.setText(f"Como ficará no nível {level}:\n" + "\n".join(lines))
+        self.con_depth_preview.setText(
+            translate_text("Como ficará no nível {level}:\n{lines}").format(
+                level=level, lines="\n".join(lines)
+            )
+        )
 
     def _update_consolidation_summary(self, *_args: Any) -> None:
         if not hasattr(self, "con_summary"):
             return
         help_text = {
             "module": (
-                "Separa os pacotes pelos módulos da árvore. Use a profundidade abaixo "
-                "para escolher quantos níveis entram em cada grupo."
+                translate_text(
+                    "Separa os pacotes pelos módulos da árvore. Use a profundidade abaixo "
+                    "para escolher quantos níveis entram em cada grupo."
+                )
             ),
             "module_submodule": (
-                "Separa pelo primeiro e segundo níveis da árvore, sem depender do campo "
-                "de profundidade."
+                translate_text(
+                    "Separa pelo primeiro e segundo níveis da árvore, sem depender do campo "
+                    "de profundidade."
+                )
             ),
-            "source_module": "Separa por fonte e primeiro módulo; útil para várias fontes.",
+            "source_module": translate_text(
+                "Separa por fonte e primeiro módulo; útil para várias fontes."
+            ),
         }.get(
             str(self.con_group.currentData()),
-            "Define quais páginas ficam juntas e como os arquivos serão distribuídos.",
+            translate_text(
+                "Define quais páginas ficam juntas e como os arquivos serão distribuídos."
+            ),
         )
         self.con_group_help.setText(help_text)
         selected = sum(
@@ -2610,24 +2683,36 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             for source in self.project.sources
             if source.enabled
         )
-        prefix = self.con_prefix.text().strip() or "pacote"
+        prefix = self.con_prefix.text().strip() or translate_text("pacote")
         estimate = len(self.last_consolidation_preview)
-        estimate_text = str(estimate) if estimate else "calculada na prévia"
+        estimate_text = str(estimate) if estimate else translate_text("calculada na prévia")
         self.con_filename_preview.setText(
-            f"Exemplo de arquivo: {prefix}-01.md, {prefix}-02.md"
+            translate_text("Exemplo de arquivo: {prefix}-01.md, {prefix}-02.md").format(
+                prefix=prefix
+            )
         )
         self.con_summary.setText(
-            f"📋 Resumo antes de gerar: {selected} páginas · "
-            f"{self.con_group.currentText()} · até {self.con_pages.value()} páginas · "
-            f"até {self.con_chars.value():,} caracteres · profundidade {self.con_depth.value()} · saída Markdown (.md) · "
-            f"quantidade de arquivos: {estimate_text}".replace(",", ".")
+            translate_text(
+                "📋 Resumo antes de gerar: {selected} páginas · {group} · "
+                "até {pages} páginas · até {chars:,} caracteres · profundidade {depth} · "
+                "saída Markdown (.md) · quantidade de arquivos: {estimate}"
+            ).format(
+                selected=selected,
+                group=self.con_group.currentText(),
+                pages=self.con_pages.value(),
+                chars=self.con_chars.value(),
+                depth=self.con_depth.value(),
+                estimate=estimate_text,
+            ).replace(",", ".")
         )
         self._update_depth_examples()
 
     def _mark_consolidation_preview_stale(self, *_args: Any) -> None:
         if not hasattr(self, "con_preview_status") or not self.last_consolidation_preview:
             return
-        self.con_preview_status.setText("○ Regras alteradas · atualize a prévia")
+        self.con_preview_status.setText(
+            translate_text("○ Regras alteradas · atualize a prévia")
+        )
         self.con_preview_status.setProperty("stale", True)
         self.con_preview_status.style().unpolish(self.con_preview_status)
         self.con_preview_status.style().polish(self.con_preview_status)
@@ -2665,15 +2750,21 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         self.con_stat_labels["characters"].setText(f"{total_chars:,}".replace(",", "."))
         average = round(total_pages / package_count) if package_count else 0
         self.con_stat_labels["average"].setText(str(average))
-        self.con_distribution_title.setText(f"Distribuição por grupo ({len(groups)} grupos)")
+        self.con_distribution_title.setText(
+            translate_text("Distribuição por grupo ({count} grupos)").format(
+                count=len(groups)
+            )
+        )
         self.package_table.setVisible(bool(groups))
         self.con_preview_empty.setVisible(not bool(groups))
         if oversized:
             self.con_preview_status.setText(
-                f"⚠  Prévia atualizada · {oversized} pacote(s) acima do limite"
+                translate_text(
+                    "⚠  Prévia atualizada · {count} pacote(s) acima do limite"
+                ).format(count=oversized)
             )
         else:
-            self.con_preview_status.setText("● Prévia atualizada agora")
+            self.con_preview_status.setText(translate_text("● Prévia atualizada agora"))
         self.con_preview_status.setProperty("stale", False)
         self.con_preview_status.style().unpolish(self.con_preview_status)
         self.con_preview_status.style().polish(self.con_preview_status)
@@ -2741,10 +2832,14 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
     def _operation_done(self, result: dict[str, Any]) -> None:
         self.last_result = result
         self.progress.setValue(100)
-        self.progress_label.setText("Operação concluída.")
+        self.progress_label.setText(translate_text("Operação concluída."))
         self._refresh_results()
         self._show_page("results")
-        QMessageBox.information(self, "Concluído", "Operação concluída com sucesso.")
+        QMessageBox.information(
+            self,
+            translate_text("Concluído"),
+            translate_text("Operação concluída com sucesso."),
+        )
 
     def _refresh_results(self) -> None:
         if not self.last_result:
@@ -2791,7 +2886,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
 
     def copy_report(self) -> None:
         QApplication.clipboard().setText(self.result_summary.toPlainText())
-        self.statusBar().showMessage("Relatório copiado.", 3000)
+        self.statusBar().showMessage(translate_text("Relatório copiado."), 3000)
 
     def _base_path(self) -> Path:
         raw = Path(self.project.output_dir)
@@ -2804,20 +2899,28 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
 
     def copy_output_path(self) -> None:
         QApplication.clipboard().setText(str(self._base_path()))
-        self.statusBar().showMessage("Caminho da pasta copiado.", 3000)
+        self.statusBar().showMessage(translate_text("Caminho da pasta copiado."), 3000)
 
     def open_manifest(self) -> None:
         path = self._base_path() / MANIFEST_NAME
         if path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
         else:
-            QMessageBox.information(self, "Manifesto", "O manifesto ainda não foi criado.")
+            QMessageBox.information(
+                self,
+                translate_text("Manifesto"),
+                translate_text("O manifesto ainda não foi criado."),
+            )
 
     def open_log(self) -> None:
         if self.log_path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.log_path)))
         else:
-            QMessageBox.information(self, "Log técnico", "O log ainda não foi criado.")
+            QMessageBox.information(
+                self,
+                translate_text("Log técnico"),
+                translate_text("O log ainda não foi criado."),
+            )
 
     def export_report(self) -> None:
         selected, _ = QFileDialog.getSaveFileName(
@@ -2836,8 +2939,10 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         if (
             QMessageBox.question(
                 self,
-                "Restaurar valores recomendados",
-                "Restaurar timeout, tentativas e intervalo para os valores seguros padrão?",
+                translate_text("Restaurar valores recomendados"),
+                translate_text(
+                    "Restaurar timeout, tentativas e intervalo para os valores seguros padrão?"
+                ),
             )
             != QMessageBox.StandardButton.Yes
         ):
@@ -2847,7 +2952,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         self.retries_spin.setValue(defaults.retry_count)
         self.delay_spin.setValue(defaults.request_delay_ms)
         self.mark_dirty()
-        self.statusBar().showMessage("Valores recomendados restaurados. Salve o projeto.", 4000)
+        self.statusBar().showMessage(
+            translate_text("Valores recomendados restaurados. Salve o projeto."), 4000
+        )
 
 
 
@@ -2880,10 +2987,12 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             len(self.project.selected_keys_for(source.id)) for source in active
         )
         if hasattr(self, "dashboard_status"):
-            state = "Executando" if self.worker else "Pronto"
+            state = translate_text("Executando" if self.worker else "Pronto")
             self.dashboard_status.setText(
-                "🛡  Sua conexão é segura. "
-                f"{len(active)} fonte(s) ativa(s), {selected} página(s) selecionada(s) — {state}."
+                translate_text(
+                    "🛡  Sua conexão é segura. {sources} fonte(s) ativa(s), "
+                    "{selected} página(s) selecionada(s) — {state}."
+                ).format(sources=len(active), selected=selected, state=state)
             )
         self._update_consolidation_action_availability()
 

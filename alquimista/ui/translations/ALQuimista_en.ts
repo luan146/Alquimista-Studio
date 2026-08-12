@@ -46,10 +46,7 @@
     <message><source>Código Markdown</source><translation>Markdown code</translation></message>
     <message><source>Visualização de leitura</source><translation>Reading preview</translation></message>
     <message><source>Operação concluída.</source><translation>Operation completed.</translation></message>
-    <message><source>Alterações não salvas</source><translation>Unsaved changes</translation></message>
-    <message><source>Descartar as alterações que ainda não foram salvas?</source><translation>Discard changes that have not been saved?</translation></message>
     <message><source>Escolha uma pasta no computador</source><translation>Choose a folder on the computer</translation></message>
-    <message><source>Já existe uma operação em andamento…</source><translation>An operation is already in progress…</translation></message>
     <message><source>🔎 Pesquisar por nome do espaço…</source><translation>🔎 Search by space name…</translation></message>
     <message><source>🔎 Pesquisar por título, caminho ou pageId…</source><translation>🔎 Search by title, path or pageId…</translation></message>
     <message><source>📋 Todas as páginas</source><translation>📋 All pages</translation></message>
@@ -133,5 +130,126 @@
     <message><source>Acesso restrito — a conta não possui permissão para este conteúdo</source><translation>Restricted access — the account has no permission for this content</translation></message>
     <message><source>Cancelar operação</source><translation>Cancel operation</translation></message>
     <message><source>Deseja interromper a operação atual? Arquivos concluídos serão preservados.</source><translation>Do you want to stop the current operation? Completed files will be preserved.</translation></message>
+    <message><source>Falhas</source><translation>Failures</translation></message>
+    <message><source>Não há páginas com falha para repetir.</source><translation>There are no failed pages to retry.</translation></message>
+    <message><source>Escolha uma operação válida antes de executar.</source><translation>Choose a valid operation before running it.</translation></message>
+    <message><source>Defina uma pasta de saída antes de executar.</source><translation>Set an output folder before running it.</translation></message>
+    <message><source>Não foi possível consolidar porque o manifesto da consolidação ainda não foi criado. Execute primeiro a extração ou gere uma prévia.</source><translation>Consolidation cannot run because its manifest has not been created yet. Run extraction first or generate a preview.</translation></message>
+    <message><source>Adicione e ative ao menos uma fonte antes de executar.</source><translation>Add and enable at least one source before running.</translation></message>
+    <message><source>Nenhuma fonte ativa possui documentos selecionados. Volte à seleção, marque ao menos uma página e tente novamente.</source><translation>No active source has selected documents. Return to selection, mark at least one page and try again.</translation></message>
+    <message><source>Configure o formato Markdown antes de executar.</source><translation>Configure the Markdown format before running.</translation></message>
+    <message><source>Configuração inválida</source><translation>Invalid configuration</translation></message>
+    <message><source>1 = primeiro módulo abaixo da raiz; 2 = módulo e submódulo; e assim por diante.</source><translation>1 = first module below the root; 2 = module and submodule; and so on.</translation></message>
+    <message><source>Inclui os níveis do caminho como títulos antes de cada documento.</source><translation>Includes path levels as headings before each document.</translation></message>
+    <message><source>Executa a extração das páginas selecionadas e depois cria os pacotes consolidados.</source><translation>Extracts the selected pages and then creates consolidated packages.</translation></message>
+    <message><source>Busca somente as páginas selecionadas e atualiza os arquivos Markdown individuais.</source><translation>Fetches only the selected pages and updates individual Markdown files.</translation></message>
+    <message><source>Usa os arquivos e o manifesto já extraídos para criar os pacotes consolidados.</source><translation>Uses the extracted files and manifest to create consolidated packages.</translation></message>
+    <message><source>Alterações não salvas</source><translation>Unsaved changes</translation></message>
+    <message><source>Descartar as alterações que ainda não foram salvas?</source><translation>Discard changes that have not been saved?</translation></message>
+    <message><source>Projeto inválido</source><translation>Invalid project</translation></message>
+    <message><source>Falha ao salvar</source><translation>Save failed</translation></message>
+    <message><source>● Salvo em {path}</source><translation>● Saved to {path}</translation></message>
+    <message><source>Carregar páginas</source><translation>Load pages</translation></message>
+    <message><source>Carregar espaços</source><translation>Load spaces</translation></message>
+    <message><source>⏳ Carregando…</source><translation>⏳ Loading…</translation></message>
+    <message><source>Carregando espaços e páginas…</source><translation>Loading spaces and pages…</translation></message>
+    <message><source>Pronto para carregar espaços.</source><translation>Ready to load spaces.</translation></message>
+    <message><source>Cancelamento solicitado. Finalizando a requisição atual…</source><translation>Cancellation requested. Finishing the current request…</translation></message>
+    <message><source>Já existe uma operação em andamento…</source><translation>An operation is already in progress…</translation></message>
+    <message><source>Mostrando {count:,} páginas carregadas. Expanda uma pasta ou página-pai para buscar os filhos.</source><translation>Showing {count:,} loaded pages. Expand a folder or parent page to fetch children.</translation></message>
+    <message><source>Mostrando {visible:,} de {total:,} páginas. O carregamento legado mantém apenas os metadados já descobertos.</source><translation>Showing {visible:,} of {total:,} pages. Legacy loading keeps only already discovered metadata.</translation></message>
+    <message><source>Aguardando uma pasta. Use “Escolher pasta” para evitar erros de digitação.</source><translation>Waiting for a folder. Use “Choose folder” to avoid typing errors.</translation></message>
+    <message><source>Pasta disponível para gravação · {free:.1f} GB livres</source><translation>Folder available for writing · {free:.1f} GB free</translation></message>
+    <message><source>Pasta disponível para gravação.</source><translation>Folder available for writing.</translation></message>
+    <message><source>Não foi possível confirmar permissão de gravação. Escolha outra pasta ou verifique o acesso no Windows.</source><translation>Could not confirm write permission. Choose another folder or check access on Windows.</translation></message>
+    <message><source>Concluído</source><translation>Completed</translation></message>
+    <message><source>Operação concluída com sucesso.</source><translation>Operation completed successfully.</translation></message>
+    <message><source>Relatório copiado.</source><translation>Report copied.</translation></message>
+    <message><source>Caminho da pasta copiado.</source><translation>Folder path copied.</translation></message>
+    <message><source>O manifesto ainda não foi criado.</source><translation>The manifest has not been created yet.</translation></message>
+    <message><source>O log ainda não foi criado.</source><translation>The log has not been created yet.</translation></message>
+    <message><source>Executando</source><translation>Running</translation></message>
+    <message><source>Pronto</source><translation>Ready</translation></message>
+    <message><source>🔌 {sources} fontes ativas    •    📄 {selected} páginas selecionadas&#10;📁 Saída: {output}&#10;🛡 A versão anterior será preservada se uma atualização falhar.</source><translation>🔌 {sources} active sources    •    📄 {selected} selected pages&#10;📁 Output: {output}&#10;🛡 The previous version will be preserved if an update fails.</translation></message>
+    <message><source>Estrutura prevista&#10;{execution}&#10;  ├─ {pages_subdir}  (arquivos Markdown individuais)&#10;  ├─ {output_subdir}  (pacotes consolidados)&#10;  ├─ manifesto_alquimista.json&#10;  └─ relatorio_execucao.json</source><translation>Expected structure&#10;{execution}&#10;  ├─ {pages_subdir}  (individual Markdown files)&#10;  ├─ {output_subdir}  (consolidated packages)&#10;  ├─ manifesto_alquimista.json&#10;  └─ relatorio_execucao.json</translation></message>
+    <message><source>Como ficará no nível {level}:&#10;{lines}</source><translation>How it will look at level {level}:&#10;{lines}</translation></message>
+    <message><source>Exemplo no nível {level}: os pacotes serão agrupados por {level} nível(is) da árvore.&#10;{lines}</source><translation>Example at level {level}: packages will be grouped by {level} tree level(s).&#10;{lines}</translation></message>
+    <message><source>Define quais páginas ficam juntas e como os arquivos serão distribuídos.</source><translation>Defines which pages stay together and how files are distributed.</translation></message>
+    <message><source>Separa os pacotes pelos módulos da árvore. Use a profundidade abaixo para escolher quantos níveis entram em cada grupo.</source><translation>Splits packages by tree modules. Use the depth below to choose how many levels belong to each group.</translation></message>
+    <message><source>Separa pelo primeiro e segundo níveis da árvore, sem depender do campo de profundidade.</source><translation>Splits by the first and second tree levels without depending on the depth field.</translation></message>
+    <message><source>Separa por fonte e primeiro módulo; útil para várias fontes.</source><translation>Splits by source and first module; useful for multiple sources.</translation></message>
+    <message><source>pacote</source><translation>package</translation></message>
+    <message><source>calculada na prévia</source><translation>calculated in preview</translation></message>
+    <message><source>Exemplo de arquivo: {prefix}-01.md, {prefix}-02.md</source><translation>File example: {prefix}-01.md, {prefix}-02.md</translation></message>
+    <message><source>📋 Resumo antes de gerar: {selected} páginas · {group} · até {pages} páginas · até {chars:,} caracteres · profundidade {depth} · saída Markdown (.md) · quantidade de arquivos: {estimate}</source><translation>📋 Summary before generation: {selected} pages · {group} · up to {pages} pages · up to {chars:,} characters · depth {depth} · Markdown output (.md) · file count: {estimate}</translation></message>
+    <message><source>○ Regras alteradas · atualize a prévia</source><translation>○ Rules changed · update the preview</translation></message>
+    <message><source>Distribuição por grupo ({count} grupos)</source><translation>Distribution by group ({count} groups)</translation></message>
+    <message><source>⚠  Prévia atualizada · {count} pacote(s) acima do limite</source><translation>⚠  Preview updated · {count} package(s) over the limit</translation></message>
+    <message><source>● Prévia atualizada agora</source><translation>● Preview updated now</translation></message>
+    <message><source>{count} itens</source><translation>{count} items</translation></message>
+    <message><source>Fonte {name} alterada.</source><translation>Source {name} updated.</translation></message>
+    <message><source>Fonte {name} adicionada.</source><translation>Source {name} added.</translation></message>
+    <message><source>💾 Salvar alterações</source><translation>💾 Save changes</translation></message>
+    <message><source>Editando {name}. Altere a URL ou o nome e salve para atualizar a fonte.</source><translation>Editing {name}. Change the URL or name and save to update the source.</translation></message>
+    <message><source>Selecione uma fonte para remover.</source><translation>Select a source to remove.</translation></message>
+    <message><source>Remover {names} do projeto?</source><translation>Remove {names} from the project?</translation></message>
+    <message><source>💡 Cole uma URL completa para preencher estes campos automaticamente.</source><translation>💡 Paste a complete URL to fill these fields automatically.</translation></message>
+    <message><source>Remover fonte</source><translation>Remove source</translation></message>
+    <message><source>Remover “{name}” do projeto?</source><translation>Remove “{name}” from the project?</translation></message>
+    <message><source>Perfil inválido</source><translation>Invalid profile</translation></message>
+    <message><source>Configuração de acesso inválida</source><translation>Invalid access configuration</translation></message>
+    <message><source>Adicione uma fonte primeiro.</source><translation>Add a source first.</translation></message>
+    <message><source>{name}: em desenvolvimento</source><translation>{name}: in development</translation></message>
+    <message><source>Conectando via {name}…</source><translation>Connecting via {name}…</translation></message>
+    <message><source>Conectando…</source><translation>Connecting…</translation></message>
+    <message><source>Conexão pública válida — somente páginas públicas serão consideradas</source><translation>Valid public connection — only public pages will be considered</translation></message>
+    <message><source>Conexão pública válida. Sem login, somente páginas públicas poderão ser localizadas e extraídas.</source><translation>Valid public connection. Without login, only public pages can be found and extracted.</translation></message>
+    <message><source>Conexão autenticada válida — conectado como: {identity}</source><translation>Valid authenticated connection — connected as: {identity}</translation></message>
+    <message><source>Login realizado. A extração poderá acessar as páginas disponíveis para esta conta.</source><translation>Login completed. Extraction can access the pages available to this account.</translation></message>
+    <message><source>✅ {message}&#10;Espaços disponíveis para sua conta: {spaces}</source><translation>✅ {message}&#10;Spaces available to your account: {spaces}</translation></message>
+    <message><source>Aguardando autenticação no navegador…</source><translation>Waiting for browser authentication…</translation></message>
+    <message><source>Login concluído — carregando os espaços disponíveis…</source><translation>Login completed — loading available spaces…</translation></message>
+    <message><source>✅ Login realizado. A sessão foi salva com seu consentimento. O acesso será limitado às permissões desta conta.</source><translation>✅ Login completed. The session was saved with your consent. Access will be limited to this account's permissions.</translation></message>
+    <message><source>Apagar sessão</source><translation>Delete session</translation></message>
+    <message><source>Apagar os cookies salvos para esta fonte?</source><translation>Delete the cookies saved for this source?</translation></message>
+    <message><source>○ Sessão removida — escolha um modo de acesso</source><translation>○ Session removed — choose an access mode</translation></message>
+    <message><source>Sessão disponível</source><translation>Session available</translation></message>
+    <message><source>Nenhuma sessão salva</source><translation>No saved session</translation></message>
+    <message><source>Acesso público selecionado — ainda não testado</source><translation>Public access selected — not tested yet</translation></message>
+    <message><source>Modo autenticado selecionado — não conectado</source><translation>Authenticated mode selected — not connected</translation></message>
+    <message><source>Testar acesso público</source><translation>Test public access</translation></message>
+    <message><source>Informar token do {name}</source><translation>Enter the {name} token</translation></message>
+    <message><source>Entrar no {name}</source><translation>Sign in to {name}</translation></message>
+    <message><source>Validar o acesso à fonte usando {name}.</source><translation>Validate source access using {name}.</translation></message>
+    <message><source>{name}: o conector ainda está em desenvolvimento</source><translation>{name}: the connector is still in development</translation></message>
+    <message><source>Login iniciado — aguardando autenticação</source><translation>Login started — waiting for authentication</translation></message>
+    <message><source>Informe o usuário antes de entrar</source><translation>Enter the username before signing in</translation></message>
+    <message><source>Informe o token antes de entrar</source><translation>Enter the token before signing in</translation></message>
+    <message><source>Selecione um método de autenticação válido</source><translation>Select a valid authentication method</translation></message>
+    <message><source>Sem login — somente páginas públicas serão consideradas</source><translation>Without login — only public pages will be considered</translation></message>
+    <message><source>Acesso público</source><translation>Public access</translation></message>
+    <message><source>Conexão concluída</source><translation>Connection completed</translation></message>
+    <message><source>Login</source><translation>Login</translation></message>
+    <message><source>Manifesto</source><translation>Manifest</translation></message>
+    <message><source>Log técnico</source><translation>Technical log</translation></message>
+    <message><source>A conexão continuará sem login; somente páginas públicas serão consideradas.</source><translation>The connection will continue without login; only public pages will be considered.</translation></message>
+    <message><source>Organização padrão das colunas restaurada.</source><translation>Default column arrangement restored.</translation></message>
+    <message><source>{count} páginas-raiz carregadas em {name}.</source><translation>{count} root pages loaded in {name}.</translation></message>
+    <message><source>{count} páginas carregadas em {name}.</source><translation>{count} pages loaded in {name}.</translation></message>
+    <message><source>Resultado reutilizado do cache local.</source><translation>Result reused from local cache.</translation></message>
+    <message><source>Aguarde o carregamento atual terminar.</source><translation>Wait for the current loading operation to finish.</translation></message>
+    <message><source>Filhos reutilizados do cache local.</source><translation>Children reused from local cache.</translation></message>
+    <message><source>Valores recomendados restaurados. Salve o projeto.</source><translation>Recommended values restored. Save the project.</translation></message>
+    <message><source>Restaurar valores recomendados</source><translation>Restore recommended values</translation></message>
+    <message><source>Restaurar timeout, tentativas e intervalo para os valores seguros padrão?</source><translation>Restore timeout, retries and delay to the safe defaults?</translation></message>
+    <message><source>Abrir projeto</source><translation>Open project</translation></message>
+    <message><source>Salvar projeto</source><translation>Save project</translation></message>
+    <message><source>Projeto ALQuimista (*.json)</source><translation>ALQuimista project (*.json)</translation></message>
+    <message><source>Exportar relatório</source><translation>Export report</translation></message>
+    <message><source>Texto (*.txt)</source><translation>Text (*.txt)</translation></message>
+    <message><source>Escolher pasta da base</source><translation>Choose base folder</translation></message>
+    <message><source>Exportar perfil da fonte</source><translation>Export source profile</translation></message>
+    <message><source>Importar perfil da fonte</source><translation>Import source profile</translation></message>
+    <message><source>Perfil JSON (*.json)</source><translation>JSON profile (*.json)</translation></message>
   </context>
 </TS>

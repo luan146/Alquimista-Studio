@@ -52,6 +52,25 @@ def test_widget_tree_retranslation_preserves_combo_data(
     assert combo.itemData(0) == "sources"
 
 
+def test_dynamic_feedback_messages_translate_with_placeholders(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    manager = LanguageManager(qapp, settings)
+    manager.set_language("en", persist=False)
+
+    assert manager.translate("Operação concluída.") == "Operation completed."
+    assert (
+        manager.translate("{count} páginas carregadas em {name}.").format(
+            count=3, name="Docs"
+        )
+        == "3 pages loaded in Docs."
+    )
+
+    manager.set_language("es", persist=False)
+    assert manager.translate("Operação concluída.") == "Operación completada."
+
+
 def test_main_window_switches_major_pages_without_changing_internal_ids(
     qapp: QApplication, tmp_path: Path
 ) -> None:
