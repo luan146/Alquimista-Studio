@@ -944,6 +944,7 @@ def test_consolidation_preview_is_dispatched_to_worker(
 ) -> None:
     window = MainWindow("complete")
     qtbot.addWidget(window)
+    window.project.sources[0].selected_page_ids = ["page-1"]
     captured: dict[str, object] = {}
 
     def capture(function, done) -> None:
