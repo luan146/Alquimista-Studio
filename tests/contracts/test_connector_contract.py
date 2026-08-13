@@ -12,7 +12,16 @@ from alquimista.models import SourceConfig
 
 from .cases import CASES, ConnectorContractCase
 
-ACTIVE_SOURCE_TYPES = ("confluence_rest", "gitbook_api", "zendesk_guide", "notion_api", "generic_web")
+ACTIVE_SOURCE_TYPES = (
+    "confluence_rest",
+    "gitbook_api",
+    "zendesk_guide",
+    "notion_api",
+    "bookstack_api",
+    "github_docs",
+    "generic_web",
+    "sharepoint_graph",
+)
 
 
 @pytest.fixture(params=CASES, ids=lambda case: case.source_type)

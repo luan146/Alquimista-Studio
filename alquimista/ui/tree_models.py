@@ -15,6 +15,7 @@ from ..models import AuthMode, SourceConfig
 def page_container_id(source: SourceConfig, page: dict[str, Any]) -> str:
     return str(
         page.get("_container_id")
+        or page.get("container_id")
         or (page.get("space") or {}).get("key")
         or source.space_key
         or "__default__"
@@ -80,10 +81,14 @@ def _deduplicate_pages(
 
 def page_parent_id(page: dict[str, Any], page_ids: set[str]) -> str | None:
     """Return the known parent id, using the provider's ancestor fallback."""
-    parent_id = str(page.get("parent_id") or "")
+    parent_id = str(page.get("parent_id") or page.get("_parent_id") or "")
     if parent_id not in page_ids:
         ancestors = page.get("ancestors") or []
-        ancestor_id = str(ancestors[-1].get("id") or "") if ancestors else ""
+        ancestor_id = (
+            str(ancestors[-1].get("id") or "")
+            if ancestors and isinstance(ancestors, list) and isinstance(ancestors[-1], dict)
+            else ""
+        )
         parent_id = ancestor_id if ancestor_id in page_ids else ""
     if parent_id == str(page.get("id") or ""):
         parent_id = ""

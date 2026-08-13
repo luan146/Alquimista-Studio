@@ -112,9 +112,11 @@ class ConnectorRegistry:
 
 
 def default_registry() -> ConnectorRegistry:
+    from .bookstack import BookStackConnector
     from .confluence import ConfluenceRestConnector
     from .generic_web import GenericWebConnector
     from .gitbook import GitBookConnector
+    from .github_docs import GitHubDocsConnector
     from .notion import NotionConnector
     from .sharepoint import SharePointConnector
     from .zendesk import ZendeskGuideConnector
@@ -253,7 +255,7 @@ def default_registry() -> ConnectorRegistry:
             source_type="notion_api",
             display_name="Notion",
             integration_name="API oficial do Notion",
-            status=ConnectorStatus.EXPERIMENTAL,
+            status=ConnectorStatus.AVAILABLE,
             implemented=True,
             capabilities=ConnectorCapabilities(
                 supports_collections=True,
@@ -294,10 +296,91 @@ def default_registry() -> ConnectorRegistry:
     )
     registry.register(
         ConnectorDescriptor(
+            source_type="bookstack_api",
+            display_name="BookStack",
+            integration_name="API REST oficial do BookStack",
+            status=ConnectorStatus.AVAILABLE,
+            implemented=True,
+            capabilities=ConnectorCapabilities(
+                supports_collections=True,
+                supports_hierarchy=True,
+                supports_incremental_updates=True,
+                supports_permissions=True,
+                supports_updated_at=True,
+                supports_bearer_token=True,
+                supports_search=True,
+            ),
+            form=ConnectorFormSpec(
+                url_label="URL da instância BookStack",
+                url_placeholder="https://wiki.suaempresa.com",
+                scope_label="ID ou Slug do Livro (opcional)",
+                scope_placeholder="livro-exemplo",
+                scope_name_label="Nome do Livro (opcional)",
+                supports_scope=True,
+                bearer_only=True,
+                help_text=(
+                    "BookStack usa tokens de API no formato 'Token ID:Token Secret' "
+                    "para listar livros, capítulos e páginas."
+                ),
+            ),
+            card=ConnectorCardSpec(
+                description="Extraia prateleiras, livros e capítulos\ndo BookStack Wiki.",
+                icon=16,
+                accent="#FFA857",
+                order=6,
+                visible=True,
+            ),
+            factory=BookStackConnector,
+            configuration_fields=("base_url", "auth_mode"),
+            limitations=("Anexos de arquivos binários não são baixados.",),
+        )
+    )
+    registry.register(
+        ConnectorDescriptor(
+            source_type="github_docs",
+            display_name="GitHub Docs / Wiki",
+            integration_name="GitHub API oficial",
+            status=ConnectorStatus.AVAILABLE,
+            implemented=True,
+            capabilities=ConnectorCapabilities(
+                supports_collections=True,
+                supports_hierarchy=True,
+                supports_incremental_updates=True,
+                supports_public_access=True,
+                supports_updated_at=True,
+                supports_bearer_token=True,
+            ),
+            form=ConnectorFormSpec(
+                url_label="URL do Repositório GitHub",
+                url_placeholder="https://github.com/org/repo",
+                scope_label="Repositório (owner/repo)",
+                scope_placeholder="org/repo",
+                scope_name_label="Branch (opcional, padrão: main)",
+                supports_scope=True,
+                bearer_only=False,
+                help_text=(
+                    "Acesse documentações Markdown em repositórios públicos "
+                    "ou privados (via Personal Access Token)."
+                ),
+            ),
+            card=ConnectorCardSpec(
+                description="Importe documentações Markdown e Wikis\nde repositórios GitHub.",
+                icon=17,
+                accent="#E1E4E8",
+                order=7,
+                visible=True,
+            ),
+            factory=GitHubDocsConnector,
+            configuration_fields=("repo", "docs_path", "branch"),
+            limitations=("Suporta arquivos Markdown (.md, .markdown, .mdx, .txt).",),
+        )
+    )
+    registry.register(
+        ConnectorDescriptor(
             source_type="generic_web",
             display_name="Generic Web",
-            integration_name="Página Web estática pública",
-            status=ConnectorStatus.EXPERIMENTAL,
+            integration_name="Página Web pública",
+            status=ConnectorStatus.AVAILABLE,
             implemented=True,
             capabilities=ConnectorCapabilities(
                 supports_collections=True,
@@ -306,13 +389,13 @@ def default_registry() -> ConnectorRegistry:
                 supports_updated_at=True,
             ),
             form=ConnectorFormSpec(
-                url_label="URL HTTPS pública",
-                url_placeholder="https://exemplo.com/documentacao",
+                url_label="URL da Página Web (HTTP / HTTPS)",
+                url_placeholder="https://exemplo.com/pagina-ou-documentacao",
                 supports_scope=False,
-                help_text="Uma página estática por URL; sem login, cookies ou crawling.",
+                help_text="Transforme qualquer página pública da internet em Markdown limpo com metadados.",
             ),
             card=ConnectorCardSpec(
-                description="Extraia uma página HTML pública estática.",
+                description="Transforme qualquer página da internet em Markdown.",
                 icon=15,
                 accent="#75C8FF",
                 order=5,
@@ -320,7 +403,7 @@ def default_registry() -> ConnectorRegistry:
             ),
             factory=GenericWebConnector,
             configuration_fields=(),
-            limitations=("Somente HTTPS público; assets são referenciados, não baixados.",),
+            limitations=("Assets e imagens são preservados por link absoluto.",),
         )
     )
     registry.register(
@@ -328,8 +411,8 @@ def default_registry() -> ConnectorRegistry:
             source_type="sharepoint_graph",
             display_name="SharePoint",
             integration_name="Microsoft Graph API",
-            status=ConnectorStatus.DEVELOPMENT,
-            implemented=False,
+            status=ConnectorStatus.AVAILABLE,
+            implemented=True,
             capabilities=ConnectorCapabilities(
                 supports_collections=True,
                 supports_hierarchy=True,

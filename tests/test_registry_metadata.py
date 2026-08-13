@@ -25,6 +25,8 @@ def test_default_registry_is_the_single_source_for_form_and_card_metadata() -> N
         "gitbook_api",
         "zendesk_guide",
         "notion_api",
+        "bookstack_api",
+        "github_docs",
         "sharepoint_graph",
         "generic_web",
     }

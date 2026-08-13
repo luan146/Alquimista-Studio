@@ -112,6 +112,8 @@ class NotionConnector(KnowledgeSourceConnector):
             supports_permissions=True,
             supports_updated_at=True,
             supports_bearer_token=True,
+            supports_search=True,
+            supports_lazy_discovery=True,
         )
 
     def validate_connection(self) -> dict[str, Any]:
@@ -128,11 +130,18 @@ class NotionConnector(KnowledgeSourceConnector):
         return {"spaces_visible": 1, "identity": str(name)}
 
     def list_containers(self) -> list[KnowledgeContainer]:
-        containers: list[KnowledgeContainer] = []
         workspace_id = self.source.space_key or "notion_workspace"
-        workspace = KnowledgeContainer(id=workspace_id, key=workspace_id, name=self.source.space_name or "Notion Workspace", description="Páginas do Notion", container_type="workspace", source_type=self.SOURCE_TYPE)
+        workspace = KnowledgeContainer(
+            id=workspace_id,
+            key=workspace_id,
+            name=self.source.space_name or "Notion Workspace",
+            description="Páginas do Notion",
+            container_type="workspace",
+            source_type=self.SOURCE_TYPE,
+        )
         containers = [workspace]
         self._containers[workspace.id] = workspace
+        seen_ids = {workspace.id}
         for item in self._paginate("/search", method="POST"):
             if item.get("object") not in {"data_source", "database"}:
                 continue
@@ -149,7 +158,8 @@ class NotionConnector(KnowledgeSourceConnector):
                 container_type="data_source",
                 source_type=self.SOURCE_TYPE,
             )
-            if db_id and db_id not in self._containers:
+            if db_id and db_id not in seen_ids:
+                seen_ids.add(db_id)
                 containers.append(container)
             self._containers[db_id] = container
         return containers
@@ -266,6 +276,60 @@ class NotionConnector(KnowledgeSourceConnector):
             metadata={"last_edited_time": page_data.get("last_edited_time")},
         )
 
+    def normalize_document(self, raw_document: object) -> KnowledgeDocument:
+        if isinstance(raw_document, KnowledgeDocument):
+            return raw_document
+        if not isinstance(raw_document, dict):
+            raise TypeError("Documento bruto do Notion deve ser um objeto JSON.")
+        document_id = str(raw_document.get("id") or "")
+        container_id = str(raw_document.get("_container_id") or raw_document.get("container_id") or self.source.space_key or "notion_workspace")
+        title = "Página Notion"
+        props = raw_document.get("properties", {}) or {}
+        for p in props.values():
+            if isinstance(p, dict) and p.get("type") == "title":
+                title = "".join(t.get("plain_text", "") for t in p.get("title", [])) or title
+                break
+        if "title" in raw_document and isinstance(raw_document["title"], str):
+            title = raw_document["title"]
+        content = str(raw_document.get("content") or raw_document.get("markdown") or "").strip()
+        if not content and "blocks" in raw_document:
+            content = self.parser.render(raw_document.get("blocks", []))
+        return KnowledgeDocument(
+            id=document_id,
+            title=title,
+            content=content,
+            document_type="page",
+            container_id=container_id,
+            original_url=str(raw_document.get("url") or raw_document.get("original_url") or ""),
+            source_type=self.SOURCE_TYPE,
+            container_name=self._containers.get(
+                container_id,
+                KnowledgeContainer(
+                    id=container_id,
+                    key=container_id,
+                    name="Notion Workspace",
+                    container_type="workspace",
+                    source_type=self.SOURCE_TYPE,
+                ),
+            ).name,
+            metadata={"last_edited_time": raw_document.get("last_edited_time")},
+        )
+
+    def get_document_children(self, document_id: str) -> list[KnowledgeDocumentMetadata]:
+        try:
+            payload = self._page(f"/blocks/{document_id}/children")
+            return self._metadata_items(
+                payload.get("results", []),
+                self.source.space_key or "notion_workspace",
+            )
+        except Exception:
+            return []
+
     def close(self) -> None:
-        if not self._injected_client and hasattr(self, "client"):
+        session = getattr(self.client, "session", None)
+        if session is not None:
+            session.headers.pop("Authorization", None)
+        if hasattr(self, "client") and hasattr(self.client, "close"):
             self.client.close()
+        self.secret = ""
+

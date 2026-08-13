@@ -85,7 +85,7 @@ class FakeConfluenceClient:
 def test_registry_exposes_confluence_and_gitbook_as_implemented() -> None:
     registry = default_registry()
     assert registry.get("confluence_rest").implemented is True
-    assert registry.get("sharepoint_graph").implemented is False
+    assert registry.get("sharepoint_graph").implemented is True
     assert registry.get("gitbook_api").implemented is True
     assert registry.get("zendesk_guide").implemented is True
     assert [item.source_type for item in registry.available()] == [
@@ -93,9 +93,12 @@ def test_registry_exposes_confluence_and_gitbook_as_implemented() -> None:
         "gitbook_api",
         "zendesk_guide",
         "notion_api",
+        "bookstack_api",
+        "github_docs",
         "generic_web",
+        "sharepoint_graph",
     ]
-    assert registry.get("notion_api").status_code is ConnectorStatus.EXPERIMENTAL
+    assert registry.get("notion_api").status_code is ConnectorStatus.AVAILABLE
 
 
 class FailingConnectorClient:

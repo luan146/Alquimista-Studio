@@ -54,24 +54,90 @@ class NotionDocumentParser:
             data = {}
         text = self._text(data.get("rich_text"))
         indent = "  " * max(depth - 1, 0)
-        if btype == "paragraph": line = f"{indent}{text}"
-        elif btype.startswith("heading_"): line = f"{'#' * int(btype[-1])} {text}"
-        elif btype == "bulleted_list_item": line = f"{indent}- {text}"
-        elif btype == "numbered_list_item": line = f"{indent}1. {text}"
-        elif btype == "to_do": line = f"{indent}- [{'x' if data.get('checked') else ' '}] {text}"
-        elif btype in {"quote", "callout"}: line = f"> {text}"
-        elif btype == "toggle": line = f"<details>\n<summary>{text}</summary>\n</details>"
-        elif btype == "code": line = f"```{data.get('language') or ''}\n{text}\n```"
-        elif btype == "equation": line = f"$${data.get('expression') or ''}$$"
-        elif btype == "divider": line = "---"
-        elif btype == "bookmark": line = f"[{data.get('caption') or data.get('url') or 'Bookmark'}]({data.get('url') or ''})"
-        elif btype == "embed": line = f"[Embed]({data.get('url') or ''})"
-        elif btype == "child_page": line = f"## {data.get('title') or 'Página filha'}"
-        elif btype == "table_row": line = " | ".join(self._text(cell) for cell in data.get("cells", []))
-        elif btype == "table": line = ""
+
+        if btype == "paragraph":
+            line = f"{indent}{text}" if text else ""
+        elif btype.startswith("heading_"):
+            try:
+                level = min(max(int(btype.split("_")[-1]), 1), 6)
+            except ValueError:
+                level = 2
+            line = f"{'#' * level} {text}"
+        elif btype == "bulleted_list_item":
+            line = f"{indent}- {text}"
+        elif btype == "numbered_list_item":
+            line = f"{indent}1. {text}"
+        elif btype == "to_do":
+            checked = "x" if data.get("checked") else " "
+            line = f"{indent}- [{checked}] {text}"
+        elif btype == "quote":
+            line = f"> {text}"
+        elif btype == "callout":
+            icon_obj = data.get("icon") or {}
+            emoji = icon_obj.get("emoji", "")
+            prefix = f"{emoji} " if emoji else "💡 "
+            line = f"> {prefix}{text}"
+        elif btype == "toggle":
+            child_lines: list[str] = []
+            for child in block.get("_children", []) or []:
+                if isinstance(child, dict):
+                    self._render_block(child, child_lines, depth + 1)
+            inner = "\n\n".join(cl for cl in child_lines if cl).strip()
+            line = f"<details>\n<summary>{text or 'Detalhes'}</summary>\n\n{inner}\n</details>" if inner else f"<details>\n<summary>{text or 'Detalhes'}</summary>\n</details>"
+            lines.append(line)
+            return
+        elif btype == "code":
+            lang = data.get("language") or ""
+            line = f"```{lang}\n{text}\n```"
+        elif btype == "equation":
+            expr = data.get("expression") or text
+            line = f"$${expr}$$"
+        elif btype == "divider":
+            line = "---"
+        elif btype == "image":
+            file_obj = data.get("file") or data.get("external") or {}
+            img_url = str(file_obj.get("url") or "")
+            caption = self._text(data.get("caption")) or "Imagem"
+            line = f"![{caption}]({img_url})" if img_url else ""
+        elif btype == "bookmark":
+            url = data.get("url") or ""
+            caption = self._text(data.get("caption")) or url or "Bookmark"
+            line = f"[{caption}]({url})" if url else ""
+        elif btype == "embed":
+            url = data.get("url") or ""
+            line = f"[Embed]({url})" if url else ""
+        elif btype == "child_page":
+            line = f"## {data.get('title') or 'Página filha'}"
+        elif btype == "table":
+            # Bloco contêiner de tabela: renderiza linhas filhas
+            rows = block.get("_children", [])
+            table_lines: list[str] = []
+            has_header = data.get("has_column_header", True)
+            for idx, r in enumerate(rows):
+                if isinstance(r, dict):
+                    r_data = r.get("table_row", {})
+                    cells = [self._text(c) for c in r_data.get("cells", [])]
+                    table_lines.append(f"| {' | '.join(cells)} |")
+                    if idx == 0 and has_header and cells:
+                        table_lines.append(f"| {' | '.join(['---'] * len(cells))} |")
+            line = "\n".join(table_lines)
+            lines.append(line)
+            return
+        elif btype == "table_row":
+            cells = [self._text(c) for c in data.get("cells", [])]
+            line = f"| {' | '.join(cells)} |" if cells else ""
+        elif btype in {"column_list", "column", "synced_block"}:
+            line = ""
+        elif btype == "link_to_page":
+            page_id = data.get("page_id") or data.get("database_id") or ""
+            line = f"[Página #{page_id}](notion://{page_id})" if page_id else ""
         else:
             line = f"<!-- unsupported:notion:{btype} -->"
-        lines.append(line)
+
+        if line:
+            lines.append(line)
+
         for child in block.get("_children", []) or []:
             if isinstance(child, dict):
                 self._render_block(child, lines, depth + 1)
+

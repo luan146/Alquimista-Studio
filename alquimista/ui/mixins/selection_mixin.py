@@ -377,6 +377,10 @@ class SelectionMixin:
                 for item in ancestor_chain(page)
                 if item.get("title")
             ]
+            if not ancestor_titles and page.get("path") and isinstance(page.get("path"), list):
+                raw_path = [str(p) for p in page["path"] if p]
+                if len(raw_path) > 1:
+                    ancestor_titles = raw_path[:-1]
             version = page.get("version", {}) or {}
             title = str(page.get("title") or "Sem titulo")
             path = " > ".join(ancestor_titles)

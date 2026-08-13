@@ -156,6 +156,39 @@ def detect_source_url(
                 base_url=base_url,
             )
 
-    if parsed.scheme == "https":
+    if host == "github.com" or host.endswith(".github.com"):
+        parts = [unquote(part).strip() for part in parsed.path.split("/") if part.strip()]
+        if len(parts) >= 2:
+            owner, repo = parts[0], parts[1]
+            branch = "main"
+            docs_path = "docs"
+            if "tree" in parts and parts.index("tree") + 1 < len(parts):
+                idx = parts.index("tree")
+                branch = parts[idx + 1]
+                docs_path = "/".join(parts[idx + 2 :]) or "docs"
+            return _detected(
+                registry,
+                "github_docs",
+                base_url=f"https://github.com/{owner}/{repo}",
+                space_key=f"{owner}/{repo}",
+                space_name=branch,
+                root_mode="title",
+                root_value=docs_path,
+            )
+
+    if "/books/" in path or "/api/books" in path or "bookstack" in host:
+        book_slug = ""
+        parts = [unquote(part).strip() for part in parsed.path.split("/") if part.strip()]
+        if "books" in parts and parts.index("books") + 1 < len(parts):
+            book_slug = parts[parts.index("books") + 1]
+        return _detected(
+            registry,
+            "bookstack_api",
+            base_url=f"{origin}/api",
+            space_key=book_slug,
+            root_mode="space",
+        )
+
+    if parsed.scheme in {"http", "https"}:
         return _detected(registry, "generic_web", base_url=raw, root_mode="id", root_value=raw)
-    raise ValueError("Generic Web exige uma URL HTTPS pública.")
+    raise ValueError("A URL deve ser HTTP ou HTTPS pública.")
