@@ -14,13 +14,22 @@ Paste a source URL, connect, choose the pages you want, and export structured co
 
 </div>
 
+> 🌐 **Read this README in:** [English](README.md) · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md)
+
+## ⬇️ Download
+
+ALQuimista Studio is distributed in portable and installed formats. The
+portable packages can be extracted and launched without installation; the
+Windows Installer creates shortcuts and keeps preferences in the user profile.
+Both formats contain Portuguese (Brazil), English and Spanish.
+
+The portable packages are named `ALQuimista-Studio-windows-portable.zip` and
+`ALQuimista-Studio-linux-portable.tar.gz`. The Windows installer is named
+`ALQuimista-Studio-windows-installer-<version>.exe`.
+
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="ALQuimista Studio dashboard" width="100%">
 </p>
-
-> 🌐 **Interface languages:** Português (Brasil), English and Español. The README is written in English to make the project easier to discover and evaluate internationally.
-
-**Read this in:** [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
 ---
 
@@ -158,6 +167,9 @@ Typical destinations include:
 
 > Platform capabilities may differ. Some connectors support features such as hierarchical lazy loading or search more completely than others.
 
+Integration status vocabulary: Estável, Disponível, Experimental, Parcial,
+Em desenvolvimento and Planejado.
+
 ---
 
 ## 📄 What does ALQuimista generate?
@@ -194,28 +206,6 @@ This makes the exported knowledge easier to trace back to its original source an
 ---
 
 ## ⚡ Quick start
-
-### Portable and installed distributions
-
-ALQuimista Studio is distributed in two formats. The Portable package can be
-extracted and launched without installation; its preferences are stored in
-the package `data/` folder. The Windows Installer creates shortcuts and keeps
-preferences in the user profile so updates do not remove them. Both formats
-contain Portuguese (Brazil), English and Spanish. On first launch, choose the
-interface language; it can be changed later in **Settings**.
-
-The portable packages are named `ALQuimista-Studio-windows-portable.zip` and
-`ALQuimista-Studio-linux-portable.tar.gz`. The Windows installer is named
-`ALQuimista-Studio-windows-installer-<version>.exe`. Linux source installation
-remains available through `tools/install/instalar_linux.sh --install`, which
-creates a launcher under `~/.local/opt/alquimista-studio` and a desktop entry.
-
-The Linux portable package is generated in CI with
-`tools/build/gerar_portable_linux.sh <version>`. It contains the same three
-interface languages and stores portable preferences in its `data/` folder.
-
-Integration status vocabulary: Estável, Disponível, Experimental, Parcial,
-Em desenvolvimento and Planejado.
 
 ### Windows
 
@@ -324,20 +314,6 @@ For a deeper code map, see [`MAPA.md`](MAPA.md) and the [`docs/`](docs/) directo
 
 ---
 
-## 📦 Download the portable version
-
-Release **0.9** is available as a portable Windows package. Download the ZIP,
-extract it, and run `ALQuimista Studio.exe`; Python installation is not
-required.
-
-[Download ALQuimista Studio 0.9 portable](https://github.com/luan146/Alquimista-Studio/releases/download/v0.9/ALQuimista-Studio-portatil-win64-v0.9.zip)
-
-The package is intended for Windows 10/11 (64-bit). Browser-assisted
-authentication may require Google Chrome. User preferences, logs, and browser
-sessions are stored under `%LOCALAPPDATA%\ALQuimista Studio`.
-
----
-
 ## 🛠️ Development
 
 <details>
@@ -380,19 +356,6 @@ The generated executable is written to:
 ```text
 dist/ALQuimista Studio.exe
 ```
-
-To create a portable ZIP for Windows 10/11 (64-bit), use:
-
-```bat
-gerar_pacote_portatil.bat
-```
-
-The package is created at `dist/ALQuimista-Studio-portatil-win64.zip`. It does
-not require Python on the target computer. User preferences, logs, and browser
-sessions are stored under `%LOCALAPPDATA%\ALQuimista Studio`, so replacing the
-executable does not remove them. Browser-assisted authentication may require
-Google Chrome installed; the Chromium browser is not bundled in this first
-portable package.
 
 </details>
 

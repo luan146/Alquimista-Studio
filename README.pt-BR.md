@@ -14,13 +14,22 @@ Cole a URL de uma fonte, conecte-se, escolha as páginas e exporte conteúdo est
 
 </div>
 
+> 🌐 **Leia este README em:** [English](README.md) · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md)
+
+## ⬇️ Download
+
+O ALQuimista Studio é distribuído em formatos portátil e instalado. Os pacotes
+portáteis podem ser extraídos e executados sem instalação; o instalador do
+Windows cria atalhos e mantém as preferências no perfil do usuário. Ambos os
+formatos incluem Português (Brasil), English e Español.
+
+Os pacotes portáteis são `ALQuimista-Studio-windows-portable.zip` e
+`ALQuimista-Studio-linux-portable.tar.gz`. O instalador do Windows é
+`ALQuimista-Studio-windows-installer-<versao>.exe`.
+
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Painel do ALQuimista Studio" width="100%">
 </p>
-
-> 🌐 **Idioma atual da interface:** português.
-
-**Leia em:** [English](README.md) · [Português (Brasil)](README.pt-BR.md)
 
 ---
 
@@ -116,7 +125,7 @@ Mantenha um arquivo Markdown por página ou agrupe o conteúdo em pacotes maiore
 Revise a fonte selecionada, o modo de acesso, a quantidade de páginas, o formato de saída, as regras de consolidação e a pasta de destino antes de iniciar a operação.
 
 <p align="center">
-  <img src="docs/screenshots/review.png" alt="Revisão final e extração" width="100%">
+  <img src="docs/screenshots/output.png" alt="Revisão final e extração" width="100%">
 </p>
 
 ---
@@ -209,13 +218,13 @@ cd Alquimista-Studio
 Instale as dependências da aplicação:
 
 ```bat
-instalar_windows.bat
+tools\install\instalar_windows.bat
 ```
 
 Se também quiser autenticação interativa pelo navegador:
 
 ```bat
-instalar_windows.bat --with-browser
+tools\install\instalar_windows.bat --with-browser
 ```
 
 Depois, inicie o ALQuimista:
@@ -231,26 +240,16 @@ Após a configuração, o fluxo normal de extração é executado pela interface
 ```bash
 git clone https://github.com/luan146/Alquimista-Studio.git
 cd Alquimista-Studio
-chmod +x instalar_linux.sh
-./instalar_linux.sh
-python alquimista_studio_completo.py
+chmod +x tools/install/instalar_linux.sh
+./tools/install/instalar_linux.sh
+python -m alquimista
 ```
 
 Para habilitar a autenticação pelo navegador:
 
 ```bash
-./instalar_linux.sh --with-browser
+./tools/install/instalar_linux.sh --with-browser
 ```
-
----
-
-## 📦 Baixar a versão portátil
-
-A release **0.9** está disponível como um pacote portátil para Windows. Baixe o ZIP, extraia os arquivos e execute `ALQuimista Studio.exe`; não é necessário instalar Python.
-
-[Baixar o ALQuimista Studio 0.9 portátil](https://github.com/luan146/Alquimista-Studio/releases/download/v0.9/ALQuimista-Studio-portatil-win64-v0.9.zip)
-
-O pacote é destinado ao Windows 10/11 (64 bits). A autenticação assistida pelo navegador pode exigir o Google Chrome. Preferências do usuário, logs e sessões de navegador ficam em `%LOCALAPPDATA%\ALQuimista Studio`.
 
 ---
 
@@ -316,31 +315,31 @@ Para um mapa mais detalhado do código, consulte [`MAPA.md`](MAPA.md) e o diret�
 Instale as dependências de desenvolvimento no Windows:
 
 ```bat
-.venv\Scripts\python.exe -m pip install -c constraints.txt -r requirements-dev.txt
+.venv\Scripts\python.exe -m pip install -c config\constraints.txt -r config\requirements-dev.txt
 ```
 
 Execute a suíte de testes:
 
 ```bat
-.venv\Scripts\python.exe -m pytest
+.venv\Scripts\python.exe -m pytest -c config\pytest.ini
 ```
 
 Execute o Ruff:
 
 ```bat
-.venv\Scripts\python.exe -m ruff check alquimista tests
+.venv\Scripts\python.exe -m ruff check --config config\pyproject.toml alquimista tests
 ```
 
 Execute o mypy:
 
 ```bat
-.venv\Scripts\python.exe -m mypy alquimista
+.venv\Scripts\python.exe -m mypy --config-file config\pyproject.toml alquimista
 ```
 
 Gere o executável do Windows:
 
 ```bat
-gerar_executavel.bat
+tools\build\gerar_executavel.bat
 ```
 
 O executável será criado em:
