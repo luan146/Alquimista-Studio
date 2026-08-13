@@ -32,16 +32,21 @@ Copy-Item -LiteralPath (Join-Path $root "distribuicao\LEIA-ME-PORTATIL.txt") -De
 if (Test-Path -LiteralPath $portableZip) { Remove-Item -LiteralPath $portableZip -Force }
 Compress-Archive -Path (Join-Path $portableRoot "*") -DestinationPath $portableZip
 
-$iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
-if (-not $iscc) {
+$isccPath = $null
+$isccCommand = Get-Command iscc.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($isccCommand) {
+    $isccPath = [string]$isccCommand.Path
+    if (-not $isccPath) { $isccPath = [string]$isccCommand.Source }
+}
+if (-not $isccPath) {
     $standardIscc = @(
         (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
         (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
     ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-    if ($standardIscc) { $iscc = Get-Item -LiteralPath $standardIscc }
+    if ($standardIscc) { $isccPath = [string]$standardIscc }
 }
-if ($iscc) {
-    & $iscc.FullName "/DAppVersion=$Version" "/DAppExeSource=$builtExe" (Join-Path $root "packaging\ALQuimista Studio.iss")
+if ($isccPath) {
+    & $isccPath "/DAppVersion=$Version" "/DAppExeSource=$builtExe" (Join-Path $root "packaging\ALQuimista Studio.iss")
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup falhou." }
 } else {
     Write-Warning "iscc.exe não encontrado; o pacote Portable foi gerado e o instalador pode ser criado com packaging/ALQuimista Studio.iss."
