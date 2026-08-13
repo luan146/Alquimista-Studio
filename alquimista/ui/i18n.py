@@ -12,12 +12,13 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QLabel,
-    QLineEdit,
     QTableWidget,
     QTreeWidget,
     QVBoxLayout,
     QWidget,
 )
+
+from .translation_fallbacks import supplemental_translation
 
 SUPPORTED_LANGUAGES = ("pt-BR", "en", "es")
 LANGUAGE_NAMES = {
@@ -142,6 +143,7 @@ class LanguageManager(QObject):
         else:
             self.app.setProperty("_alquimista_translator", None)
         self.language = selected
+        self.app.setProperty("_alquimista_language", selected)
         if persist:
             self.settings.setValue("preferences/language", selected)
             self.settings.sync()
@@ -151,12 +153,18 @@ class LanguageManager(QObject):
     def translate(self, source: str, disambiguation: str | None = None) -> str:
         if self.language == "pt-BR":
             return source
-        return QCoreApplication.translate("ALQuimista", source, disambiguation)
+        translated = QCoreApplication.translate("ALQuimista", source, disambiguation)
+        return supplemental_translation(source, self.language) or translated
 
 
 def translate_text(source: str) -> str:
     """Translate a UI string through the current application translator."""
-    return QCoreApplication.translate("ALQuimista", source)
+    translated = QCoreApplication.translate("ALQuimista", source)
+    app = QCoreApplication.instance()
+    language = str(app.property("_alquimista_language") or "pt-BR") if app else "pt-BR"
+    if language == "pt-BR":
+        return source
+    return supplemental_translation(source, language) or translated
 
 
 def _remember(widget: QWidget, key: str, value: str) -> str:
@@ -200,9 +208,13 @@ def retranslate_widget_tree(root: QWidget, *, exclude: tuple[QWidget, ...] = ())
             if value:
                 source = _remember(widget, "text", str(value))
                 text_setter(translate_text(source))
-        if isinstance(widget, QLineEdit) and widget.placeholderText():
-            source = _remember(widget, "placeholder", widget.placeholderText())
-            widget.setPlaceholderText(translate_text(source))
+        placeholder_getter = getattr(widget, "placeholderText", None)
+        placeholder_setter = getattr(widget, "setPlaceholderText", None)
+        if callable(placeholder_getter) and callable(placeholder_setter):
+            placeholder = placeholder_getter()
+            if placeholder:
+                source = _remember(widget, "placeholder", str(placeholder))
+                placeholder_setter(translate_text(source))
         for key, value, setter in (
             ("tooltip", widget.toolTip(), widget.setToolTip),
             ("accessible", widget.accessibleName(), widget.setAccessibleName),
@@ -218,10 +230,17 @@ class LanguageDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Choose interface language")
+        language = system_language()
+        labels = {
+            "pt-BR": ("Escolha o idioma da interface", "Escolha o idioma do ALQuimista Studio:"),
+            "en": ("Choose interface language", "Choose the language for ALQuimista Studio:"),
+            "es": ("Elige el idioma de la interfaz", "Elige el idioma de ALQuimista Studio:"),
+        }
+        title, prompt = labels[language]
+        self.setWindowTitle(title)
         self.selected_language = "pt-BR"
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Choose the language for ALQuimista Studio:"))
+        layout.addWidget(QLabel(prompt))
         self.combo = QComboBox()
         for code in SUPPORTED_LANGUAGES:
             self.combo.addItem(LANGUAGE_NAMES[code], code)

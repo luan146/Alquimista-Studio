@@ -8,6 +8,7 @@ from PySide6.QtCore import QThreadPool
 from PySide6.QtWidgets import QMessageBox
 
 from ..runtime import CancellationToken
+from .i18n import translate_text
 from .workers import Worker
 
 WorkerFunction = Callable[..., Any]
@@ -48,8 +49,8 @@ class WorkerOperationController:
         if self.worker is not None:
             QMessageBox.information(
                 window,
-                "Operação em andamento",
-                "Aguarde ou cancele a operação atual.",
+                translate_text("Operação em andamento"),
+                translate_text("Aguarde ou cancele a operação atual."),
             )
             return
 
@@ -77,7 +78,9 @@ class WorkerOperationController:
         window.progress.setValue(percent)
         elapsed = time.monotonic() - window.started_at
         window.progress_label.setText(
-            f"{done}/{total}  —  {item}  —  {elapsed:.1f}s decorridos"
+            translate_text("{done}/{total}  —  {item}  —  {elapsed:.1f}s decorridos").format(
+                done=done, total=total, item=item, elapsed=elapsed
+            )
         )
         if getattr(window, "_tree_loading", False) and hasattr(
             window, "tree_load_progress"
@@ -88,9 +91,11 @@ class WorkerOperationController:
                 progress_text = f"{done}/{total}"
             else:
                 window.tree_load_progress.setRange(0, 0)
-                progress_text = "em andamento"
+                progress_text = translate_text("em andamento")
             if item:
-                window._tree_loading_message = f"Carregando ({progress_text}): {item}"
+                window._tree_loading_message = translate_text(
+                    "Carregando ({progress}): {item}"
+                ).format(progress=progress_text, item=item)
                 window.tree_load_status.setText(window._tree_loading_message)
                 for status_name in ("page_render_status", "selection_render_status"):
                     status = getattr(window, status_name, None)
@@ -105,18 +110,18 @@ class WorkerOperationController:
 
     def worker_failed(self, message: str, detail: str) -> None:
         window = self.window
-        self.append_log(f"FALHA: {message}")
+        self.append_log(f"{translate_text('FALHA')}: {message}")
         if detail.strip():
-            self.append_log(f"Detalhes técnicos:\n{detail.rstrip()}")
+            self.append_log(f"{translate_text('Detalhes técnicos')}:\n{detail.rstrip()}")
         lowered = f"{message}\n{detail}".casefold()
         cancelled = bool(self.token and self.token.cancelled) or "cancel" in lowered
         self._set_state("CANCELLED" if cancelled else "FAILED")
         if cancelled:
             if getattr(window, "_tree_loading", False):
-                window._set_tree_loading(False, "Carregamento cancelado.")
+                window._set_tree_loading(False, translate_text("Carregamento cancelado."))
             if hasattr(window, "progress_label"):
-                window.progress_label.setText("Operação cancelada.")
-            window.statusBar().showMessage("Operação cancelada.", 5000)
+                window.progress_label.setText(translate_text("Operação cancelada."))
+            window.statusBar().showMessage(translate_text("Operação cancelada."), 5000)
             return
 
         if (
@@ -125,21 +130,27 @@ class WorkerOperationController:
         ):
             source = window.source_by_combo(window.connection_source)
             if "401" in message or "autentica" in lowered or "sessão expirada" in lowered:
-                state = "Falha de autenticação — credenciais inválidas ou sessão expirada"
-                title = "Não foi possível entrar"
+                state = translate_text(
+                    "Falha de autenticação — credenciais inválidas ou sessão expirada"
+                )
+                title = translate_text("Não foi possível entrar")
             elif "403" in message or "permiss" in lowered or "restrito" in lowered:
-                state = "Acesso restrito — a conta não possui permissão para este conteúdo"
-                title = "Página sem permissão"
+                state = translate_text(
+                    "Acesso restrito — a conta não possui permissão para este conteúdo"
+                )
+                title = translate_text("Página sem permissão")
             else:
-                state = "Falha de comunicação — o Confluence está indisponível ou inacessível"
-                title = "Confluence indisponível"
+                state = translate_text(
+                    "Falha de comunicação — o Confluence está indisponível ou inacessível"
+                )
+                title = translate_text("Confluence indisponível")
             window.connection_state.setText(state)
             if source:
                 window.connection_states[source.id] = state
             QMessageBox.critical(window, title, f"{state}\n\n{message}")
             return
 
-        QMessageBox.critical(window, "Operação não concluída", message)
+        QMessageBox.critical(window, translate_text("Operação não concluída"), message)
 
     def worker_finished(self) -> None:
         window = self.window
@@ -162,8 +173,10 @@ class WorkerOperationController:
         if confirm and (
             QMessageBox.question(
                 window,
-                "Cancelar operação",
-                "Deseja interromper a operação atual? Arquivos concluídos serão preservados.",
+                translate_text("Cancelar operação"),
+                translate_text(
+                    "Deseja interromper a operação atual? Arquivos concluídos serão preservados."
+                ),
             )
             != QMessageBox.StandardButton.Yes
         ):
@@ -172,5 +185,5 @@ class WorkerOperationController:
         self._set_state("CANCELLED")
         if hasattr(window, "progress_label"):
             window.progress_label.setText(
-                "Cancelamento solicitado. Finalizando a etapa atual…"
+                translate_text("Cancelamento solicitado. Finalizando a etapa atual…")
             )

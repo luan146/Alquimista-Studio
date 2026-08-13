@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import unicodedata
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote, urljoin
@@ -118,11 +119,16 @@ class MarkdownTransformer:
         source: SourceConfig,
         root: dict[str, Any],
         options: MarkdownOptions,
+        translator: Callable[[str], str] | None = None,
     ) -> None:
         self.client = client
         self.source = source
         self.root = root
         self.options = options
+        self.translator = translator or (lambda value: value)
+
+    def _t(self, value: str) -> str:
+        return self.translator(value)
 
     def _attachment_url(self, page_id: str, filename: str) -> str:
         return (
@@ -138,7 +144,7 @@ class MarkdownTransformer:
             label = body.get_text(" ", strip=True) if body else ""
             anchor = soup.new_tag("a")
             if page_ref:
-                target = str(page_ref.get("ri:content-title") or label or "Página")
+                target = str(page_ref.get("ri:content-title") or label or self._t("Página"))
                 anchor["href"] = (
                     f"{self.client.base_url}/pages/viewpage.action?"
                     f"title={quote(target)}"
@@ -153,7 +159,7 @@ class MarkdownTransformer:
                 anchor.string = label or filename
             else:
                 anchor["href"] = "#"
-                anchor.string = label or "Link do Confluence"
+                anchor.string = label or self._t("Link do Confluence")
             link.replace_with(anchor)
 
     def _replace_macros(self, soup: BeautifulSoup, page_id: str) -> None:
@@ -203,10 +209,10 @@ class MarkdownTransformer:
                 macro.replace_with(pre)
                 continue
             labels = {
-                "warning": "⚠ Aviso",
-                "info": "ℹ Informação",
-                "note": "📝 Observação",
-                "tip": "💡 Dica",
+                "warning": self._t("⚠ Aviso"),
+                "info": self._t("ℹ Informação"),
+                "note": self._t("📝 Observação"),
+                "tip": self._t("💡 Dica"),
             }
             if name in labels and not self.options.include_panels:
                 macro.decompose()
@@ -222,7 +228,9 @@ class MarkdownTransformer:
             elif name == "expand":
                 title = macro.find("ac:parameter", attrs={"ac:name": "title"})
                 strong = soup.new_tag("strong")
-                strong.string = f"Conteúdo expansível — {title.get_text(strip=True) if title else 'Detalhes'}:"
+                strong.string = self._t("Conteúdo expansível — {title}:").format(
+                    title=title.get_text(strip=True) if title else self._t("Detalhes")
+                )
                 wrapper.append(strong)
                 wrapper.append(" ")
             elif not self.options.include_content_macros:
@@ -234,7 +242,9 @@ class MarkdownTransformer:
                     wrapper.append(child.extract())
             else:
                 em = soup.new_tag("em")
-                em.string = f"Macro do Confluence: {name or 'desconhecida'}"
+                em.string = self._t("Macro do Confluence: {name}").format(
+                    name=name or self._t("desconhecida")
+                )
                 wrapper.append(em)
             macro.replace_with(wrapper)
 
@@ -308,22 +318,22 @@ class MarkdownTransformer:
     ) -> str:
         options = self.options
         fields = [
-            ("page_id", "ID da página", metadata["page_id"], options.include_page_id),
-            ("source_url", "URL original", metadata["source_url"], options.include_source_url),
-            ("source_name", "Fonte", metadata["source_name"], options.include_source_name),
-            ("space_key", "Chave do espaço", metadata["space_key"], options.include_space_key),
-            ("space_name", "Nome do espaço", metadata["space_name"], options.include_space_name),
-            ("root_title", "Página raiz", metadata["root_title"], options.include_root),
-            ("module", "Módulo", metadata["module"], options.include_module),
-            ("submodule", "Submódulo", metadata["submodule"], options.include_submodule),
-            ("path", "Caminho", " > ".join(metadata["path"]), options.include_path),
-            ("version", "Versão no Confluence", metadata["confluence_version"], options.include_version),
-            ("updated_at", "Última atualização", format_updated_at(metadata["updated_at"]), options.include_updated_at),
-            ("author", "Autor", metadata["author"], options.include_author),
-            ("labels", "Rótulos", metadata["labels"], options.include_labels),
-            ("content_hash", "SHA-256", content_hash, options.include_hash),
-            ("collected_at", "Data da coleta", collected_at, options.include_collected_at),
-            ("status", "Status", status, options.include_status),
+            ("page_id", self._t("ID da página"), metadata["page_id"], options.include_page_id),
+            ("source_url", self._t("URL original"), metadata["source_url"], options.include_source_url),
+            ("source_name", self._t("Fonte"), metadata["source_name"], options.include_source_name),
+            ("space_key", self._t("Chave do espaço"), metadata["space_key"], options.include_space_key),
+            ("space_name", self._t("Nome do espaço"), metadata["space_name"], options.include_space_name),
+            ("root_title", self._t("Página raiz"), metadata["root_title"], options.include_root),
+            ("module", self._t("Módulo"), metadata["module"], options.include_module),
+            ("submodule", self._t("Submódulo"), metadata["submodule"], options.include_submodule),
+            ("path", self._t("Caminho"), " > ".join(metadata["path"]), options.include_path),
+            ("version", self._t("Versão no Confluence"), metadata["confluence_version"], options.include_version),
+            ("updated_at", self._t("Última atualização"), format_updated_at(metadata["updated_at"]), options.include_updated_at),
+            ("author", self._t("Autor"), metadata["author"], options.include_author),
+            ("labels", self._t("Rótulos"), metadata["labels"], options.include_labels),
+            ("content_hash", self._t("SHA-256"), content_hash, options.include_hash),
+            ("collected_at", self._t("Data da coleta"), collected_at, options.include_collected_at),
+            ("status", self._t("Status"), status, options.include_status),
         ]
         selected = [(key, label, value) for key, label, value, enabled in fields if enabled and value not in ("", None, [])]
         lines: list[str] = []
@@ -342,7 +352,7 @@ class MarkdownTransformer:
         if options.metadata_style in {"markdown", "both"}:
             for key, label, value in selected:
                 if key == "source_url":
-                    rendered = f"[Abrir no Confluence]({value})"
+                    rendered = f"[{self._t('Abrir no Confluence')}]({value})"
                 elif isinstance(value, list):
                     rendered = ", ".join(str(item) for item in value)
                 elif key in {"page_id", "content_hash"}:
@@ -355,7 +365,10 @@ class MarkdownTransformer:
         if technical:
             if options.include_content_heading:
                 level = min(6, options.title_heading_level + 1)
-                lines.extend([f"{'#' * level} {options.content_heading_text or 'Conteúdo'}", ""])
+                heading = options.content_heading_text or self._t("Conteúdo")
+                if heading == "Conteúdo técnico":
+                    heading = self._t(heading)
+                lines.extend([f"{'#' * level} {heading}", ""])
             lines.extend([technical, ""])
         if options.include_document_markers:
             lines.append(f'<!-- ALQUIMISTA_DOCUMENT_END key="{marker_key}" -->')
@@ -482,27 +495,28 @@ class KnowledgeDocumentRenderer:
         return normalize_markdown("\n".join(lines)) + "\n"
 
 
-def sample_page() -> dict[str, Any]:
+def sample_page(translator: Callable[[str], str] | None = None) -> dict[str, Any]:
+    translate = translator or (lambda value: value)
     return {
         "id": "123456",
-        "title": "Como configurar uma venda",
+        "title": translate("Como configurar uma venda"),
         "ancestors": [
-            {"id": "100", "title": "Manual do Produto"},
+            {"id": "100", "title": translate("Manual do Produto")},
             {"id": "110", "title": "POS"},
         ],
-        "space": {"key": "EXEMPLO", "name": "Espaço de exemplo"},
+        "space": {"key": "EXEMPLO", "name": translate("Espaço de exemplo")},
         "version": {
             "number": 4,
             "when": "2026-07-26T15:00:00Z",
-            "by": {"displayName": "Equipe de Produto"},
+            "by": {"displayName": translate("Equipe de Produto")},
         },
-        "metadata": {"labels": {"results": [{"name": "vendas"}]}},
+        "metadata": {"labels": {"results": [{"name": translate("vendas")}]}},
         "body": {
             "storage": {
                 "value": (
-                    "<p>Este é um exemplo de conteúdo técnico.</p>"
+                    f"<p>{translate('Este é um exemplo de conteúdo técnico.')}</p>"
                     "<ac:structured-macro ac:name='tip'><ac:rich-text-body>"
-                    "<p>Revise os dados antes de concluir.</p>"
+                    f"<p>{translate('Revise os dados antes de concluir.')}</p>"
                     "</ac:rich-text-body></ac:structured-macro>"
                 )
             }

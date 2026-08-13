@@ -206,6 +206,16 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                 blocker = QSignalBlocker(language_combo)
                 language_combo.setCurrentIndex(index)
                 del blocker
+        if hasattr(self, "con_group"):
+            self._update_consolidation_summary()
+        if hasattr(self, "review_summary"):
+            self._refresh_review()
+        if hasattr(self, "extraction_summary"):
+            self._update_extraction_summary()
+        if hasattr(self, "output_path_status"):
+            self._update_output_preview()
+        if hasattr(self, "result_summary"):
+            self._refresh_results()
 
     def _change_language(self, language: str) -> None:
         self.i18n.set_language(language)
@@ -689,7 +699,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         if not source:
             self._set_page_stat(self.page_space_stat, "—")
             self._set_page_stat(self.page_count_stat, "0")
-            self._set_page_stat(self.page_sync_stat, "Ainda não")
+            self._set_page_stat(self.page_sync_stat, translate_text("Ainda não"))
             return
         root = (data or {}).get("root", {}) or {}
         space_name = source.space_name or source.space_key or str(root.get("title") or "—")
@@ -703,7 +713,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             except ValueError:
                 sync_label = loaded_at
         else:
-            sync_label = "Ainda não"
+            sync_label = translate_text("Ainda não")
         self._set_page_stat(self.page_space_stat, space_name)
         self._set_page_stat(self.page_count_stat, count)
         self._set_page_stat(self.page_sync_stat, sync_label)
@@ -2417,15 +2427,28 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
     def _update_preview(self) -> None:
         try:
             self._sync_markdown_controls()
-            source = self.project.sources[0] if self.project.sources else SourceConfig(name="Exemplo")
+            source = (
+                self.project.sources[0]
+                if self.project.sources
+                else SourceConfig(name=translate_text("Exemplo"))
+            )
             root = {
                 "id": "100",
-                "title": "Manual do Produto",
-                "space": {"key": source.space_key or "EXEMPLO", "name": source.space_name or "Exemplo"},
+                "title": translate_text("Manual do Produto"),
+                "space": {
+                    "key": source.space_key or "EXEMPLO",
+                    "name": source.space_name or translate_text("Exemplo"),
+                },
             }
             fake = _PreviewClient(source)
-            page = sample_page()
-            transformer = MarkdownTransformer(fake, source, root, self.project.markdown)
+            page = sample_page(translate_text)
+            transformer = MarkdownTransformer(
+                fake,
+                source,
+                root,
+                self.project.markdown,
+                translator=translate_text,
+            )
             technical = transformer.technical_markdown(page)
             metadata = page_metadata(page, source, root)
             content_hash = sha256_text(transformer.hash_input(metadata, technical))
@@ -2651,9 +2674,21 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         if examples:
             return examples
         return [
-            ["Acesso ao Sistema", "Barra de Cabeçalho", "Login"],
-            ["Acesso ao Sistema", "Barra de Cabeçalho", "Dashboard"],
-            ["Cadastros", "Clientes", "Novo cliente"],
+            [
+                translate_text("Acesso ao Sistema"),
+                translate_text("Barra de Cabeçalho"),
+                translate_text("Login"),
+            ],
+            [
+                translate_text("Acesso ao Sistema"),
+                translate_text("Barra de Cabeçalho"),
+                translate_text("Dashboard"),
+            ],
+            [
+                translate_text("Cadastros"),
+                translate_text("Clientes"),
+                translate_text("Novo cliente"),
+            ],
         ][:limit]
 
     def _update_depth_examples(self) -> None:
@@ -3032,31 +3067,37 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             len(self.project.selected_keys_for(item.id)) for item in active
         )
         source_text = (
-            f"{source.name} · Ativa" if source else "Nenhuma fonte ativa · Pendente"
+            translate_text("{name} · Ativa").format(name=source.name)
+            if source
+            else translate_text("Nenhuma fonte ativa · Pendente")
         )
         if source is None:
-            connection_text = "Não configurada · Pendente"
+            connection_text = translate_text("Não configurada · Pendente")
         elif source.auth_mode == AuthMode.PUBLIC:
             connection_text = (
-                "Acesso público · Conectada"
+                translate_text("Acesso público · Conectada")
                 if source.id in self.connected_sources
-                else "Acesso público · Pendente de teste"
+                else translate_text("Acesso público · Pendente de teste")
             )
         elif source.id in self.connection_states:
             connection_text = self.connection_states[source.id]
         else:
-            connection_text = "Não conectada · Pendente"
+            connection_text = translate_text("Não conectada · Pendente")
         selection_text = (
-            f"{selected} páginas · Pronta"
+            translate_text("{count} páginas · Pronta").format(count=selected)
             if selected
-            else "0 páginas · Pendente — selecione documentos"
+            else translate_text("0 páginas · Pendente — selecione documentos")
         )
-        format_text = f"Markdown ({self.project.markdown.metadata_style}) · Configurado"
+        format_text = translate_text(
+            "Markdown ({style}) · Configurado"
+        ).format(style=self.project.markdown.metadata_style)
         manifest_ready = (self._base_path() / MANIFEST_NAME).is_file()
         consolidation_text = (
-            f"{self.con_group.currentText()} · Pronta"
+            translate_text("{group} · Pronta").format(group=self.con_group.currentText())
             if manifest_ready
-            else f"{self.con_group.currentText()} · Pendente — manifesto ainda não criado"
+            else translate_text(
+                "{group} · Pendente — manifesto ainda não criado"
+            ).format(group=self.con_group.currentText())
         )
         output_text = self.output_dir.text().strip() or self.project.output_dir
         values = {
@@ -3079,14 +3120,15 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         estimate = len(self.last_consolidation_preview)
         self.review_summary.setVisible(True)
         self.review_summary.setText(
-            f"Fonte\n{source_text}\n\n"
-            f"Modo de acesso\n{connection_text}\n\n"
-            f"Seleção\n{selection_text}\n\n"
-            f"Operação\n{self.execution_mode.currentText()}\n\n"
-            f"Formato\n{format_text}\n\n"
-            f"Consolidação\n{consolidation_text}\n\n"
-            f"Arquivos estimados\n{estimate if estimate else 'Prévia ainda não gerada'}\n\n"
-            f"Pasta de saída\n{output_text}"
+            f"{translate_text('Fonte')}\n{source_text}\n\n"
+            f"{translate_text('Modo de acesso')}\n{connection_text}\n\n"
+            f"{translate_text('Seleção')}\n{selection_text}\n\n"
+            f"{translate_text('Operação')}\n{self.execution_mode.currentText()}\n\n"
+            f"{translate_text('Formato')}\n{format_text}\n\n"
+            f"{translate_text('Consolidação')}\n{consolidation_text}\n\n"
+            f"{translate_text('Arquivos estimados')}\n"
+            f"{estimate if estimate else translate_text('Prévia ainda não gerada')}\n\n"
+            f"{translate_text('Pasta de saída')}\n{output_text}"
         )
         self._update_output_preview()
 
