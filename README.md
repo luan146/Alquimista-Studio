@@ -7,6 +7,8 @@
 Paste a source URL, connect, choose the pages you want, and export structured content ready for **AI, RAG, NotebookLM, Obsidian, offline archives, or any Markdown-based workflow**.
 
 [![ALQuimista quality](https://github.com/luan146/Alquimista-Studio/actions/workflows/quality.yml/badge.svg)](https://github.com/luan146/Alquimista-Studio/actions/workflows/quality.yml)
+[![Release](https://img.shields.io/github/v/release/luan146/Alquimista-Studio)](https://github.com/luan146/Alquimista-Studio/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/luan146/Alquimista-Studio/total)](https://github.com/luan146/Alquimista-Studio/releases)
 ![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![PySide6](https://img.shields.io/badge/UI-PySide6-41CD52?logo=qt&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-6E7781)
@@ -15,6 +17,8 @@ Paste a source URL, connect, choose the pages you want, and export structured co
 </div>
 
 > 🌐 **Read this README in:** [English](README.md) · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md)
+
+➡️ [Download the latest release](https://github.com/luan146/Alquimista-Studio/releases/latest) · [View all releases](https://github.com/luan146/Alquimista-Studio/releases)
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="ALQuimista Studio dashboard" width="100%">
@@ -196,18 +200,25 @@ This makes the exported knowledge easier to trace back to its original source an
 
 ## ⚡ Quick start
 
-### Portable and installed distributions
+### 1. For most users: download and run
 
-ALQuimista Studio is distributed in portable and installed formats. The
-portable packages can be extracted and launched without installation; the
-Windows Installer creates shortcuts and keeps preferences in the user profile.
-Both formats contain Portuguese (Brazil), English and Spanish.
+Download → install or extract → open ALQuimista Studio.
 
-The portable packages are named `ALQuimista-Studio-windows-portable.zip` and
-`ALQuimista-Studio-linux-portable.tar.gz`. The Windows installer is named
-`ALQuimista-Studio-windows-installer-<version>.exe`.
+| Platform | Package |
+|---|---|
+| 🪟 Windows | [Installer](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-installer-0.9.5.exe) · [Portable ZIP](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-portable-0.9.5.zip) |
+| 🐧 Linux | [Portable tar.gz](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-portable-0.9.5.tar.gz) |
 
-### Windows
+➡️ [View all releases](https://github.com/luan146/Alquimista-Studio/releases)
+
+The Windows Installer creates shortcuts and keeps preferences in the user
+profile. The Portable package can be extracted and launched without
+installation. On Linux, extract the tarball and run the included
+`ALQuimista Studio` executable.
+
+### 2. For developers: run from source
+
+#### Windows
 
 Clone the repository:
 
@@ -236,7 +247,7 @@ abrir_completo.bat
 
 After setup, the normal extraction workflow is handled through the graphical interface.
 
-### Linux
+#### Linux
 
 ```bash
 git clone https://github.com/luan146/Alquimista-Studio.git

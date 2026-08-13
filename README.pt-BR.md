@@ -7,6 +7,8 @@
 Cole a URL de uma fonte, conecte-se, escolha as páginas e exporte conteúdo estruturado para **IA, RAG, NotebookLM, Obsidian, arquivos offline ou qualquer fluxo baseado em Markdown**.
 
 [![ALQuimista quality](https://github.com/luan146/Alquimista-Studio/actions/workflows/quality.yml/badge.svg)](https://github.com/luan146/Alquimista-Studio/actions/workflows/quality.yml)
+[![Release](https://img.shields.io/github/v/release/luan146/Alquimista-Studio)](https://github.com/luan146/Alquimista-Studio/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/luan146/Alquimista-Studio/total)](https://github.com/luan146/Alquimista-Studio/releases)
 ![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![PySide6](https://img.shields.io/badge/UI-PySide6-41CD52?logo=qt&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-6E7781)
@@ -15,6 +17,8 @@ Cole a URL de uma fonte, conecte-se, escolha as páginas e exporte conteúdo est
 </div>
 
 > 🌐 **Leia este README em:** [English](README.md) · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md)
+
+➡️ [Baixar a última release](https://github.com/luan146/Alquimista-Studio/releases/latest) · [Ver todas as releases](https://github.com/luan146/Alquimista-Studio/releases)
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Painel do ALQuimista Studio" width="100%">
@@ -195,18 +199,24 @@ Isso torna o conhecimento exportado mais fácil de rastrear até a origem e de p
 
 ## ⚡ Início rápido
 
-### 📦 Baixar a versão portátil
+### 1. Para a maioria das pessoas: baixar e executar
 
-O ALQuimista Studio é distribuído em formatos portátil e instalado. Os pacotes
-portáteis podem ser extraídos e executados sem instalação; o instalador do
-Windows cria atalhos e mantém as preferências no perfil do usuário. Ambos os
-formatos incluem Português (Brasil), English e Español.
+Baixe → instale ou extraia → abra o ALQuimista Studio.
 
-Os pacotes portáteis são `ALQuimista-Studio-windows-portable.zip` e
-`ALQuimista-Studio-linux-portable.tar.gz`. O instalador do Windows é
-`ALQuimista-Studio-windows-installer-<versao>.exe`.
+| Plataforma | Pacote |
+|---|---|
+| 🪟 Windows | [Instalador](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-installer-0.9.5.exe) · [ZIP portátil](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-portable-0.9.5.zip) |
+| 🐧 Linux | [tar.gz portátil](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-portable-0.9.5.tar.gz) |
 
-### Windows
+➡️ [Ver todas as releases](https://github.com/luan146/Alquimista-Studio/releases)
+
+O instalador do Windows cria atalhos e mantém as preferências no perfil do
+usuário. O pacote portátil pode ser extraído e executado sem instalação. No
+Linux, extraia o tarball e execute o arquivo `ALQuimista Studio` incluído.
+
+### 2. Para desenvolvedores: executar a partir do código
+
+#### Windows
 
 Clone o repositório:
 
@@ -235,7 +245,7 @@ abrir_completo.bat
 
 Após a configuração, o fluxo normal de extração é executado pela interface gráfica.
 
-### Linux
+#### Linux
 
 ```bash
 git clone https://github.com/luan146/Alquimista-Studio.git
