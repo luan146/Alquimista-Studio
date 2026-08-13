@@ -13,7 +13,11 @@ from alquimista.source_detection import detect_source_url
         ),
         ("https://acme.zendesk.com/hc/pt-br", "zendesk_guide", "Help Center API do Zendesk"),
         ("https://www.notion.so/acme/Manual-123", "notion_api", "API oficial do Notion"),
-        ("https://acme.sharepoint.com/sites/manual", "sharepoint_graph", "Microsoft Graph"),
+        (
+            "https://acme.sharepoint.com/sites/manual",
+            "sharepoint_graph",
+            "Microsoft Graph API",
+        ),
         ("https://docs.gitbook.io/manual", "gitbook_api", "API REST oficial do GitBook"),
     ],
 )
@@ -26,6 +30,6 @@ def test_detect_source_url_identifies_platform_and_api(
     assert detected.api_name == api_name
 
 
-def test_detect_source_url_rejects_unknown_platform() -> None:
-    with pytest.raises(ValueError, match="Não foi possível identificar"):
-        detect_source_url("https://example.org/manual")
+def test_detect_source_url_falls_back_to_generic_web() -> None:
+    detected = detect_source_url("https://example.org/manual")
+    assert detected.source_type == "generic_web"

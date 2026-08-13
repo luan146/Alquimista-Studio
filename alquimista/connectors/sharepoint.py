@@ -11,6 +11,7 @@ from ..models import (
     KnowledgeDocument,
     KnowledgeDocumentMetadata,
     KnowledgeSource,
+    MarkdownOptions,
     SourceConfig,
 )
 from ..runtime import CancellationToken, LogCallback
@@ -31,9 +32,11 @@ class SharePointConnector(KnowledgeSourceConnector):
         token: CancellationToken | None = None,
         log: LogCallback | None = None,
         client: ApiHttpClient | None = None,
+        markdown_options: MarkdownOptions | None = None,
     ) -> None:
         self.source = source
         self.options = options
+        self.markdown_options = markdown_options or MarkdownOptions()
         self.secret = secret
         self.token = token or CancellationToken()
         self.log = log or (lambda _message: None)

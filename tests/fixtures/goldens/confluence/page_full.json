@@ -1,0 +1,22 @@
+{
+  "id": "page-42",
+  "title": "Página de integração",
+  "type": "page",
+  "ancestors": [
+    {"id": "root-1", "title": "Manual"},
+    {"id": "section-2", "title": "Integrações"}
+  ],
+  "space": {"key": "DOCS", "name": "Documentação"},
+  "version": {
+    "number": 7,
+    "when": "2026-08-12T15:00:00Z",
+    "by": {"displayName": "Equipe ALQuimista"}
+  },
+  "metadata": {"labels": {"results": [{"name": "p0"}, {"name": "confluence"}]}},
+  "body": {
+    "storage": {
+      "value": "<!-- comentário -->\n<div class='page-metadata'>ruído</div><h2>Visão geral</h2><p>Conteúdo UTF-8: ação, integração e informação.</p><p><a href='/display/DOCS/42'>Link relativo</a> e <a href='https://example.org'>externo</a></p><ac:link><ri:page ri:content-title='Configuração'/><ac:plain-text-link-body>Abrir configuração</ac:plain-text-link-body></ac:link><ac:link><ri:attachment ri:filename='guia.pdf'/><ac:link-body>Baixar guia</ac:link-body></ac:link><p><ac:image ac:alt='Diagrama'><ri:attachment ri:filename='diagrama.png'/></ac:image></p><table><tr><th>Campo</th><th>Valor</th></tr><tr><td>modo</td><td>ativo</td></tr></table><ac:structured-macro ac:name='tip'><ac:rich-text-body><p>Use o fluxo aprovado.</p></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name='expand'><ac:parameter ac:name='title'>Detalhes</ac:parameter><ac:rich-text-body><p>Explicação adicional.</p></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name='code'><ac:plain-text-body>print('ok')</ac:plain-text-body></ac:structured-macro><iframe src='/video'></iframe><script>ignorar</script>"
+    }
+  },
+  "_links": {"webui": "/pages/viewpage.action?pageId=page-42"}
+}

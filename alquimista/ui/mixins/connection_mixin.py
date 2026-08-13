@@ -11,7 +11,6 @@ from ...auth import browser_login, delete_session
 from ...client import session_path
 from ...models import AuthMode, SourceConfig
 from ...runtime import CancellationToken
-from ..connector_forms import form_spec
 from ..i18n import translate_text
 
 
@@ -53,7 +52,8 @@ class ConnectionMixin:
         secret = mode in {AuthMode.BASIC.value, AuthMode.BEARER.value}
         browser = mode == AuthMode.BROWSER.value
         source = self.source_by_combo(self.connection_source) if hasattr(self, "connection_source") else None
-        bearer_only = bool(source and form_spec(source.source_type).bearer_only)
+        descriptor = self.connector_registry.get(source.source_type) if source else None
+        bearer_only = bool(descriptor and descriptor.form.bearer_only)
         if bearer_only:
             basic = False
             browser = False
@@ -99,7 +99,7 @@ class ConnectionMixin:
             )
             return
         descriptor = self.connector_registry.get(source.source_type)
-        if not descriptor.implemented:
+        if not descriptor.runnable:
             self.connection_states[source.id] = translate_text(
                 "{name}: em desenvolvimento"
             ).format(name=descriptor.display_name)
@@ -227,7 +227,7 @@ class ConnectionMixin:
         if not source:
             return
         descriptor = self.connector_registry.get(source.source_type)
-        bearer_only = form_spec(source.source_type).bearer_only
+        bearer_only = descriptor.form.bearer_only
         for index in range(self.auth_mode.count()):
             item = self.auth_mode.model().item(index)
             if item is not None:
@@ -295,7 +295,7 @@ class ConnectionMixin:
             )
             return
         descriptor = self.connector_registry.get(source.source_type)
-        if not descriptor.operational:
+        if not descriptor.runnable:
             self.connection_states[source.id] = (
                 translate_text(
                     "{name}: o conector ainda está em desenvolvimento"
@@ -308,7 +308,7 @@ class ConnectionMixin:
             mode = AuthMode(str(raw_mode)) if raw_mode else source.auth_mode
         except ValueError:
             mode = source.auth_mode
-        if form_spec(source.source_type).bearer_only:
+        if descriptor.form.bearer_only:
             mode = AuthMode.BEARER
             with QSignalBlocker(self.auth_mode):
                 self.auth_mode.setCurrentIndex(self.auth_mode.findData(mode.value))

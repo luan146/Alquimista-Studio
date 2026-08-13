@@ -7,11 +7,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from .browser.cache import BrowserCache
 from .client import session_path
 from .errors import AuthenticationError
 from .models import SourceConfig
 from .runtime import CancellationToken
-from .session_store import delete_session_file, save_session
+from .session_store import delete_session_file, save_session, session_directory
 
 
 def _authenticated_identity(payload: object) -> bool:
@@ -35,7 +36,13 @@ def _authenticated_identity(payload: object) -> bool:
 
 
 def delete_session(source: SourceConfig) -> bool:
-    return delete_session_file(source.id)
+    deleted = delete_session_file(source.id)
+    # A logout must also invalidate metadata snapshots.  They never contain
+    # credentials, but can contain private titles, URLs and visibility.
+    cache = BrowserCache(session_directory().parent / "browser_metadata.sqlite3")
+    cache.purge_source(source.id)
+    cache.close()
+    return deleted
 
 def _browser_session_closed(browser: object, page: object) -> bool:
     """Detect a user-closed browser/page without relying on a timeout."""
@@ -134,6 +141,11 @@ def browser_login(
             import json
 
             state = json.loads(Path(temporary).read_text(encoding="utf-8"))
+            # Rotate discovery metadata before exposing the new browser
+            # identity.  The next lazy request will populate a fresh scope.
+            cache = BrowserCache(session_directory().parent / "browser_metadata.sqlite3")
+            cache.purge_source(source.id)
+            cache.close()
             save_session(source.id, state)
             Path(temporary).unlink(missing_ok=True)
             temporary = None

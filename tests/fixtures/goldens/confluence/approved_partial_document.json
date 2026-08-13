@@ -1,0 +1,28 @@
+{
+  "attachments": [],
+  "container_id": "DOCS",
+  "container_name": "DOCS",
+  "content": "",
+  "created_at": null,
+  "etag": null,
+  "id": "page-partial",
+  "metadata": {
+    "ancestors": [],
+    "author": "",
+    "confluence_version": null,
+    "labels": [
+      "parcial"
+    ],
+    "raw_type": "page",
+    "space_key": "DOCS",
+    "space_name": "DOCS"
+  },
+  "original_url": "https://example.test/pages/viewpage.action?pageId=page-partial",
+  "parent_id": null,
+  "path": [
+    "Sem título"
+  ],
+  "source_type": "confluence_rest",
+  "title": "Sem título",
+  "updated_at": null
+}

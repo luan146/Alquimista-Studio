@@ -39,17 +39,17 @@ def build_sources_page(window: Any) -> QWidget:
             label = f"{descriptor.display_name} — {descriptor.integration_name}"
             if descriptor.status_code.value == "experimental":
                 label += " (Experimental)"
-            elif not descriptor.operational:
+            elif not descriptor.runnable:
                 label += " (Em desenvolvimento)"
             window.src_platform.addItem(label, descriptor.source_type)
             window.src_platform.setItemData(
                 window.src_platform.count() - 1,
-                not descriptor.operational,
+                not descriptor.runnable,
                 Qt.ItemDataRole.UserRole + 1,
             )
             item = window.src_platform.model().item(window.src_platform.count() - 1)
             if item is not None:
-                item.setEnabled(descriptor.operational)
+                item.setEnabled(descriptor.runnable)
         window.src_platform.currentIndexChanged.connect(window._source_platform_changed)
         window.src_url = QLineEdit(legacy)
         window.src_url.setAccessibleName("URL da página do Confluence")

@@ -21,6 +21,7 @@ class _DiscoveryConnectorDouble:
         )
         self.root_calls = 0
         self.children_calls: list[tuple[str, str]] = []
+        self.secret = "test-identity"
 
     def get_source(self) -> KnowledgeSource:
         return self.source

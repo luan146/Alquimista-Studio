@@ -13,12 +13,12 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
+from ...auth import delete_session
 from ...client import ConfluenceClient
 from ...confluence_url import parse_confluence_url
 from ...models import AuthMode, SourceConfig, now_iso
 from ...runtime import CancellationToken
 from ...source_detection import DetectedSource, detect_source_url
-from ..connector_forms import form_spec
 from ..i18n import translate_text
 from ..source_controller import source_by_combo as resolve_source_by_combo
 from ..source_controller import source_by_index as resolve_source_by_index
@@ -61,6 +61,8 @@ class SourceMixin:
     source_detection_status: Any
     sources_empty_label: Any
     trees: Any
+    selection_store: Any
+    connection_states: Any
     mark_dirty: Any
     thread_pool: Any
     statusBar: Any
@@ -68,6 +70,10 @@ class SourceMixin:
     page_lookup_worker: "Worker | None"
     _editing_source_row: int | None
     _source_added_at: dict[str, str]
+    _active_page_container: str | None
+    _active_selection_container: str | None
+    _page_render_limits: dict[tuple[str, str], int]
+    _selection_render_limits: dict[tuple[str, str], int]
     _connection_source_changed: Any
     _selection_source_changed: Any
     _tree_source_changed: Any
@@ -118,7 +124,26 @@ class SourceMixin:
                 self.tree_source.setCurrentIndex(index)
             if hasattr(self, "selection_source"):
                 self.selection_source.setCurrentIndex(index)
-        self._connection_source_changed()
+        connection_source = self.source_by_combo(self.connection_source)
+        try:
+            if connection_source is not None:
+                self.connector_registry.get(connection_source.source_type)
+        except ValueError:
+            assert connection_source is not None
+            if hasattr(self, "connection_state"):
+                self.connection_state.setText(
+                    translate_text(
+                        "Conector não registrado ({source_type}) — conexão bloqueada"
+                    ).format(source_type=connection_source.source_type)
+                )
+            if hasattr(self, "auth_secret"):
+                self.auth_secret.clear()
+            if hasattr(self, "login_button"):
+                self.login_button.setEnabled(False)
+        else:
+            if hasattr(self, "login_button"):
+                self.login_button.setEnabled(True)
+            self._connection_source_changed()
         if hasattr(self, "tree_source"):
             self._tree_source_changed()
         if hasattr(self, "selection_source"):
@@ -152,8 +177,13 @@ class SourceMixin:
             original_url = str(source.connector_options.get("source_url") or source.base_url)
             self.source_table.setItem(table_row, 1, QTableWidgetItem(original_url))
             self.source_table.setItem(table_row, 2, QTableWidgetItem(source.name))
-            descriptor = self.connector_registry.get(source.source_type)
-            api_label = f"{descriptor.display_name} · {descriptor.integration_name}"
+            try:
+                descriptor = self.connector_registry.get(source.source_type)
+                api_label = f"{descriptor.display_name} · {descriptor.integration_name}"
+            except ValueError:
+                api_label = translate_text(
+                    "{source_type} · Conector não registrado"
+                ).format(source_type=source.source_type)
             self.source_table.setItem(table_row, 3, QTableWidgetItem(api_label))
             added_at = self._source_added_at.get(source.id, now_iso())
             self._source_added_at.setdefault(source.id, added_at)
@@ -208,14 +238,14 @@ class SourceMixin:
             )
             return
         try:
-            detected = detect_source_url(raw)
+            detected = detect_source_url(raw, self.connector_registry)
         except ValueError as exc:
             self.source_detection_status.setText(
                 translate_text("⚠ {error}").format(error=exc)
             )
             return
         descriptor = self.connector_registry.get(detected.source_type)
-        if descriptor.operational:
+        if descriptor.runnable:
             message = (
                 translate_text(
                     "✓ Detectado: {display} · {api}. "
@@ -284,7 +314,7 @@ class SourceMixin:
             )
             return
         try:
-            detected = detect_source_url(raw_url)
+            detected = detect_source_url(raw_url, self.connector_registry)
             row = self._editing_source_row
             previous = self.project.sources[row] if row is not None else None
             updated = self._source_from_detection(
@@ -402,7 +432,7 @@ class SourceMixin:
         try:
             self.src_name.setText(source.name)
             platform_index = self.src_platform.findData(source.source_type)
-            self.src_platform.setCurrentIndex(max(platform_index, 0))
+            self.src_platform.setCurrentIndex(platform_index)
             self.src_url.setText(source.base_url)
             self.src_space.setText(source.space_key)
             self.src_space_name.setText(source.space_name)
@@ -435,75 +465,44 @@ class SourceMixin:
         source = self.current_source()
         if not source:
             return
-        source.source_type = str(self.src_platform.currentData() or "confluence_rest")
-        descriptor = self.connector_registry.get(source.source_type)
-        implemented = descriptor.operational
-        self.src_url.setEnabled(implemented)
-        confluence = implemented and source.source_type == "confluence_rest"
-        gitbook = implemented and source.source_type == "gitbook_api"
-        zendesk = implemented and source.source_type == "zendesk_guide"
-        spec = form_spec(source.source_type)
-        self.src_space.setEnabled(implemented and spec.supports_scope)
-        self.src_space_name.setEnabled(implemented and spec.supports_scope)
-        self.src_root_mode.setEnabled(implemented and spec.supports_root)
-        self.src_root.setEnabled(implemented and spec.supports_root)
-        self.src_include_root.setEnabled(implemented and spec.supports_root)
-        if spec.bearer_only and source.auth_mode != AuthMode.BEARER:
-            source.auth_mode = AuthMode.BEARER
-        if gitbook:
-            self.src_url_label.setText(translate_text("URL da API GitBook (opcional)"))
-            self.src_url.setPlaceholderText("https://api.gitbook.com/v1")
-            self.src_space_label.setText(translate_text("ID da organização GitBook"))
-            self.src_space.setPlaceholderText("organizationId")
-            self.src_space_name_label.setText(translate_text("Nome da organização (opcional)"))
-            self.src_root_mode.setCurrentIndex(self.src_root_mode.findData("space"))
+        selected = self.src_platform.currentData()
+        selected_source_type = str(selected or source.source_type)
+        try:
+            descriptor = self.connector_registry.get(selected_source_type)
+        except ValueError:
+            self.src_url.setEnabled(False)
+            self.src_space.setEnabled(False)
+            self.src_space_name.setEnabled(False)
+            self.src_root_mode.setEnabled(False)
+            self.src_root.setEnabled(False)
+            self.src_include_root.setEnabled(False)
             self.src_autofill_status.setText(
                 translate_text(
-                    "GitBook usa o ID da organização e um Personal Access Token; "
-                    "o conteúdo é descoberto pela API oficial."
-                )
+                    "{source_type}: Conector não registrado. Selecione uma plataforma suportada para continuar."
+                ).format(source_type=selected_source_type)
             )
-        elif zendesk:
-            if source.auth_mode != AuthMode.BEARER:
-                source.auth_mode = AuthMode.BEARER
-            self.src_url_label.setText(translate_text("URL da API Zendesk (opcional)"))
-            self.src_url.setPlaceholderText("https://subdominio.zendesk.com/api/v2")
-            self.src_space_label.setText(translate_text("Subdomínio Zendesk"))
-            self.src_space.setPlaceholderText("subdominio")
-            self.src_space_name_label.setText(translate_text("Locale (opcional)"))
-            self.src_autofill_status.setText(
-                translate_text(
-                    "Zendesk Guide usa um access token OAuth em modo Bearer e acessa "
-                    "somente o Help Center."
-                )
-            )
-        elif confluence:
-            self.src_url_label.setText(translate_text("URL do Confluence"))
-            self.src_url.setPlaceholderText(
-                translate_text("Cole a URL completa da página do Confluence")
-            )
-            self.src_space_label.setText(translate_text("Chave do espaço"))
-            self.src_space.setPlaceholderText("")
-            self.src_space_name_label.setText(translate_text("Nome do espaço"))
-        if implemented:
-            self.src_autofill_status.setText(
-                translate_text(
-                    "Integração: {name}. As capacidades serão descobertas após a conexão."
-                ).format(name=descriptor.integration_name)
-            )
-        else:
+            return
+        runnable = descriptor.runnable
+        self.src_url.setEnabled(True)
+        spec = descriptor.form
+        self.src_space.setEnabled(spec.supports_scope)
+        self.src_space_name.setEnabled(spec.supports_scope)
+        self.src_root_mode.setEnabled(spec.supports_root)
+        self.src_root.setEnabled(spec.supports_root)
+        self.src_include_root.setEnabled(spec.supports_root)
+        self.src_url_label.setText(translate_text(spec.url_label))
+        self.src_url.setPlaceholderText(translate_text(spec.url_placeholder))
+        self.src_space_label.setText(translate_text(spec.scope_label))
+        self.src_space.setPlaceholderText(translate_text(spec.scope_placeholder))
+        self.src_space_name_label.setText(translate_text(spec.scope_name_label))
+        if not runnable:
             self.src_autofill_status.setText(
                 translate_text(
                     "{name}: Em desenvolvimento. Nenhuma chamada será realizada."
                 ).format(name=descriptor.display_name)
             )
 
-        if implemented:
-            self.src_url_label.setText(translate_text(spec.url_label))
-            self.src_url.setPlaceholderText(translate_text(spec.url_placeholder))
-            self.src_space_label.setText(translate_text(spec.scope_label))
-            self.src_space.setPlaceholderText(translate_text(spec.scope_placeholder))
-            self.src_space_name_label.setText(translate_text(spec.scope_name_label))
+        else:
             self.src_autofill_status.setText(translate_text(spec.help_text))
 
 
@@ -512,6 +511,39 @@ class SourceMixin:
             return
         raw = self.src_url.text().strip()
         if not raw or ("/" not in raw.removeprefix("https://").removeprefix("http://")):
+            return
+        selected_source_type = str(
+            self.src_platform.currentData() or "confluence_rest"
+        )
+        if selected_source_type != "confluence_rest":
+            try:
+                detected = detect_source_url(raw, self.connector_registry)
+            except ValueError as exc:
+                self.src_autofill_status.setText(
+                    translate_text("⚠ {error}").format(error=exc)
+                )
+                return
+            if detected.source_type != selected_source_type:
+                return
+            self._loading_source_form = True
+            try:
+                self.src_url.setText(detected.base_url)
+                if detected.space_key:
+                    self.src_space.setText(detected.space_key)
+                if detected.space_name:
+                    self.src_space_name.setText(detected.space_name)
+                index = self.src_root_mode.findData(detected.root_mode)
+                if index >= 0:
+                    self.src_root_mode.setCurrentIndex(index)
+                self.src_root.setText(detected.root_value)
+            finally:
+                self._loading_source_form = False
+            self.src_autofill_status.setText(
+                translate_text("✓ Detectado: {display} · {api}.").format(
+                    display=detected.display_name,
+                    api=detected.api_name,
+                )
+            )
             return
         try:
             parsed = parse_confluence_url(raw)
@@ -637,7 +669,8 @@ class SourceMixin:
                 )
             )
 
-        def failed(message: str, _details: str) -> None:
+        def failed(error: Exception | str, _details: str) -> None:
+            message = str(error)
             self.src_autofill_status.setText(
                 translate_text(
                     "⚠ pageId {identifier} foi preenchido, mas título e espaço não puderam "
@@ -751,10 +784,17 @@ class SourceMixin:
         if not source:
             return True
         try:
+            selected = self.src_platform.currentData()
+            selected_source_type = str(selected or source.source_type)
+            try:
+                descriptor = self.connector_registry.get(selected_source_type)
+            except ValueError:
+                descriptor = None
+            source_type_changed = selected_source_type != source.source_type
             updated = source.model_copy(
                 update={
                     "name": self.src_name.text().strip() or "Fonte sem nome",
-                    "source_type": str(self.src_platform.currentData() or "confluence_rest"),
+                    "source_type": selected_source_type,
                     "base_url": self.src_url.text().strip(),
                     "space_key": self.src_space.text().strip(),
                     "space_name": self.src_space_name.text().strip(),
@@ -762,9 +802,22 @@ class SourceMixin:
                     "root_value": self.src_root.text().strip(),
                     "enabled": self.src_enabled.isChecked(),
                     "include_root": self.src_include_root.isChecked(),
+                    "selected_page_ids": [] if source_type_changed else source.selected_page_ids,
+                    "consolidation_excluded_page_ids": (
+                        []
+                        if source_type_changed
+                        else source.consolidation_excluded_page_ids
+                    ),
+                    "auth_mode": (
+                        AuthMode.BEARER
+                        if descriptor is not None and descriptor.form.bearer_only
+                        else source.auth_mode
+                    ),
                 }
             )
             updated = SourceConfig.model_validate(updated.model_dump())
+            if source_type_changed:
+                self._invalidate_source_type_state(source)
             self.project.sources[self.sources_list.currentRow()] = updated
             self._refresh_source_widgets()
             self.mark_dirty()
@@ -775,6 +828,33 @@ class SourceMixin:
             if not silent:
                 QMessageBox.warning(self, translate_text("Fonte inválida"), str(exc))
             return False
+
+
+    def _invalidate_source_type_state(self, source: SourceConfig) -> None:
+        """Drop runtime state that is not portable across connector types."""
+        self.secrets.pop(source.id, None)
+        delete_session(source)
+        self.trees.pop(source.id, None)
+        self.connected_sources.discard(source.id)
+        self.connection_states.pop(source.id, None)
+        self.project.selections = [
+            item for item in self.project.selections if item.source_id != source.id
+        ]
+        for key in list(self.selection_store.keys_for_source(source.id)):
+            source_id, container_id, document_id = key.split(":", 2)
+            self.selection_store.set(source_id, container_id, document_id, False)
+        self._page_render_limits = {
+            key: value
+            for key, value in self._page_render_limits.items()
+            if key[0] != source.id
+        }
+        self._selection_render_limits = {
+            key: value
+            for key, value in self._selection_render_limits.items()
+            if key[0] != source.id
+        }
+        self._active_page_container = None
+        self._active_selection_container = None
 
 
 

@@ -8,6 +8,19 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
 
 from ..components import AlchemistIconAtlas, SourceCard, card
+from ..i18n import translate_text
+
+
+def _grid_position(index: int, total: int, *, cards_per_row: int = 3) -> tuple[int, int, int]:
+    """Center incomplete rows in a grid where every card spans two columns."""
+
+    row, index_in_row = divmod(index, cards_per_row)
+    row_start = row * cards_per_row
+    items_in_row = min(cards_per_row, total - row_start)
+    span = 2
+    grid_columns = cards_per_row * span
+    offset = (grid_columns - items_in_row * span) // 2
+    return row, offset + index_in_row * span, span
 
 
 def build_dashboard_page(window: Any) -> QWidget:
@@ -41,17 +54,26 @@ def build_dashboard_page(window: Any) -> QWidget:
     source_grid.setVerticalSpacing(18)
     for column in range(6):
         source_grid.setColumnStretch(column, 1)
-    sources = [
-        ("zendesk_guide", "Zendesk", "Conecte e extraia artigos,\ntickets e soluções do Zendesk Guide.", 10, "#7FE4B5", 0),
-        ("confluence_rest", "Confluence", "Acesse páginas, espaços\ne documentos do Atlassian Confluence.", 11, "#67B7FF", 2),
-        ("notion_api", "Notion", "Importe páginas, bases de dados\ne conteúdos do Notion.", 12, "#B09AFF", 4),
-        ("sharepoint_graph", "SharePoint", "Explore sites, bibliotecas e documentos\ndo Microsoft SharePoint.", 13, "#75E7BA", 1),
-        ("gitbook_api", "GitBook", "Importe documentação e conteúdos\ndisponíveis na sua base do GitBook.", 14, "#B09AFF", 3),
-    ]
-    for row, (source_type, name, description, icon, accent, column) in enumerate(sources):
-        source_card = SourceCard(source_type, name, description, icon, accent)
+    descriptors = sorted(
+        (
+            descriptor
+            for descriptor in window.connector_registry.all()
+            if descriptor.card.visible
+        ),
+        key=lambda descriptor: (descriptor.card.order, descriptor.source_type),
+    )
+    for index, descriptor in enumerate(descriptors):
+        spec = descriptor.card
+        source_card = SourceCard(
+            descriptor.source_type,
+            translate_text(spec.title or descriptor.display_name),
+            translate_text(spec.description),
+            spec.icon,
+            spec.accent,
+        )
         source_card.clicked.connect(window._source_card_clicked)
-        source_grid.addWidget(source_card, 0 if row < 3 else 1, column, 1, 2)
+        row, column, column_span = _grid_position(index, len(descriptors))
+        source_grid.addWidget(source_card, row, column, 1, column_span)
     source_layout.addLayout(source_grid)
     layout.addWidget(source_panel, 1)
     window.dashboard_status = QLabel(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -8,10 +9,16 @@ import pytest
 
 import alquimista.services as services
 from alquimista.errors import ExtractionCancelledError, ManifestError
-from alquimista.models import ManifestDocument, ManifestEntry, ProjectConfig, SourceConfig
+from alquimista.models import (
+    EntryStatus,
+    ManifestDocument,
+    ManifestEntry,
+    ProjectConfig,
+    SourceConfig,
+)
 from alquimista.runtime import CancellationToken
 from alquimista.services import ConsolidationService, ExtractionService, SourceRuntime
-from alquimista.storage import ManifestStore
+from alquimista.storage import FileTransaction, ManifestStore
 
 
 def page(
@@ -358,6 +365,65 @@ def test_partial_update_preserves_entries_outside_retry_scope(
     assert healthy.active
     assert healthy.selected
     assert healthy.status.value == "new"
+
+
+def test_reconciliation_preserves_missing_descendant_until_inventory_is_complete(
+    tmp_path: Path,
+) -> None:
+    source = SourceConfig(id="source", space_key="SPACE")
+    project = ProjectConfig(output_dir="base", sources=[source])
+    project.extraction.detect_remote_removals = True
+    service = ExtractionService(project, [], tmp_path)
+    root_key = "source:SPACE:root"
+    child_key = "source:SPACE:child"
+    previous = {
+        root_key: ManifestEntry(
+            source_id="source",
+            container_id="SPACE",
+            document_id="root",
+            page_id="root",
+            document_key=root_key,
+            title="Raiz",
+        ),
+        child_key: ManifestEntry(
+            source_id="source",
+            container_id="SPACE",
+            document_id="child",
+            page_id="child",
+            document_key=child_key,
+            title="Descendente",
+        ),
+    }
+
+    lazy_current: dict[str, ManifestEntry] = {}
+    with FileTransaction(tmp_path / "base") as transaction:
+        service._reconcile_manifest(
+            previous=previous,
+            current=lazy_current,
+            discovered_keys={root_key},
+            selected_keys={root_key},
+            complete_containers=set(),
+            counters=Counter(),
+            transaction=transaction,
+            collected_at="2026-08-13T12:00:00-03:00",
+        )
+    assert lazy_current[child_key].status is EntryStatus.NEW
+    assert lazy_current[child_key].active is True
+
+    complete_current: dict[str, ManifestEntry] = {}
+    with FileTransaction(tmp_path / "base") as transaction:
+        service._reconcile_manifest(
+            previous=previous,
+            current=complete_current,
+            discovered_keys={root_key},
+            selected_keys={root_key},
+            complete_containers={("source", "SPACE")},
+            counters=Counter(),
+            transaction=transaction,
+            collected_at="2026-08-13T12:01:00-03:00",
+        )
+    assert complete_current[child_key].status is EntryStatus.REMOVED
+    assert complete_current[child_key].active is False
 
 
 def test_empty_page_has_explicit_status_instead_of_removed(configured) -> None:

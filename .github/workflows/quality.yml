@@ -15,18 +15,20 @@ jobs:
       - name: Install pinned development dependencies
         shell: pwsh
         run: python -m pip install -c config/constraints.txt -r config/requirements-dev.txt
-      - name: Static checks
+      - name: Ruff
         shell: pwsh
-        run: |
-          python -m ruff check --config config/pyproject.toml alquimista tests
-          python -m mypy --config-file config/pyproject.toml alquimista --follow-imports=skip --ignore-missing-imports
-      - name: Compile and test
+        run: python -m ruff check --config config/pyproject.toml alquimista tests
+      - name: Mypy
+        shell: pwsh
+        run: python -m mypy --config-file config/pyproject.toml alquimista --follow-imports=skip --ignore-missing-imports
+      - name: Compile Python sources
+        shell: pwsh
+        run: python -m compileall -q alquimista tools/legacy tests
+      - name: Run pytest
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
-        run: |
-          python -m compileall -q alquimista tools/legacy tests
-          python -m pytest -c config/pytest.ini -q
+        run: python -m pytest -c config/pytest.ini -q
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y

@@ -14,6 +14,7 @@ from ..models import (
     KnowledgeDocument,
     KnowledgeDocumentMetadata,
     KnowledgeSource,
+    MarkdownOptions,
     SourceConfig,
 )
 from ..runtime import CancellationToken, LogCallback
@@ -63,6 +64,7 @@ class GitBookConnector(KnowledgeSourceConnector):
         token: CancellationToken | None = None,
         log: LogCallback | None = None,
         client: ApiHttpClient | None = None,
+        markdown_options: MarkdownOptions | None = None,
     ) -> None:
         if source.source_type != self.SOURCE_TYPE:
             raise ValueError("A configuração não pertence ao conector GitBook.")
@@ -70,6 +72,7 @@ class GitBookConnector(KnowledgeSourceConnector):
             raise AuthenticationError("Informe o Personal Access Token do GitBook.")
         self.source = source
         self.options = options
+        self.markdown_options = markdown_options or MarkdownOptions()
         self.secret = secret
         self.token = token or CancellationToken()
         self.log = log or (lambda _message: None)

@@ -5,23 +5,23 @@ class AlquimistaError(RuntimeError):
     """Base class for expected functional errors."""
 
 
-class AuthenticationError(AlquimistaError):
+class ConnectorError(AlquimistaError):
+    """Base class for expected connector and remote-source failures."""
+
+
+class AuthenticationError(ConnectorError):
     pass
 
 
-class PermissionDeniedError(AlquimistaError):
+class PermissionDeniedError(ConnectorError):
     pass
 
 
-class ResourceNotFoundError(AlquimistaError):
+class ResourceNotFoundError(ConnectorError):
     pass
 
 
-class ConfluenceConnectionError(AlquimistaError):
-    pass
-
-
-class ApiConnectionError(AlquimistaError):
+class ApiConnectionError(ConnectorError):
     """A reusable connector HTTP client could not complete a request."""
 
 
@@ -29,12 +29,14 @@ class ApiRateLimitError(ApiConnectionError):
     pass
 
 
-class RateLimitError(ConfluenceConnectionError):
+class InvalidResponseError(ApiConnectionError):
     pass
 
 
-class InvalidResponseError(ConfluenceConnectionError):
-    pass
+# Public compatibility names retained for callers that still use the former
+# Confluence-specific transport hierarchy.
+ConfluenceConnectionError = ApiConnectionError
+RateLimitError = ApiRateLimitError
 
 
 class InvalidProjectError(AlquimistaError):

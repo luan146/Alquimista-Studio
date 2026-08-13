@@ -4,17 +4,21 @@ import json
 import re
 import time
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .client import ConfluenceClient
 from .connectors.confluence import ConfluenceRestConnector
-from .errors import AlquimistaError, ExtractionCancelledError, ManifestError, StorageError
+from .errors import (
+    AlquimistaError,
+    ExtractionCancelledError,
+    ManifestError,
+    StorageError,
+)
 from .markdown import (
     KnowledgeDocumentRenderer,
     MarkdownTransformer,
-    knowledge_document_metadata,
     normalize_markdown,
     page_metadata,
     sha256_text,
@@ -42,6 +46,19 @@ from .storage import (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class SelectedDocumentRef:
+    source_id: str
+    container_id: str
+    document_id: str
+    metadata: KnowledgeDocumentMetadata | None = None
+    summary_trusted: bool = False
+
+    @property
+    def document_key(self) -> str:
+        return f"{self.source_id}:{self.container_id}:{self.document_id}"
+
+
 @dataclass
 class SourceRuntime:
     source: SourceConfig
@@ -54,6 +71,10 @@ class SourceRuntime:
     connector: Any | None = None
     containers: dict[str, Any] | None = None
     documents_by_container: dict[str, dict[str, KnowledgeDocumentMetadata]] | None = None
+    # Containers whose metadata snapshot represents a complete inventory.
+    # Partial/lazy snapshots must not be interpreted as remote-removal scans.
+    inventory_complete_containers: set[str] = field(default_factory=set)
+    selected_documents: list[SelectedDocumentRef] = field(default_factory=list)
 
     @property
     def is_generic(self) -> bool:
@@ -61,6 +82,8 @@ class SourceRuntime:
 
     @property
     def selected_document_keys(self) -> list[str]:
+        if self.selected_documents:
+            return [item.document_key for item in self.selected_documents]
         if self.connector is None:
             return [f"{self.source.id}:{self.source.space_key}:{item}" for item in self.selected_page_ids]
         return list(self.selected_page_ids)
@@ -314,6 +337,379 @@ class ExtractionService:
                 )
             ]
 
+    @staticmethod
+    def _summary_value(summary: Any, name: str, default: Any = None) -> Any:
+        if isinstance(summary, dict):
+            return summary.get(name, default)
+        return getattr(summary, name, default)
+
+    def _summary_metadata(
+        self,
+        runtime: SourceRuntime,
+        summary: Any,
+        *,
+        container_id: str,
+        document_id: str,
+        document_key: str,
+    ) -> dict[str, Any]:
+        """Build a manifest-compatible fallback from discovery metadata.
+
+        Discovery deliberately does not fetch bodies.  When a document request
+        fails, this metadata is sufficient to preserve an individual FAILED
+        entry without aborting the remaining batch.
+        """
+        updated_at = self._summary_value(summary, "updated_at")
+        created_at = self._summary_value(summary, "created_at")
+        def iso(value: Any) -> str | None:
+            return value.isoformat() if hasattr(value, "isoformat") else (str(value) if value else None)
+
+        source = runtime.source
+        title = str(self._summary_value(summary, "title", document_id) or document_id)
+        path = list(self._summary_value(summary, "path", []) or [])
+        return {
+            "source_id": source.id,
+            "source_type": source.source_type,
+            "container_id": container_id,
+            "container_type": "space",
+            "container_name": str(
+                self._summary_value(summary, "container_name", "")
+                or source.space_name
+                or container_id
+            ),
+            "document_id": document_id,
+            "parent_id": self._summary_value(summary, "parent_id"),
+            "page_id": document_id,
+            "document_key": document_key,
+            "title": title,
+            "source_url": str(self._summary_value(summary, "original_url", "") or ""),
+            "source_name": source.name,
+            "space_key": source.space_key or container_id,
+            "space_name": source.space_name,
+            "path": path,
+            "ancestors": list(self._summary_value(summary, "ancestors", []) or []),
+            "created_at": iso(created_at),
+            "updated_at": iso(updated_at),
+            "etag": self._summary_value(summary, "etag"),
+            "document_type": str(self._summary_value(summary, "document_type", "document")),
+            "metadata": dict(self._summary_value(summary, "metadata", {}) or {}),
+        }
+
+    @staticmethod
+    def _canonical_entry_key(entry: ManifestEntry, project: ProjectConfig) -> str:
+        container = str(entry.container_id or entry.space_key or "__legacy__")
+        document = str(entry.document_id or entry.page_id)
+        return f"{entry.source_id}:{container}:{document}"
+
+    @staticmethod
+    def _key_matches(
+        key: str,
+        candidates: set[str],
+        *,
+        source_id: str | None = None,
+        container_id: str | None = None,
+        document_id: str | None = None,
+    ) -> bool:
+        if key in candidates:
+            return True
+        if source_id is None or document_id is None:
+            return False
+        aliases = {f"{source_id}:{document_id}"}
+        if container_id:
+            aliases.add(f"{source_id}:{container_id}:{document_id}")
+        return bool(aliases.intersection(candidates))
+
+    def _effective_keys(self, runtime: SourceRuntime) -> list[str]:
+        if self.partial_update_keys is None:
+            return list(runtime.selected_page_ids)
+        result: list[str] = []
+        for key in runtime.selected_page_ids:
+            parts = key.split(":", 2)
+            if len(parts) != 3:
+                if key in self.partial_update_keys:
+                    result.append(key)
+                continue
+            if self._key_matches(
+                key,
+                self.partial_update_keys,
+                source_id=parts[0],
+                container_id=parts[1],
+                document_id=parts[2],
+            ):
+                result.append(key)
+        return result
+
+    def _reconcile_manifest(
+        self,
+        *,
+        previous: dict[str, ManifestEntry],
+        current: dict[str, ManifestEntry],
+        discovered_keys: set[str],
+        selected_keys: set[str],
+        complete_containers: set[tuple[str, str]],
+        counters: Counter[str],
+        transaction: FileTransaction,
+        collected_at: str,
+    ) -> None:
+        """Apply one manifest lifecycle to both extraction algorithms."""
+        configured = {source.id: source for source in self.project.sources}
+        enabled = {source.id for source in self.project.sources if source.enabled}
+        current_canonical = {
+            self._canonical_entry_key(entry, self.project): key
+            for key, entry in current.items()
+        }
+        for key, old in previous.items():
+            canonical = self._canonical_entry_key(old, self.project)
+            if canonical in current_canonical or key in current:
+                continue
+            if self.partial_update_keys is not None and not self._key_matches(
+                canonical,
+                self.partial_update_keys,
+                source_id=old.source_id,
+                container_id=old.container_id or old.space_key,
+                document_id=old.document_id or old.page_id,
+            ):
+                current[key] = old.model_copy(deep=True)
+                continue
+
+            entry = old.model_copy(deep=True)
+            if old.source_id not in configured:
+                entry.status = EntryStatus.SOURCE_REMOVED
+                counters[EntryStatus.SOURCE_REMOVED.value] += 1
+            elif old.source_id not in enabled:
+                entry.status = EntryStatus.SOURCE_DISABLED
+                counters[EntryStatus.SOURCE_DISABLED.value] += 1
+            elif canonical in discovered_keys and canonical not in selected_keys:
+                entry.status = EntryStatus.UNSELECTED
+                counters[EntryStatus.UNSELECTED.value] += 1
+                page_path = (
+                    confined_path(self.output_dir, entry.markdown_path)
+                    if entry.markdown_path
+                    else None
+                )
+                if self.project.extraction.cleanup_unselected_files and page_path:
+                    transaction.stage_delete(page_path)
+                if not self.project.extraction.keep_unselected_manifest_entries:
+                    continue
+            elif (
+                self.project.extraction.detect_remote_removals
+                and (old.source_id, str(old.container_id or old.space_key or "__legacy__"))
+                in complete_containers
+            ):
+                entry.status = EntryStatus.REMOVED
+                counters[EntryStatus.REMOVED.value] += 1
+                page_path = (
+                    confined_path(self.output_dir, entry.markdown_path)
+                    if entry.markdown_path
+                    else None
+                )
+                if self.project.extraction.delete_removed_files and page_path:
+                    transaction.stage_delete(page_path)
+            else:
+                # A partial snapshot cannot prove that a remote document is gone.
+                current[key] = old.model_copy(deep=True)
+                continue
+            entry.active = False
+            entry.selected = False
+            entry.checked_at = collected_at
+            entry.packages = []
+            current[key] = entry
+
+    def _record_failure(
+        self,
+        *,
+        runtime: SourceRuntime,
+        summary: Any,
+        key: str,
+        container_id: str,
+        document_id: str,
+        old: ManifestEntry | None,
+        exc: Exception,
+        collected_at: str,
+        current: dict[str, ManifestEntry],
+        failures: dict[str, dict[str, str]],
+        counters: Counter[str],
+    ) -> None:
+        self.log(
+            f"Falha ao extrair página {document_id} ({self._summary_value(summary, 'title', document_id)}) "
+            f"da fonte {runtime.source.name}: {exc}"
+        )
+        failures[key] = {
+            "source": runtime.source.name,
+            "page_id": document_id,
+            "title": str(self._summary_value(summary, "title", document_id) or document_id),
+            "error": str(exc),
+        }
+        if old and self.project.extraction.preserve_previous_on_error:
+            entry = old.model_copy(deep=True)
+            entry.status = EntryStatus.PRESERVED_AFTER_ERROR
+            entry.error_message = str(exc)
+            entry.checked_at = collected_at
+        else:
+            entry = ManifestEntry(
+                **self._summary_metadata(
+                    runtime,
+                    summary,
+                    container_id=container_id,
+                    document_id=document_id,
+                    document_key=key,
+                ),
+                checked_at=collected_at,
+                status=EntryStatus.FAILED,
+                error_message=str(exc),
+                active=True,
+                selected=True,
+            )
+        current[key] = entry
+        counters[entry.status.value] += 1
+
+    def _extract_generic_document(
+        self,
+        *,
+        runtime: SourceRuntime,
+        connector: Any,
+        summary: Any,
+        key: str,
+        container_id: str,
+        document_id: str,
+        old: ManifestEntry | None,
+        renderer: KnowledgeDocumentRenderer,
+        transform_hash: str,
+        collected_at: str,
+        transaction: FileTransaction,
+        counters: Counter[str],
+    ) -> ManifestEntry:
+        summary_updated = self._summary_value(summary, "updated_at")
+        summary_updated_text = summary_updated.isoformat() if hasattr(summary_updated, "isoformat") else summary_updated
+        summary_etag = self._summary_value(summary, "etag")
+        summary_relative = old.markdown_path if old else ""
+        if (
+            old
+            and summary_updated_text
+            and (not summary_etag or old.etag == summary_etag)
+            and old.updated_at == summary_updated_text
+            and old.transform_config_hash == transform_hash
+            and summary_relative
+            and confined_path(self.output_dir, summary_relative).exists()
+        ):
+            entry = old.model_copy(deep=True)
+            entry.status = EntryStatus.UNCHANGED
+            entry.checked_at = collected_at
+            entry.active = True
+            entry.selected = True
+            entry.error_message = ""
+            counters[EntryStatus.UNCHANGED.value] += 1
+            return entry
+        document = None
+        try:
+            document = connector.get_document(document_id, container_id=container_id)
+        except TypeError as exc:
+            if "container_id" not in str(exc):
+                raise
+            document = connector.get_document(document_id)
+        prepared = renderer.prepare(
+            document,
+            runtime.source,
+            metadata_overrides={"container_id": container_id, "document_key": key},
+        )
+        normalized = prepared.metadata
+        relative = self._relative_page_path(runtime.source, normalized)
+        absolute = confined_path(self.output_dir, relative)
+        metadata_hash = self._metadata_hash(normalized)
+        if (
+            old
+            and summary_updated_text
+            and (not summary_etag or old.etag == summary_etag)
+            and old.updated_at == summary_updated_text
+            and old.transform_config_hash == transform_hash
+            and old.markdown_path
+            and absolute.exists()
+        ):
+            entry = old.model_copy(deep=True)
+            entry.status = EntryStatus.UNCHANGED
+            entry.checked_at = collected_at
+            entry.active = True
+            entry.selected = True
+            entry.error_message = ""
+            counters[EntryStatus.UNCHANGED.value] += 1
+            return entry
+        if (
+            old
+            and self.project.extraction.use_version_shortcut
+            and not self.project.extraction.force_reprocess
+            and (not normalized.get("etag") or old.etag == normalized.get("etag"))
+            and old.updated_at == normalized.get("updated_at")
+            and old.metadata_hash == metadata_hash
+            and old.transform_config_hash == transform_hash
+            and absolute.exists()
+        ):
+            entry = old.model_copy(deep=True)
+            entry.status = EntryStatus.UNCHANGED
+            entry.checked_at = collected_at
+            entry.active = True
+            entry.selected = True
+            entry.error_message = ""
+            counters[EntryStatus.UNCHANGED.value] += 1
+            return entry
+        content = prepared.content
+        if not content and not self.project.markdown.include_empty_pages:
+            counters[EntryStatus.EMPTY_SKIPPED.value] += 1
+            if old:
+                entry = old.model_copy(deep=True)
+                entry.status = EntryStatus.EMPTY_SKIPPED
+                entry.checked_at = collected_at
+                entry.error_message = ""
+                entry.active = False
+                entry.selected = True
+                entry.packages = []
+            else:
+                entry = ManifestEntry(
+                    **normalized,
+                    checked_at=collected_at,
+                    status=EntryStatus.EMPTY_SKIPPED,
+                    active=False,
+                    selected=True,
+                )
+            return entry
+        content_hash = prepared.content_hash
+        if old is None:
+            status = EntryStatus.NEW
+        elif not absolute.exists():
+            status = EntryStatus.REPAIRED
+        elif old.content_hash != content_hash:
+            status = EntryStatus.UPDATED
+        elif old.transform_config_hash != transform_hash:
+            status = EntryStatus.FORMAT_UPDATED
+        elif old.metadata_hash != metadata_hash:
+            status = EntryStatus.METADATA_UPDATED
+        else:
+            status = EntryStatus.UNCHANGED
+        output = renderer.render_prepared(prepared, collected_at, status.value)
+        if status != EntryStatus.UNCHANGED or not absolute.exists():
+            transaction.stage_text(absolute, output)
+        if old and old.markdown_path and old.markdown_path != relative.as_posix():
+            old_path = confined_path(self.output_dir, old.markdown_path)
+            if old_path != absolute:
+                transaction.stage_delete(old_path)
+        entry = ManifestEntry(
+            **normalized,
+            collected_at=collected_at,
+            checked_at=collected_at,
+            first_collected_at=old.first_collected_at if old else collected_at,
+            last_successful_at=collected_at,
+            content_hash=content_hash,
+            metadata_hash=metadata_hash,
+            transform_config_hash=transform_hash,
+            document_hash=sha256_text(output),
+            markdown_path=relative.as_posix(),
+            packages=old.packages if old else [],
+            status=status,
+            error_message="",
+            active=True,
+            selected=True,
+        )
+        counters[status.value] += 1
+        return entry
+
     def _run_generic(self, transaction: FileTransaction) -> dict[str, Any]:
         """Run extraction through the platform-neutral connector contract."""
         started = time.monotonic()
@@ -341,21 +737,45 @@ class ExtractionService:
                 continue
             connector = runtime.connector
             try:
-                for key in runtime.selected_page_ids:
+                refs = list(runtime.selected_documents)
+                if not refs:
+                    refs = [
+                        SelectedDocumentRef(
+                            source_id=runtime.source.id,
+                            container_id=parts[1],
+                            document_id=parts[2],
+                            metadata=(runtime.documents_by_container or {})
+                            .get(parts[1], {}).get(parts[2]),
+                        )
+                        for key in self._effective_keys(runtime)
+                        if len(parts := key.split(":", 2)) == 3
+                    ]
+                if self.partial_update_keys is not None:
+                    refs = [item for item in refs if self._key_matches(
+                        item.document_key, self.partial_update_keys,
+                        source_id=item.source_id, container_id=item.container_id,
+                        document_id=item.document_id,
+                    )]
+                for ref in refs:
                     self.token.check()
-                    parts = key.split(":", 2)
-                    if len(parts) != 3 or parts[0] != runtime.source.id:
+                    if ref.source_id != runtime.source.id:
                         continue
-                    _source_id, container_id, document_id = parts
-                    metadata_by_id = (runtime.documents_by_container or {}).get(container_id, {})
-                    summary = metadata_by_id.get(document_id)
+                    key = ref.document_key
+                    container_id = ref.container_id
+                    document_id = ref.document_id
+                    summary = ref.metadata or (runtime.documents_by_container or {}) \
+                        .get(container_id, {}).get(document_id)
                     if summary is None:
-                        continue
+                        summary = KnowledgeDocumentMetadata(
+                            id=document_id, container_id=container_id, title=document_id,
+                            metadata={"synthetic": True},
+                        )
                     discovered_keys.add(key)
                     selected_keys.add(key)
                     completed += 1
-                    self.progress(completed, total, summary.title)
-                    self.log(f"{runtime.source.name} [{completed}/{total}] {summary.title}")
+                    summary_title = str(self._summary_value(summary, "title", document_id) or document_id)
+                    self.progress(completed, total, summary_title)
+                    self.log(f"{runtime.source.name} [{completed}/{total}] {summary_title}")
                     # Prefer the disambiguated 3-part legacy alias when the
                     # container is known, then fall back to the 2-part alias
                     # for manifests written before container_id existed.
@@ -364,172 +784,51 @@ class ExtractionService:
                         or legacy_aliases.get(f"{runtime.source.id}:{container_id}:{document_id}")
                         or legacy_aliases.get(f"{runtime.source.id}:{document_id}")
                     )
-                    summary_updated = summary.updated_at.isoformat() if summary.updated_at else None
-                    summary_etag = summary.etag
-                    if (
-                        old
-                        and summary_updated
-                        and (not summary_etag or old.etag == summary_etag)
-                        and old.updated_at == summary_updated
-                        and old.transform_config_hash == transform_hash
-                        and old.markdown_path
-                        and confined_path(self.output_dir, old.markdown_path).exists()
-                    ):
-                        entry = old.model_copy(deep=True)
-                        entry.status = EntryStatus.UNCHANGED
-                        entry.checked_at = collected_at
-                        entry.active = True
-                        entry.selected = True
-                        entry.error_message = ""
-                        current[key] = entry
-                        counters[EntryStatus.UNCHANGED.value] += 1
-                        continue
                     try:
-                        document = connector.get_document(
-                            document_id, container_id=container_id
-                        )
-                    except TypeError as exc:
-                        # Keep compatibility with older third-party/test connectors
-                        # that implemented the original one-argument contract.
-                        if "container_id" not in str(exc):
-                            raise
-                        document = connector.get_document(document_id)
-                    normalized = knowledge_document_metadata(document, runtime.source)
-                    normalized["container_id"] = container_id
-                    normalized["document_key"] = key
-                    relative = self._relative_page_path(runtime.source, normalized)
-                    absolute = confined_path(self.output_dir, relative)
-                    metadata_hash = self._metadata_hash(normalized)
-                    if (
-                        old
-                        and self.project.extraction.use_version_shortcut
-                        and not self.project.extraction.force_reprocess
-                        and (
-                            not normalized.get("etag")
-                            or old.etag == normalized.get("etag")
-                        )
-                        and old.updated_at == normalized.get("updated_at")
-                        and old.metadata_hash == metadata_hash
-                        and old.transform_config_hash == transform_hash
-                        and absolute.exists()
-                    ):
-                        entry = old.model_copy(deep=True)
-                        entry.status = EntryStatus.UNCHANGED
-                        entry.checked_at = collected_at
-                        entry.active = True
-                        entry.selected = True
-                        entry.error_message = ""
-                        current[key] = entry
-                        counters[EntryStatus.UNCHANGED.value] += 1
-                        continue
-                    try:
-                        content = normalize_markdown(document.content)
-                        if not content and not self.project.markdown.include_empty_pages:
-                            counters[EntryStatus.EMPTY_SKIPPED.value] += 1
-                            self.log(f"Página vazia ignorada: {normalized.get('title', document_id)}")
-                            if old:
-                                entry = old.model_copy(deep=True)
-                                entry.status = EntryStatus.EMPTY_SKIPPED
-                                entry.checked_at = collected_at
-                                entry.error_message = ""
-                                entry.active = False
-                                entry.selected = True
-                                entry.packages = []
-                            else:
-                                entry = ManifestEntry(
-                                    **normalized,
-                                    checked_at=collected_at,
-                                    status=EntryStatus.EMPTY_SKIPPED,
-                                    active=False,
-                                    selected=True,
-                                )
-                            current[key] = entry
-                            continue
-                        content_hash = sha256_text(renderer.hash_input(normalized, content))
-                        if old is None:
-                            status = EntryStatus.NEW
-                        elif not absolute.exists():
-                            status = EntryStatus.REPAIRED
-                        elif old.content_hash != content_hash:
-                            status = EntryStatus.UPDATED
-                        elif old.transform_config_hash != transform_hash:
-                            status = EntryStatus.FORMAT_UPDATED
-                        elif old.metadata_hash != metadata_hash:
-                            status = EntryStatus.METADATA_UPDATED
-                        else:
-                            status = EntryStatus.UNCHANGED
-                        output = renderer.render(
-                            normalized, content, content_hash, collected_at, status.value
-                        )
-                        if status != EntryStatus.UNCHANGED or not absolute.exists():
-                            transaction.stage_text(absolute, output)
-                        if old and old.markdown_path and old.markdown_path != relative.as_posix():
-                            old_path = confined_path(self.output_dir, old.markdown_path)
-                            if old_path != absolute:
-                                transaction.stage_delete(old_path)
-                        entry = ManifestEntry(
-                            **normalized,
+                        current[key] = self._extract_generic_document(
+                            runtime=runtime,
+                            connector=connector,
+                            summary=summary,
+                            key=key,
+                            container_id=container_id,
+                            document_id=document_id,
+                            old=old,
+                            renderer=renderer,
+                            transform_hash=transform_hash,
                             collected_at=collected_at,
-                            checked_at=collected_at,
-                            first_collected_at=old.first_collected_at if old else collected_at,
-                            last_successful_at=collected_at,
-                            content_hash=content_hash,
-                            metadata_hash=metadata_hash,
-                            transform_config_hash=transform_hash,
-                            document_hash=sha256_text(output),
-                            markdown_path=relative.as_posix(),
-                            packages=old.packages if old else [],
-                            status=status,
-                            error_message="",
-                            active=True,
-                            selected=True,
+                            transaction=transaction,
+                            counters=counters,
                         )
-                        current[key] = entry
-                        counters[status.value] += 1
+                    except ExtractionCancelledError:
+                        raise
                     except Exception as exc:
-                        self.log(
-                            f"Falha ao extrair pagina {document_id} "
-                            f"({summary.title}) da fonte {runtime.source.name}: {exc}"
+                        self._record_failure(
+                            runtime=runtime,
+                            summary=summary,
+                            key=key,
+                            container_id=container_id,
+                            document_id=document_id,
+                            old=old,
+                            exc=exc,
+                            collected_at=collected_at,
+                            current=current,
+                            failures=failures,
+                            counters=counters,
                         )
-                        failures[key] = {
-                            "source": runtime.source.name,
-                            "page_id": document_id,
-                            "title": summary.title,
-                            "error": str(exc),
-                        }
 
-                        if old and self.project.extraction.preserve_previous_on_error:
-                            entry = old.model_copy(deep=True)
-                            entry.status = EntryStatus.PRESERVED_AFTER_ERROR
-                            entry.error_message = str(exc)
-                            entry.checked_at = collected_at
-                            current[key] = entry
-                            counters[EntryStatus.PRESERVED_AFTER_ERROR.value] += 1
-                        else:
-                            current[key] = ManifestEntry(
-                                **normalized,
-                                checked_at=collected_at,
-                                status=EntryStatus.FAILED,
-                                error_message=str(exc),
-                                active=True,
-                                selected=True,
-                            )
-                            counters[EntryStatus.FAILED.value] += 1
             finally:
                 connector.close()
 
-        for key, old in previous.items():
-            if key in current:
-                continue
-            entry = old.model_copy(deep=True)
-            if key not in selected_keys:
-                entry.status = EntryStatus.UNSELECTED
-                counters[EntryStatus.UNSELECTED.value] += 1
-            entry.active = False
-            entry.selected = False
-            entry.checked_at = collected_at
-            entry.packages = []
-            current[key] = entry
+        self._reconcile_manifest(
+            previous=previous,
+            current=current,
+            discovered_keys=discovered_keys,
+            selected_keys=selected_keys,
+            complete_containers=set(),
+            counters=counters,
+            transaction=transaction,
+            collected_at=collected_at,
+        )
 
         manifest = ManifestDocument(
             project_id=self.project.project_id,
@@ -611,6 +910,7 @@ class ExtractionService:
         collected_at = now_iso()
         discovered_keys: set[str] = set()
         selected_keys: set[str] = set()
+        complete_containers: set[tuple[str, str]] = set()
         total = sum(len(runtime.selected_page_ids) for runtime in self.runtimes if runtime.source.enabled)
         completed = 0
         for runtime in self.runtimes:
@@ -629,9 +929,11 @@ class ExtractionService:
                     client, source, runtime.root, self.project.markdown
                 )
                 root_id = str(runtime.root["id"])
+                legacy_container = str(source.space_key or "__legacy__")
                 discovered_keys.update(
-                    f"{source.id}:{page_id}" for page_id in runtime.pages_by_id
+                    f"{source.id}:{legacy_container}:{page_id}" for page_id in runtime.pages_by_id
                 )
+                complete_containers.add((source.id, legacy_container))
                 selected_ids = [
                     page_id
                     for page_id in runtime.selected_page_ids
@@ -641,8 +943,20 @@ class ExtractionService:
                         or source.include_root
                         or page_id != root_id
                     )
+                    and (
+                        self.partial_update_keys is None
+                        or self._key_matches(
+                            f"{source.id}:{legacy_container}:{page_id}",
+                            self.partial_update_keys,
+                            source_id=source.id,
+                            container_id=legacy_container,
+                            document_id=page_id,
+                        )
+                    )
                 ]
-                selected_keys.update(f"{source.id}:{page_id}" for page_id in selected_ids)
+                selected_keys.update(
+                    f"{source.id}:{legacy_container}:{page_id}" for page_id in selected_ids
+                )
 
                 for page_id in selected_ids:
                     self.token.check()
@@ -653,7 +967,7 @@ class ExtractionService:
                     # Prefer the disambiguated 3-part legacy alias (space_key
                     # acts as the container in the legacy flow), then fall back
                     # to the 2-part alias for older manifests.
-                    legacy_container = str(summary_meta.get("space_key") or source.space_key or "")
+                    legacy_container = str(summary_meta.get("space_key") or source.space_key or "__legacy__")
                     old = (
                         previous.get(key)
                         or (legacy_aliases.get(f"{source.id}:{legacy_container}:{page_id}") if legacy_container else None)
@@ -772,7 +1086,7 @@ class ExtractionService:
                     except Exception as exc:
                         self.log(
                             f"Falha ao extrair pagina {page_id} "
-                            f"({summary_meta["title"]}) da fonte {source.name}: {exc}"
+                            f"({summary_meta['title']}) da fonte {source.name}: {exc}"
                         )
                         failures[key] = {
                             "source": source.name,
@@ -801,43 +1115,16 @@ class ExtractionService:
                         self.log(f"Falha em {summary_meta['title']}: {exc}")
                     self.token.wait(self.project.extraction.request_delay_ms / 1000)
 
-        configured = {source.id: source for source in self.project.sources}
-        runtime_ids = {runtime.source.id for runtime in self.runtimes}
-        for key, old in previous.items():
-            if key in current:
-                continue
-            if self.partial_update_keys is not None and key not in self.partial_update_keys:
-                current[key] = old.model_copy(deep=True)
-                continue
-            entry = old.model_copy(deep=True)
-            page_path = (
-                confined_path(self.output_dir, entry.markdown_path)
-                if entry.markdown_path
-                else None
-            )
-            if entry.source_id not in configured:
-                entry.status = EntryStatus.SOURCE_REMOVED
-                counters[EntryStatus.SOURCE_REMOVED.value] += 1
-            elif entry.source_id not in runtime_ids:
-                entry.status = EntryStatus.SOURCE_DISABLED
-                counters[EntryStatus.SOURCE_DISABLED.value] += 1
-            elif key in discovered_keys and key not in selected_keys:
-                entry.status = EntryStatus.UNSELECTED
-                counters[EntryStatus.UNSELECTED.value] += 1
-                if self.project.extraction.cleanup_unselected_files and page_path:
-                    transaction.stage_delete(page_path)
-                if not self.project.extraction.keep_unselected_manifest_entries:
-                    continue
-            elif self.project.extraction.detect_remote_removals:
-                entry.status = EntryStatus.REMOVED
-                counters[EntryStatus.REMOVED.value] += 1
-                if self.project.extraction.delete_removed_files and page_path:
-                    transaction.stage_delete(page_path)
-            entry.active = False
-            entry.selected = False
-            entry.checked_at = collected_at
-            entry.packages = []
-            current[key] = entry
+        self._reconcile_manifest(
+            previous=previous,
+            current=current,
+            discovered_keys=discovered_keys,
+            selected_keys=selected_keys,
+            complete_containers=complete_containers,
+            counters=counters,
+            transaction=transaction,
+            collected_at=collected_at,
+        )
 
         manifest = ManifestDocument(
             project_id=self.project.project_id,
@@ -876,6 +1163,70 @@ class ExtractionService:
         except Exception as exc:
             self.log(f"Índice SQLite não atualizado; o manifesto JSON permanece válido: {exc}")
         self.log("Extração concluída.")
+        return report
+
+
+class InventoryReconciliationService:
+    """Explicit, body-free remote inventory reconciliation action."""
+
+    def __init__(
+        self,
+        project: ProjectConfig,
+        runtimes: list[SourceRuntime],
+        project_dir: Path,
+        *,
+        token: CancellationToken | None = None,
+        log: LogCallback | None = None,
+    ) -> None:
+        self.project = project
+        self.runtimes = runtimes
+        self.project_dir = project_dir.resolve()
+        self.token = token or CancellationToken()
+        self.log = log or (lambda _message: None)
+        output_dir = Path(project.output_dir)
+        self.output_dir = (output_dir if output_dir.is_absolute() else self.project_dir / output_dir).resolve()
+        self.store = ManifestStore(self.output_dir / MANIFEST_NAME, project, log=self.log)
+
+    def run(self) -> dict[str, Any]:
+        manifest = self.store.load()
+        discovered: set[tuple[str, str, str]] = set()
+        completed_containers: set[tuple[str, str]] = set()
+        failures: list[dict[str, str]] = []
+        for runtime in self.runtimes:
+            connector = runtime.connector
+            if connector is None:
+                continue
+            try:
+                self.token.check()
+                for container in connector.list_containers():
+                    container_id = str(container.id)
+                    self.token.check()
+                    try:
+                        metadata = connector.list_documents(container_id)
+                    except Exception as exc:
+                        failures.append({"source_id": runtime.source.id, "container_id": container_id, "error": str(exc)})
+                        continue
+                    for item in metadata:
+                        discovered.add((runtime.source.id, container_id, str(item.id)))
+                    completed_containers.add((runtime.source.id, container_id))
+            finally:
+                connector.close()
+        removed = 0
+        for entry in manifest.entries:
+            identity = (entry.source_id, str(entry.container_id or entry.space_key), str(entry.document_id or entry.page_id))
+            if identity[:2] in completed_containers and identity not in discovered and entry.active:
+                entry.active = False
+                entry.status = EntryStatus.REMOVED
+                entry.checked_at = now_iso()
+                removed += 1
+        self.store.save(manifest)
+        report = {
+            "completed_containers": len(completed_containers),
+            "removed": removed,
+            "failures": failures,
+            "generated_at": now_iso(),
+        }
+        self.log(f"Reconciliação concluída: {removed} remoções.")
         return report
 
 

@@ -1,0 +1,18 @@
+{
+  "id": "page-macros",
+  "title": "Macros aninhadas",
+  "type": "page",
+  "ancestors": [{"id": "root-1", "title": "Manual"}],
+  "space": {"key": "DOCS", "name": "Documentação"},
+  "version": {
+    "number": 3,
+    "when": "2026-08-12T17:00:00Z"
+  },
+  "metadata": {"labels": {"results": [{"name": "macro"}]}},
+  "body": {
+    "storage": {
+      "value": "<ac:structured-macro ac:name='custom'><ac:rich-text-body><p>Macro externa.</p><ac:structured-macro ac:name='warning'><ac:rich-text-body><p>Aviso aninhado.</p></ac:rich-text-body></ac:structured-macro></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name='mystery'></ac:structured-macro>"
+    }
+  },
+  "_links": {"webui": "/pages/viewpage.action?pageId=page-macros"}
+}

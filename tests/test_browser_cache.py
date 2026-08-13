@@ -135,6 +135,16 @@ def test_cache_ttl_expires_pages_but_exposes_stale_etag(tmp_path: Path) -> None:
     assert stale.etag == "spaces-v1"
 
 
+def test_cache_purge_source_removes_all_scopes(tmp_path: Path) -> None:
+    cache = BrowserCache(tmp_path / "browser.sqlite3")
+    cache.put_containers("source", [SpaceMetadata("source", "space", "Privado")], scope="auth-a")
+    cache.put_containers("source", [SpaceMetadata("source", "space", "Outra")], scope="auth-b")
+
+    assert cache.purge_source("source") > 0
+    assert cache.get_containers("source", scope="auth-a") is None
+    assert cache.get_containers("source", scope="auth-b") is None
+
+
 def test_service_is_cache_first_and_children_are_deduplicated(tmp_path: Path) -> None:
     adapter = FakeAdapter()
     cache = BrowserCache(tmp_path / "browser.sqlite3")

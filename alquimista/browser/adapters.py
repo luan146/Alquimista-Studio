@@ -6,6 +6,10 @@ from collections.abc import Mapping
 from typing import Any
 
 from ..connectors.base import KnowledgeSourceConnector
+from ..connectors.capabilities import (
+    HierarchicalDiscoveryConnector,
+    SearchableConnector,
+)
 from ..models import KnowledgeContainer, KnowledgeDocumentMetadata
 from .contracts import (
     CancellationLike,
@@ -31,12 +35,10 @@ class ConnectorDiscoveryAdapter(DiscoveryAdapter):
     @property
     def capabilities(self) -> frozenset[str]:
         capabilities = {"list_containers"}
-        base = KnowledgeSourceConnector
-        connector_type = type(self.connector)
-        for name in ("list_root_documents", "list_document_children", "search_documents"):
-            implementation = getattr(connector_type, name, None)
-            if implementation is not None and implementation is not getattr(base, name):
-                capabilities.add(name)
+        if isinstance(self.connector, HierarchicalDiscoveryConnector):
+            capabilities.update({"list_root_documents", "list_document_children"})
+        if isinstance(self.connector, SearchableConnector):
+            capabilities.add("search_documents")
         return frozenset(capabilities)
 
     def list_containers(

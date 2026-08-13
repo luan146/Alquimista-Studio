@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from ..client import ConfluenceClient
 from ..connectors import ConnectorRegistry, KnowledgeSourceConnector, default_registry
 from ..errors import AlquimistaError
-from ..models import ProjectConfig, now_iso
+from ..models import (
+    KnowledgeContainer,
+    KnowledgeDocumentMetadata,
+    ProjectConfig,
+    now_iso,
+)
 from ..runtime import CancellationToken
-from ..services import SourceRuntime
+from ..services import SelectedDocumentRef, SourceRuntime
 
 
 class RuntimeSecrets:
@@ -57,6 +63,11 @@ class RuntimeBuilder:
             token.check()
             if not source.enabled:
                 continue
+            if source.source_type != "confluence_rest":
+                raise AlquimistaError(
+                    "O RuntimeBuilder legado aceita apenas confluence_rest; "
+                    "use build_connectors para outros conectores."
+                )
             data = self.trees.get(source.id)
             if data is None:
                 log(f"Carregando árvore de {source.name}…")
@@ -103,13 +114,71 @@ class RuntimeBuilder:
             if key in legacy_ids or key.rsplit(":", 1)[-1] in legacy_ids
         }
 
+    @staticmethod
+    def _snapshot_metadata(
+        connector: Any,
+        raw: Any,
+        container_id: str,
+    ) -> KnowledgeDocumentMetadata | None:
+        if isinstance(raw, KnowledgeDocumentMetadata):
+            return raw
+        if not isinstance(raw, dict):
+            return None
+        normalizer = getattr(connector, "_metadata", None)
+        if callable(normalizer):
+            try:
+                return normalizer(raw, container_id)
+            except (AttributeError, KeyError, TypeError, ValueError):
+                # The UI snapshot is intentionally connector-neutral; use the
+                # common mapping below when a private connector adapter rejects
+                # a stale row.
+                pass
+        page_id = str(raw.get("id") or "")
+        if not page_id:
+            return None
+        version = raw.get("version") or {}
+        updated = raw.get("updated_at") or version.get("when")
+        if isinstance(updated, str):
+            try:
+                updated = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+            except ValueError:
+                updated = None
+        if not isinstance(updated, datetime):
+            updated = None
+        ancestors = list(raw.get("ancestors") or [])
+        path = list(raw.get("path") or [])
+        if not path:
+            path = [str(item.get("title", "")) for item in ancestors if item.get("title")]
+            if raw.get("title"):
+                path.append(str(raw["title"]))
+        space = raw.get("space") or {}
+        return KnowledgeDocumentMetadata(
+            id=page_id,
+            container_id=str(raw.get("_container_id") or container_id),
+            parent_id=str(raw.get("parent_id") or "") or None,
+            title=str(raw.get("title") or page_id),
+            original_url=str(raw.get("original_url") or ""),
+            updated_at=updated,
+            etag=raw.get("etag"),
+            has_children=bool(raw.get("has_children") or raw.get("hasChildren")),
+            document_type=str(raw.get("type") or raw.get("document_type") or "document"),
+            path=path,
+            metadata={
+                **dict(raw.get("metadata") or {}),
+                "space_key": str(space.get("key") or container_id),
+                "space_name": str(space.get("name") or ""),
+                "ancestors": ancestors,
+                "confluence_version": version.get("number"),
+            },
+        )
+
     def build_connectors(
         self,
         project: ProjectConfig,
         token: CancellationToken,
         log: Any,
     ) -> list[SourceRuntime]:
-        """Build runtimes from the canonical structured selection only."""
+        """Build runtimes from selected references without remote inventory scans."""
         runtimes: list[SourceRuntime] = []
         for source in project.sources:
             token.check()
@@ -125,6 +194,7 @@ class RuntimeBuilder:
             connector: KnowledgeSourceConnector | None = self.registry.create(
                 source,
                 options=project.extraction,
+                markdown_options=project.markdown,
                 secret=self.secrets.get(source.id),
                 token=token,
                 log=log,
@@ -136,56 +206,80 @@ class RuntimeBuilder:
                     f"tipo={source.source_type}; base_url={source.base_url or '<vazia>'}; "
                     f"space_key={source.space_key or '<não definido>'}"
                 )
-                log(f"Descobrindo contêineres de {source.name}…")
-                containers = connector.list_containers()
-                if source.source_type == "confluence_rest" and source.space_key:
-                    containers = [
-                        item for item in containers if item.id == source.space_key
+                snapshot = self.trees.get(source.id) or {}
+                pages_by_container = snapshot.get("pages_by_container") or {}
+                structured = [item for item in project.selections
+                              if item.source_id == source.id and item.selected]
+                if structured:
+                    requested_refs = [
+                        (str(item.container_id), str(item.document_id)) for item in structured
                     ]
-                structured_selection = any(
-                    item.source_id == source.id for item in project.selections
-                )
-                selected_container_ids = {
-                    parts[1]
-                    for key in requested_keys
-                    if (parts := key.split(":", 2))
-                    and len(parts) == 3
-                    and parts[0] == source.id
-                    and parts[1]
-                }
-                if structured_selection and selected_container_ids:
-                    selected_containers = [
-                        item for item in containers if str(item.id) in selected_container_ids
-                    ]
-                    if selected_containers:
-                        containers = selected_containers
-                container_map = {str(item.id): item for item in containers}
-                documents: dict[str, dict[str, Any]] = {}
-                available: set[str] = set()
-                for container in containers:
-                    token.check()
-                    metadata = connector.list_documents(container.id)
-                    documents[str(container.id)] = {
-                        str(item.id): item for item in metadata
-                    }
-                    available.update(
-                        f"{source.id}:{container.id}:{item.id}" for item in metadata
-                    )
-                selected_keys = self._selected_available_keys(
-                    project, source, available
-                )
-                if not selected_keys:
+                else:
+                    requested_refs = []
+                    for key in requested_keys:
+                        parts = key.split(":", 2)
+                        if len(parts) == 3 and parts[0] == source.id:
+                            requested_refs.append((parts[1], parts[2]))
+                        else:
+                            requested_refs.append((str(source.space_key or "__legacy__"), str(key)))
+                if not requested_refs:
                     continue
+                documents: dict[str, dict[str, KnowledgeDocumentMetadata]] = {}
+                selected_documents: list[SelectedDocumentRef] = []
+                container_map: dict[str, KnowledgeContainer] = {}
+                seen: set[str] = set()
+                for container_id, document_id in requested_refs:
+                    token.check()
+                    key = f"{source.id}:{container_id}:{document_id}"
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    raw_items = pages_by_container.get(container_id) or []
+                    metadata = next(
+                        (item for raw in raw_items
+                         if (item := self._snapshot_metadata(connector, raw, container_id))
+                         and str(item.id) == document_id),
+                        None,
+                    )
+                    if metadata is None:
+                        metadata = KnowledgeDocumentMetadata(
+                            id=document_id,
+                            container_id=container_id,
+                            title=document_id,
+                            metadata={"synthetic": True},
+                        )
+                    documents.setdefault(container_id, {})[document_id] = metadata
+                    container_map.setdefault(
+                        container_id,
+                        KnowledgeContainer(
+                            id=container_id,
+                            key=container_id,
+                            name=container_id,
+                            container_type="container",
+                            source_type=source.source_type,
+                        ),
+                    )
+                    selected_documents.append(
+                        SelectedDocumentRef(
+                            source_id=source.id,
+                            container_id=container_id,
+                            document_id=document_id,
+                            metadata=metadata,
+                            summary_trusted=not bool(metadata.metadata.get("synthetic")),
+                        )
+                    )
                 runtimes.append(
                     SourceRuntime(
                         source=source,
                         root={},
                         pages_by_id={},
-                        selected_page_ids=sorted(selected_keys),
+                        selected_page_ids=[item.document_key for item in selected_documents],
                         secret=self.secrets.get(source.id),
                         connector=connector,
                         containers=container_map,
                         documents_by_container=documents,
+                        inventory_complete_containers=set(),
+                        selected_documents=selected_documents,
                     )
                 )
                 connector = None

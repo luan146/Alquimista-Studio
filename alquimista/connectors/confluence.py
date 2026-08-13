@@ -3,10 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
-from urllib.parse import quote, urljoin
-
-from bs4 import BeautifulSoup
-from markdownify import markdownify
+from urllib.parse import urljoin
 
 from ..browser.contracts import (
     CancellationLike,
@@ -24,10 +21,12 @@ from ..models import (
     KnowledgeDocument,
     KnowledgeDocumentMetadata,
     KnowledgeSource,
+    MarkdownOptions,
     SourceConfig,
 )
 from ..runtime import CancellationToken, LogCallback
 from .base import KnowledgeSourceConnector
+from .confluence_parser import ConfluenceDocumentParser
 
 _UNSET = object()
 _LAZY_BATCH_LIMIT = 100
@@ -57,9 +56,11 @@ class ConfluenceRestConnector(KnowledgeSourceConnector):
         token: CancellationToken | None = None,
         log: LogCallback | None = None,
         client: ConfluenceClient | None = None,
+        markdown_options: MarkdownOptions | None = None,
     ) -> None:
         self.source = source
         self.options = options
+        self.markdown_options = markdown_options or MarkdownOptions()
         self.secret = secret
         self.token = token or CancellationToken()
         self.log = log or (lambda _message: None)
@@ -73,6 +74,9 @@ class ConfluenceRestConnector(KnowledgeSourceConnector):
         )
         self._containers: dict[str, KnowledgeContainer] = {}
         self._documents: dict[str, dict[str, Any]] = {}
+
+    def configure_markdown(self, options: MarkdownOptions) -> None:
+        self.markdown_options = options
 
     def get_source_type(self) -> str:
         return self.SOURCE_TYPE
@@ -95,6 +99,9 @@ class ConfluenceRestConnector(KnowledgeSourceConnector):
             supports_permissions=True,
             supports_search=True,
             supports_updated_at=True,
+            supports_public_access=True,
+            supports_bearer_token=True,
+            supports_lazy_discovery=True,
         )
 
     def validate_connection(self) -> dict[str, Any]:
@@ -135,7 +142,18 @@ class ConfluenceRestConnector(KnowledgeSourceConnector):
             self._containers[identifier] = container
             containers.append(container)
 
-        if self.source.space_key and self.source.space_key not in self._containers:
+        if self.source.space_key:
+            configured = next(
+                (
+                    container
+                    for container in containers
+                    if container.id == self.source.space_key
+                ),
+                None,
+            )
+            if configured is not None:
+                self.log("[Confluence] 1 espaço configurado disponível.")
+                return [configured]
             specified = KnowledgeContainer(
                 id=self.source.space_key,
                 key=self.source.space_key,
@@ -490,53 +508,10 @@ class ConfluenceRestConnector(KnowledgeSourceConnector):
     def normalize_document(self, raw_document: object) -> KnowledgeDocument:
         if not isinstance(raw_document, dict):
             raise TypeError("Documento bruto do Confluence deve ser um objeto JSON.")
-        page = raw_document
-        container = page.get("space") or {}
-        container_id = str(
-            page.get("container_id") or container.get("key") or self.source.space_key
-        )
-        metadata = self._metadata(page, container_id)
-        html = str(page.get("body", {}).get("storage", {}).get("value") or "")
-        soup = BeautifulSoup(html, "html.parser")
-        attachments = [
-            {
-                "filename": str(node.get("ri:filename") or node.get("filename") or ""),
-                "url": f"{self.source.base_url}/download/attachments/{metadata.id}/"
-                f"{quote(str(node.get('ri:filename') or node.get('filename') or ''))}",
-            }
-            for node in soup.find_all("ri:attachment")
-            if node.get("ri:filename") or node.get("filename")
-        ]
-        for tag in soup(["script", "style", "noscript"]):
-            tag.decompose()
-        content = markdownify(str(soup), heading_style="ATX", bullets="-").strip()
-        version = page.get("version") or {}
-        author = version.get("by") or {}
-        labels = [
-            str(item.get("name"))
-            for item in (page.get("metadata", {}).get("labels", {}).get("results", []) or [])
-            if item.get("name")
-        ]
-        return KnowledgeDocument(
-            id=metadata.id,
-            container_id=container_id,
-            parent_id=metadata.parent_id,
-            title=metadata.title,
-            content=content,
-            original_url=ConfluenceClient.source_url(self.source.base_url, page),
-            updated_at=metadata.updated_at,
-            source_type=self.SOURCE_TYPE,
-            container_name=str(container.get("name") or container_id),
-            path=metadata.path,
-            attachments=attachments,
-            metadata={
-                "confluence_version": version.get("number"),
-                "author": str(author.get("displayName") or author.get("username") or ""),
-                "labels": labels,
-                "ancestors": page.get("ancestors", []) or [],
-                "raw_type": page.get("type", "page"),
-            },
-        )
+        return ConfluenceDocumentParser(
+            self.source,
+            self.markdown_options,
+        ).parse(raw_document)
 
     def _metadata(
         self, page: dict[str, Any], container_id: str
@@ -712,9 +687,13 @@ class ConfluenceRestConnector(KnowledgeSourceConnector):
         }
 
     def close(self) -> None:
+        session = getattr(self.client, "session", None)
+        if session is not None:
+            session.headers.pop("Authorization", None)
         close = getattr(self.client, "close", None)
         if callable(close):
             close()
+        self.secret = ""
 
 
 def _check_token(token: CancellationLike | None) -> None:

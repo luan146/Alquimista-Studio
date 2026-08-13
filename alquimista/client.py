@@ -10,11 +10,11 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from .errors import (
+    ApiConnectionError,
+    ApiRateLimitError,
     AuthenticationError,
-    ConfluenceConnectionError,
     InvalidResponseError,
     PermissionDeniedError,
-    RateLimitError,
     ResourceNotFoundError,
 )
 from .models import AuthMode, ExtractionOptions, SourceConfig
@@ -66,7 +66,7 @@ class ConfluenceClient:
             return path
         parsed = urlparse(self.base_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ConfluenceConnectionError(
+            raise ApiConnectionError(
                 f"A fonte “{self.source.name}” ({self.source.id}) não possui uma "
                 f"base_url válida para o Confluence: {self.source.base_url or 'vazia'}. "
                 "Informe uma URL completa, por exemplo https://example.com."
@@ -177,11 +177,11 @@ class ConfluenceClient:
                 if transient:
                     if attempt == self.options.retry_count:
                         if response.status_code == 429:
-                            raise RateLimitError(
+                            raise ApiRateLimitError(
                                 f"O Confluence limitou as requisições (HTTP 429) em {url} "
                                 f"após {attempt} tentativa(s)."
                             )
-                        raise ConfluenceConnectionError(
+                        raise ApiConnectionError(
                             f"O Confluence permaneceu indisponível (HTTP {response.status_code}) "
                             f"em {url} após {attempt} tentativa(s)."
                         )
@@ -206,7 +206,7 @@ class ConfluenceClient:
                 PermissionDeniedError,
                 ResourceNotFoundError,
                 InvalidResponseError,
-                RateLimitError,
+                ApiRateLimitError,
             ):
                 raise
             except (requests.Timeout, requests.ConnectionError) as exc:
@@ -219,10 +219,10 @@ class ConfluenceClient:
                 )
                 self.token.wait(delay)
             except requests.RequestException as exc:
-                raise ConfluenceConnectionError(
+                raise ApiConnectionError(
                     f"Falha HTTP em {url}: {exc}"
                 ) from exc
-        raise ConfluenceConnectionError(
+        raise ApiConnectionError(
             f"Não foi possível conectar ao Confluence em {url} após "
             f"{self.options.retry_count} tentativa(s): {last_error}"
         )
@@ -352,7 +352,7 @@ class ConfluenceClient:
                     endpoint,
                     params={"expand": "restrictions.user,restrictions.group"},
                 )
-            except (ConfluenceConnectionError, PermissionDeniedError, ResourceNotFoundError):
+            except (ApiConnectionError, PermissionDeniedError, ResourceNotFoundError):
                 continue
             restriction_data = self._read_restriction_payload(payload)
             if restriction_data is not None:

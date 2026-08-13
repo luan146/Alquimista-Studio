@@ -92,8 +92,10 @@ def test_registry_exposes_confluence_and_gitbook_as_implemented() -> None:
         "confluence_rest",
         "gitbook_api",
         "zendesk_guide",
+        "notion_api",
+        "generic_web",
     ]
-    assert registry.get("notion_api").status_code is ConnectorStatus.DEVELOPMENT
+    assert registry.get("notion_api").status_code is ConnectorStatus.EXPERIMENTAL
 
 
 class FailingConnectorClient:
@@ -812,8 +814,8 @@ def test_public_confluence_runtime_extracts_and_consolidates_without_cql(
     consolidation = ConsolidationService(project, tmp_path).run()
     assert consolidation["packages"] == 1
     assert consolidation["pages"] == 1
-    assert client.cql_called is True
-    assert client.hierarchy_called is True
+    assert client.cql_called is False
+    assert client.hierarchy_called is False
     connector.close()
     assert client.closed is True
 
@@ -831,6 +833,29 @@ def test_zendesk_orders_items_by_position_without_reordering_ties() -> None:
     ordered = ZendeskGuideConnector._ordered_items(items)
 
     assert [item["id"] for item in ordered] == ["first", "middle", "late", "tie-a", "tie-b"]
+
+
+def test_zendesk_paged_rejects_silent_truncation() -> None:
+    source = SourceConfig(
+        id="zendesk-limit",
+        name="Zendesk limite",
+        source_type="zendesk_guide",
+        space_key="example",
+    )
+
+    class Client:
+        def get_json(self, _path: str, *, params: dict[str, Any] | None = None) -> Any:
+            del params
+            return {"items": [{"id": index} for index in range(5000)], "links": {"next": "/next"}}
+
+    connector = ZendeskGuideConnector(
+        source,
+        ExtractionOptions(),
+        secret="token-for-test",
+        client=Client(),  # type: ignore[arg-type]
+    )
+    with pytest.raises(InvalidResponseError, match="excedeu o limite"):
+        connector._paged("/items", "items")
 
 
 def test_zendesk_guide_runs_through_incremental_markdown_pipeline(tmp_path: Path) -> None:

@@ -39,6 +39,7 @@ def test_three_modes_open(qtbot, mode: str) -> None:
         ("notion_api", "notion_api"),
         ("sharepoint_graph", "sharepoint_graph"),
         ("gitbook_api", "gitbook_api"),
+        ("generic_web", "generic_web"),
     ],
 )
 def test_dashboard_source_cards_open_sources_page(
@@ -54,10 +55,11 @@ def test_dashboard_source_cards_open_sources_page(
     assert set(cards) == {
         "zendesk_guide",
         "confluence_rest",
-        "notion_api",
-        "sharepoint_graph",
-        "gitbook_api",
-    }
+            "notion_api",
+            "sharepoint_graph",
+            "gitbook_api",
+            "generic_web",
+        }
 
     qtbot.mouseClick(cards[source_type], Qt.MouseButton.LeftButton)
 

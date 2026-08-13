@@ -11,7 +11,7 @@ from ..runtime import CancellationToken
 
 class WorkerSignals(QObject):
     succeeded = Signal(object)
-    failed = Signal(str, str)
+    failed = Signal(object, str)
     progress = Signal(int, int, str)
     log = Signal(str)
     finished = Signal()
@@ -38,7 +38,7 @@ class Worker(QRunnable):
                 self.signals.log.emit,
             )
         except Exception as exc:
-            self.signals.failed.emit(str(exc), traceback.format_exc())
+            self.signals.failed.emit(exc, traceback.format_exc())
         else:
             self.signals.succeeded.emit(result)
         finally:

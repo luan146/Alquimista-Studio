@@ -535,3 +535,29 @@ class BrowserCache:
                 return total
         finally:
             connection.close()
+
+    def purge_source(self, source_id: str, *, scope: str | None = None) -> int:
+        """Remove discovery snapshots for a source.
+
+        Authenticated snapshots are metadata-only, but titles, URLs and
+        visibility can still reveal private information.  Purging is therefore
+        intentionally scoped to the source (and optionally one identity scope)
+        and covers both item and page tables atomically.
+        """
+        if not str(source_id).strip():
+            raise ValueError("source_id é obrigatório")
+        connection = self._connection()
+        try:
+            with connection:
+                where = "source_id = ?"
+                params: list[object] = [source_id]
+                if scope is not None:
+                    where += " AND scope = ?"
+                    params.append(scope)
+                total = 0
+                for table in ("containers", "container_pages", "documents", "document_pages", "search_pages"):
+                    cursor = connection.execute(f"DELETE FROM {table} WHERE {where}", params)
+                    total += cursor.rowcount
+                return total
+        finally:
+            connection.close()

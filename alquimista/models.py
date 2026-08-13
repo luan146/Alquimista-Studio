@@ -69,6 +69,7 @@ class ConnectorCapabilities(Model):
     supports_bearer_token: bool = False
     supports_multiple_languages: bool = False
     supports_document_download: bool = False
+    supports_lazy_discovery: bool = False
 
 
 class KnowledgeSource(Model):

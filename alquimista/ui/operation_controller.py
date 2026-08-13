@@ -7,12 +7,83 @@ from typing import Any
 from PySide6.QtCore import QThreadPool
 from PySide6.QtWidgets import QMessageBox
 
+from ..errors import (
+    ApiConnectionError,
+    ApiRateLimitError,
+    AuthenticationError,
+    InvalidResponseError,
+    PermissionDeniedError,
+    ResourceNotFoundError,
+)
 from ..runtime import CancellationToken
 from .i18n import translate_text
 from .workers import Worker
 
 WorkerFunction = Callable[..., Any]
 DoneCallback = Callable[[Any], None]
+
+
+def _connection_error_presentation(
+    error: Exception | str,
+    integration_name: str,
+) -> tuple[str, str]:
+    """Return a user-facing connection state and title for a typed failure."""
+    message = str(error)
+    lowered = message.casefold()
+    if isinstance(error, AuthenticationError) or (
+        isinstance(error, str)
+        and ("401" in message or "autentica" in lowered or "sessão expirada" in lowered)
+    ):
+        return (
+            translate_text(
+                "Falha de autenticação — credenciais inválidas ou sessão expirada"
+            ),
+            translate_text("Não foi possível entrar"),
+        )
+    if isinstance(error, PermissionDeniedError) or (
+        isinstance(error, str)
+        and ("403" in message or "permiss" in lowered or "restrito" in lowered)
+    ):
+        return (
+            translate_text(
+                "Acesso restrito — a conta não possui permissão para este conteúdo"
+            ),
+            translate_text("Página sem permissão"),
+        )
+    if isinstance(error, ResourceNotFoundError):
+        return (
+            translate_text(
+                "Recurso não encontrado — verifique a fonte e o conteúdo selecionado"
+            ),
+            translate_text("Conteúdo não encontrado"),
+        )
+    if isinstance(error, ApiRateLimitError):
+        return (
+            translate_text(
+                "Limite de requisições atingido em {name} — aguarde e tente novamente"
+            ).format(name=integration_name),
+            translate_text("Limite de requisições"),
+        )
+    if isinstance(error, InvalidResponseError):
+        return (
+            translate_text(
+                "Resposta inválida recebida de {name} — tente novamente mais tarde"
+            ).format(name=integration_name),
+            translate_text("Resposta inválida"),
+        )
+    if isinstance(error, ApiConnectionError):
+        return (
+            translate_text(
+                "Falha de comunicação — {name} está indisponível ou inacessível"
+            ).format(name=integration_name),
+            translate_text("{name} indisponível").format(name=integration_name),
+        )
+    return (
+        translate_text(
+            "Não foi possível validar a conexão com {name}"
+        ).format(name=integration_name),
+        translate_text("Falha na conexão"),
+    )
 
 
 class WorkerOperationController:
@@ -108,8 +179,9 @@ class WorkerOperationController:
         if hasattr(window, "log_text"):
             window.log_text.append(f"[{time.strftime('%H:%M:%S')}] {message}")
 
-    def worker_failed(self, message: str, detail: str) -> None:
+    def worker_failed(self, error: Exception | str, detail: str) -> None:
         window = self.window
+        message = str(error)
         self.append_log(f"{translate_text('FALHA')}: {message}")
         if detail.strip():
             self.append_log(f"{translate_text('Detalhes técnicos')}:\n{detail.rstrip()}")
@@ -129,21 +201,20 @@ class WorkerOperationController:
             and window.stack.currentWidget() is window.pages.get("connection")
         ):
             source = window.source_by_combo(window.connection_source)
-            if "401" in message or "autentica" in lowered or "sessão expirada" in lowered:
-                state = translate_text(
-                    "Falha de autenticação — credenciais inválidas ou sessão expirada"
+            integration_name = translate_text("a integração")
+            if source:
+                registry = getattr(window, "connector_registry", None)
+                try:
+                    descriptor = registry.get(source.source_type) if registry else None
+                except (KeyError, ValueError):
+                    descriptor = None
+                integration_name = str(
+                    getattr(descriptor, "display_name", "")
+                    or getattr(descriptor, "integration_name", "")
+                    or getattr(source, "name", "")
+                    or integration_name
                 )
-                title = translate_text("Não foi possível entrar")
-            elif "403" in message or "permiss" in lowered or "restrito" in lowered:
-                state = translate_text(
-                    "Acesso restrito — a conta não possui permissão para este conteúdo"
-                )
-                title = translate_text("Página sem permissão")
-            else:
-                state = translate_text(
-                    "Falha de comunicação — o Confluence está indisponível ou inacessível"
-                )
-                title = translate_text("Confluence indisponível")
+            state, title = _connection_error_presentation(error, integration_name)
             window.connection_state.setText(state)
             if source:
                 window.connection_states[source.id] = state

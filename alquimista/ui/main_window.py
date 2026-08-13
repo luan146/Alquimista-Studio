@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import shutil
 import sys
@@ -45,10 +47,12 @@ from PySide6.QtWidgets import (
 
 from ..browser import BrowserCache, LazyDiscoveryService
 from ..browser.adapters import ConnectorDiscoveryAdapter
-from ..client import ConfluenceClient, session_directory
+from ..client import session_directory
 from ..connectors import default_registry
+from ..connectors.confluence_parser import ConfluenceDocumentParser
+from ..errors import AuthenticationError
 from ..logging_utils import configure_logging, default_log_path
-from ..markdown import MarkdownTransformer, page_metadata, sample_page, sha256_text
+from ..markdown import KnowledgeDocumentRenderer, sample_page
 from ..models import (
     AuthMode,
     MarkdownOptions,
@@ -60,6 +64,7 @@ from ..models import (
 from ..runtime import CancellationToken
 from ..selection import SelectionStore
 from ..services import ConsolidationService, SourceRuntime
+from ..session_store import load_session
 from ..storage import MANIFEST_NAME
 from .components import (
     APP_TITLE,
@@ -186,13 +191,27 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         self._update_load_context()
         self._show_page("dashboard")
         self.retranslate_ui()
+        # Widget initialization can emit ordinary editor signals; loading the
+        # default project is not a user edit and must leave the window clean.
+        self.dirty = False
+        self.project_badge.setText(translate_text("● Projeto não salvo"))
 
     def _language_changed(self, _language: str) -> None:
+        dirty_before = self.dirty
         self.retranslate_ui()
-        # The dashboard summary is written after the initial widget tree is
-        # created. Refresh only this aggregate here; refreshing form controls
-        # would emit editing signals while the language selector changes.
+        # Dynamic summaries and the local preview are written after the initial
+        # widget tree is created. Do not reload editable form controls here.
         self._refresh_dashboard()
+        if hasattr(self, "preview_after"):
+            self._update_preview()
+        # Retranslation updates widget text only; it must not turn a clean
+        # project into an unsaved one through ordinary Qt change signals.
+        self.dirty = dirty_before
+        self.project_badge.setText(
+            translate_text("● Alterações não salvas")
+            if dirty_before
+            else translate_text("● Projeto não salvo")
+        )
 
     def retranslate_ui(self) -> None:
         """Refresh the visible UI while keeping internal combo data stable."""
@@ -749,7 +768,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
     def _container_requires_full_load(data: dict[str, Any], container_id: str) -> bool:
         """Return whether the current snapshot contains roots only."""
         state = (data.get("lazy_discovery") or {}).get(str(container_id), {}) or {}
-        return bool(state.get("enabled") and not state.get("full_loaded"))
+        return bool(state.get("enabled") and not state.get("inventory_complete"))
 
 
     def _selection_containers(self, source: SourceConfig) -> list[dict[str, Any]]:
@@ -892,13 +911,43 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         source = self.source_by_combo(getattr(self, "tree_source", getattr(self, "selection_source", None)))
         if not source or not self._active_page_container:
             return
+        data = self.trees.get(source.id)
+        lazy = self._lazy_state(data or {}, self._active_page_container) if data else {}
+        if lazy.get("enabled") and lazy.get("next_cursor"):
+            self._load_container_for_source(
+                source,
+                self._active_page_container,
+                target="pages",
+                load_all=False,
+                cursor=str(lazy["next_cursor"]),
+            )
+            return
         key = self._page_render_key(source, self._active_page_container)
         self._page_render_limits[key] = self._page_render_limits.get(key, 800) + 800
-        data = self.trees.get(source.id)
         if data:
             self._populate_page_tree(
                 source, data, container_id=self._active_page_container
             )
+
+    def _load_more_selection_rows(self) -> None:
+        source = self._selection_source()
+        if not source or not self._active_selection_container:
+            return
+        data = self.trees.get(source.id)
+        lazy = self._lazy_state(data or {}, self._active_selection_container) if data else {}
+        if lazy.get("enabled") and lazy.get("next_cursor"):
+            self._load_container_for_source(
+                source,
+                self._active_selection_container,
+                target="selection",
+                load_all=False,
+                cursor=str(lazy["next_cursor"]),
+            )
+            return
+        key = self._page_render_key(source, self._active_selection_container)
+        self._selection_render_limits[key] = self._selection_render_limits.get(key, 800) + 800
+        if data:
+            self._populate_selection_tree(source, data, container_id=self._active_selection_container)
 
 
     def _reflow_space_cards(
@@ -1526,66 +1575,37 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                     translate_text("Já existe uma operação em andamento…")
                 )
             return
-        self._set_tree_loading(True)
-        if source.source_type in {"confluence_rest", "gitbook_api", "zendesk_guide"}:
-            self._load_tree_via_connector(source)
+        try:
+            descriptor = self._require_runnable_descriptor(source)
+        except ValueError as exc:
+            message = str(exc)
+            self._set_tree_loading(False, message)
+            self.statusBar().showMessage(message, 5000)
             return
+        self._set_tree_loading(True)
+        self._load_tree_via_connector(source, descriptor=descriptor)
 
-        def work(token: CancellationToken, progress: Any, log: Any) -> dict[str, Any]:
-            progress(0, 1, "Descobrindo espaços")
-            with ConfluenceClient(
-                source,
-                self.project.extraction,
-                secret=self.secrets.get(source.id, ""),
-                token=token,
-                log=log,
-            ) as client:
-                raw_containers = client.list_spaces()
-            containers = [
-                {
-                    "id": str(item.get("key") or item.get("id") or ""),
-                    "key": str(item.get("key") or item.get("id") or ""),
-                    "name": str(item.get("name") or item.get("key") or "Sem nome"),
-                    "metadata": {},
-                }
-                for item in raw_containers
-                if item.get("key") or item.get("id")
-            ]
-            if source.space_key:
-                containers = [
-                    item for item in containers if item["id"] == source.space_key
-                ] or containers
-            progress(1, 1, f"{len(containers)} espaços encontrados")
-            return {
-                "root": {"id": "__all_containers__", "title": "Contêineres"},
-                "containers": containers,
-                "pages": [],
-                "pages_by_container": {},
-                "loaded_at": now_iso(),
-            }
-
-        def done(data: dict[str, Any]) -> None:
-            self.trees[source.id] = data
-            self._active_page_container = None
-            if hasattr(self, "pages_stack"): self.pages_stack.setCurrentIndex(0)
-            self._refresh_pages_home()
-            self._refresh_selection_home()
-            self._set_tree_loading(
-                False,
+    def _require_runnable_descriptor(self, source: SourceConfig) -> Any:
+        descriptor = self.connector_registry.get(source.source_type)
+        if not descriptor.runnable:
+            raise ValueError(
                 translate_text(
-                    "{count} espaços encontrados. Escolha um para carregar."
-                ).format(count=len(data["containers"])),
+                    "A integração {name} ainda está em desenvolvimento."
+                ).format(name=descriptor.display_name)
             )
-            self.statusBar().showMessage(
+        return descriptor
+
+    def _load_tree_via_connector(
+        self, source: SourceConfig, *, descriptor: Any | None = None
+    ) -> None:
+        descriptor = descriptor or self._require_runnable_descriptor(source)
+        if not descriptor.runnable:
+            raise ValueError(
                 translate_text(
-                    "{count} espaços encontrados. Escolha um para carregar."
-                ).format(count=len(data["containers"])),
-                5000,
+                    "A integração {name} ainda está em desenvolvimento."
+                ).format(name=descriptor.display_name)
             )
 
-        self._start_worker(work, done)
-
-    def _load_tree_via_connector(self, source: SourceConfig) -> None:
         def work(token: CancellationToken, progress: Any, log: Any) -> dict[str, Any]:
             progress(0, 1, translate_text("Descobrindo espaços"))
             connector = self.connector_registry.create(
@@ -1599,10 +1619,6 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                 containers = connector.list_containers()
             finally:
                 connector.close()
-            if source.source_type == "confluence_rest" and source.space_key:
-                filtered = [item for item in containers if item.id == source.space_key]
-                if filtered:
-                    containers = filtered
             progress(
                 1,
                 1,
@@ -1712,55 +1728,39 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             self._set_tree_loading(False, "Todos os espaços já estão carregados.")
             return
 
+        try:
+            self._require_runnable_descriptor(source)
+        except ValueError as exc:
+            message = str(exc)
+            self._set_tree_loading(False, message)
+            self.statusBar().showMessage(message, 5000)
+            return
+
         self._set_tree_loading(True, f"Carregando 0 de {len(containers)} espaços…")
 
         def work(token: CancellationToken, progress: Any, log: Any) -> list[dict[str, Any]]:
             results: list[dict[str, Any]] = []
-            connector = None
+            connector = self.connector_registry.create(
+                source,
+                options=self.project.extraction,
+                secret=self.secrets.get(source.id, ""),
+                token=token,
+                log=log,
+            )
             try:
-                if source.source_type in {"confluence_rest", "gitbook_api", "zendesk_guide"}:
-                    connector = self.connector_registry.create(
-                        source,
-                        options=self.project.extraction,
-                        secret=self.secrets.get(source.id, ""),
-                        token=token,
-                        log=log,
-                    )
                 for index, container in enumerate(containers, 1):
                     token.check()
                     container_id = str(container["id"])
                     progress(index - 1, len(containers), f"Abrindo {container['name']}")
-                    if connector is not None:
-                        documents = connector.list_documents(container_id)
-                        pages = [
-                            self._container_page_dict(container, item)
-                            for item in documents
-                        ]
-                    else:
-                        configured = source.model_copy(
-                            update={
-                                "space_key": container_id,
-                                "space_name": container["name"],
-                                "root_mode": "space",
-                                "root_value": "",
-                            }
-                        )
-                        with ConfluenceClient(
-                            configured,
-                            self.project.extraction,
-                            secret=self.secrets.get(source.id, ""),
-                            token=token,
-                            log=log,
-                        ) as client:
-                            pages = [
-                                self._container_page_dict(container, item)
-                                for item in client.list_pages()
-                            ]
+                    documents = connector.list_documents(container_id)
+                    pages = [
+                        self._container_page_dict(container, item)
+                        for item in documents
+                    ]
                     results.append({"container_id": container_id, "pages": pages})
                     progress(index, len(containers), f"{len(pages)} páginas em {container['name']}")
             finally:
-                if connector is not None:
-                    connector.close()
+                connector.close()
             return results
 
         def done(results: list[dict[str, Any]]) -> None:
@@ -1786,9 +1786,17 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         *,
         target: str,
         load_all: bool = False,
+        cursor: str | None = None,
     ) -> None:
         data = self.trees.get(source.id)
         if data is None or self.worker is not None:
+            return
+        try:
+            descriptor = self._require_runnable_descriptor(source)
+        except ValueError as exc:
+            message = str(exc)
+            self._set_tree_loading(False, message)
+            self.statusBar().showMessage(message, 5000)
             return
         container = next(
             (item for item in self._tree_containers(source, data) if item["id"] == container_id),
@@ -1801,79 +1809,79 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             lazy_enabled = False
             from_cache = False
             fallback_reason = ""
-            if source.source_type in {"confluence_rest", "gitbook_api", "zendesk_guide"}:
-                connector = self.connector_registry.create(
-                    source,
-                    options=self.project.extraction,
-                    secret=self.secrets.get(source.id, ""),
-                    token=token,
-                    log=log,
-                )
-                try:
-                    page = None if load_all else self._lazy_discovery_page(
+            connector = self.connector_registry.create(
+                source,
+                options=self.project.extraction,
+                secret=self.secrets.get(source.id, ""),
+                token=token,
+                log=log,
+            )
+            try:
+                page = (
+                    None
+                    if load_all or not descriptor.capabilities.supports_lazy_discovery
+                    else self._lazy_discovery_page(
                         source,
                         connector,
                         container_id,
                         parent_id=None,
                         token=token,
+                        identity_secret=self.secrets.get(source.id, ""),
+                        cursor=cursor,
+                        supports_lazy_discovery=True,
                     )
-                    if load_all or page is None:
-                        fallback_reason = (
-                            "Carregamento completo solicitado para este espaço."
-                            if load_all
-                            else "O conector não expõe a descoberta completa por raiz e filhos; usando compatibilidade "
-                            "legada, que carrega o inventário completo deste espaço."
-                        )
-                        documents = connector.list_documents(container_id)
-                    else:
-                        lazy_enabled = True
-                        documents = list(page.items)
-                        from_cache = bool(page.from_cache)
-                    pages = [self._container_page_dict(container, item) for item in documents]
-                finally:
-                    connector.close()
-            else:
-                configured = source.model_copy(
-                    update={
-                        "space_key": container_id,
-                        "space_name": container["name"],
-                        "root_mode": "space",
-                        "root_value": "",
-                    }
                 )
-                with ConfluenceClient(
-                    configured,
-                    self.project.extraction,
-                    secret=self.secrets.get(source.id, ""),
-                    token=token,
-                    log=log,
-                ) as client:
+                if load_all or page is None:
                     fallback_reason = (
-                        "A fonte legada não expõe descoberta por hierarquia; usando compatibilidade "
-                        "legada, que carrega o inventário completo deste espaço."
+                        "Carregamento completo solicitado para este espaço."
+                        if load_all
+                        else "O conector não expõe descoberta lazy; carregando o inventário completo deste espaço."
                     )
-                    pages = [self._container_page_dict(container, item) for item in client.list_pages()]
+                    documents = connector.list_documents(container_id)
+                else:
+                    lazy_enabled = True
+                    documents = list(page.items)
+                    from_cache = bool(page.from_cache)
+                pages = [self._container_page_dict(container, item) for item in documents]
+                next_cursor = getattr(page, "next_cursor", None) if page is not None else None
+            finally:
+                connector.close()
             progress(1, 1, f"{len(pages)} páginas encontradas em {container['name']}")
             return {
                 "container_id": container_id,
                 "pages": pages,
                 "target": target,
                 "lazy_enabled": lazy_enabled,
-                "full_loaded": bool(load_all or not lazy_enabled),
+                "roots_complete": bool(not lazy_enabled or not next_cursor),
+                "inventory_complete": bool(load_all or not lazy_enabled),
                 "fallback_reason": fallback_reason,
                 "from_cache": from_cache,
+                "next_cursor": next_cursor if 'next_cursor' in locals() else None,
+                "append": bool(cursor),
             }
 
         def done(result: dict[str, Any]) -> None:
             current = self.trees.setdefault(source.id, data)
             pages_by_container = current.setdefault("pages_by_container", {})
-            pages_by_container[container_id] = result["pages"]
-            current.setdefault("lazy_discovery", {})[container_id] = {
+            if result.get("append"):
+                existing = pages_by_container.setdefault(container_id, [])
+                known = {str(item.get("id", "")) for item in existing}
+                existing.extend(item for item in result["pages"] if str(item.get("id", "")) not in known)
+            else:
+                pages_by_container[container_id] = result["pages"]
+            lazy_state = current.setdefault("lazy_discovery", {}).setdefault(container_id, {})
+            lazy_state.update({
                 "enabled": bool(result.get("lazy_enabled")),
-                "full_loaded": bool(result.get("full_loaded")),
-                "loaded_parents": [],
+                "roots_complete": bool(result.get("roots_complete")),
+                "inventory_complete": bool(result.get("inventory_complete")),
+                # Compatibility for readers of snapshots written before the
+                # roots/inventory distinction. It now means inventory only.
+                "full_loaded": bool(result.get("inventory_complete")),
+                "loaded_parents": lazy_state.get("loaded_parents", []),
                 "fallback_reason": str(result.get("fallback_reason", "")),
-            }
+                "next_cursor": result.get("next_cursor"),
+                "truncated": bool(result.get("next_cursor")),
+            })
             current["pages"] = self._tree_pages(current)
             current["loaded_at"] = now_iso()
             # Loading the inventory must not change the user's selection.
@@ -1889,7 +1897,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                     translate_text(
                         "{count} páginas-raiz carregadas em {name}."
                     ).format(count=len(result["pages"]), name=container["name"])
-                    if result.get("lazy_enabled") and not result.get("full_loaded")
+                    if result.get("lazy_enabled") and not result.get("inventory_complete")
                     else translate_text(
                         "{count} páginas carregadas em {name}."
                     ).format(count=len(result["pages"]), name=container["name"])
@@ -1941,15 +1949,56 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         """Return the local metadata-cache path without incorporating secrets."""
         return session_directory().parent / "browser_metadata.sqlite3"
 
-    @staticmethod
-    def _browser_cache_scope(source: SourceConfig) -> str:
-        """Partition discovery snapshots by authentication mode only."""
-        return {
-            AuthMode.PUBLIC: "public",
-            AuthMode.BASIC: "basic",
-            AuthMode.BEARER: "bearer",
-            AuthMode.BROWSER: "session",
-        }.get(source.auth_mode, "public")
+    @classmethod
+    def _browser_cache_scope(
+        cls,
+        source: SourceConfig,
+        *,
+        connector: Any | None = None,
+        identity_secret: str = "",
+    ) -> str | None:
+        """Return a non-reversible cache scope isolated by identity."""
+        mode = source.auth_mode
+        if mode == AuthMode.PUBLIC:
+            return "public-v2"
+        material: object | None = None
+        identity = getattr(connector, "get_auth_identity", None)
+        if callable(identity):
+            try:
+                material = identity()
+            except (AttributeError, TypeError, ValueError, RuntimeError):
+                material = None
+        if material is None:
+            material = identity_secret or getattr(connector, "secret", "") or None
+        if material is None and mode == AuthMode.BROWSER:
+            try:
+                state = load_session(source.id)
+                cookies = state.get("cookies", []) if isinstance(state, dict) else []
+                material = [
+                    {
+                        "name": item.get("name", ""),
+                        "value": item.get("value", ""),
+                        "domain": item.get("domain", ""),
+                        "path": item.get("path", "/"),
+                    }
+                    for item in cookies
+                    if isinstance(item, dict)
+                ]
+            except (AuthenticationError, OSError, TypeError, ValueError):
+                material = None
+        if material is None or material == "":
+            return None
+        payload = {
+            "version": 2,
+            "source": source.id,
+            "origin": source.base_url.rstrip("/").casefold(),
+            "mode": mode.value,
+            "material": material,
+        }
+        digest = hashlib.sha256(
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        return f"auth-v2:{digest}"
 
     @classmethod
     def _lazy_discovery_page(
@@ -1960,6 +2009,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         *,
         parent_id: str | None,
         token: CancellationToken,
+        cursor: str | None = None,
+        identity_secret: str = "",
+        supports_lazy_discovery: bool = True,
     ) -> Any | None:
         """Load one lazy page through the durable metadata-only cache.
 
@@ -1967,25 +2019,33 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         lazy capability. Legacy ``list_documents`` callers therefore remain
         network-only and are never silently cached as if they were lazy.
         """
+        if not supports_lazy_discovery:
+            return None
         adapter = ConnectorDiscoveryAdapter(connector)
         capability = "list_document_children" if parent_id else "list_root_documents"
         if capability not in adapter.capabilities or not hasattr(connector, "get_source"):
             return None
-        cache = BrowserCache(cls._browser_cache_path())
+        cache_scope = cls._browser_cache_scope(
+            source,
+            connector=connector,
+            identity_secret=identity_secret,
+        )
+        cache = BrowserCache(cls._browser_cache_path()) if cache_scope else None
         service = LazyDiscoveryService(
             source.id,
             adapter,
             cache=cache,
-            cache_scope=cls._browser_cache_scope(source),
+            cache_scope=cache_scope or "network-only",
         )
         if parent_id:
             return service.list_document_children(
                 container_id,
                 parent_id,
+                cursor=cursor,
                 limit=800,
                 token=token,
             )
-        return service.list_root_documents(container_id, limit=800, token=token)
+        return service.list_root_documents(container_id, cursor=cursor, limit=800, token=token)
 
     @classmethod
     def _lazy_documents(
@@ -2032,7 +2092,11 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         if source is None or data is None:
             return
         state = self._lazy_state(data, container_id)
-        if not state.get("enabled") or document_id in state.get("loaded_parents", []):
+        child_cursors = state.get("child_cursors", {}) or {}
+        if not state.get("enabled") or (
+            document_id in state.get("loaded_parents", [])
+            and not child_cursors.get(document_id)
+        ):
             return
         if self.worker is not None:
             self.statusBar().showMessage(
@@ -2045,6 +2109,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             container_id,
             document_id,
             target=target,
+            cursor=str(child_cursors.get(document_id)) if child_cursors.get(document_id) else None,
         )
 
     def _load_document_children(
@@ -2055,7 +2120,22 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
         parent_id: str,
         *,
         target: str,
+        cursor: str | None = None,
     ) -> None:
+        try:
+            descriptor = self._require_runnable_descriptor(source)
+        except ValueError as exc:
+            message = str(exc)
+            self._set_tree_loading(False, message)
+            self.statusBar().showMessage(message, 5000)
+            return
+        if not descriptor.capabilities.supports_lazy_discovery:
+            message = translate_text(
+                "O conector não oferece descoberta lazy de filhos."
+            )
+            self._set_tree_loading(False, message)
+            self.statusBar().showMessage(message, 5000)
+            return
         container = next(
             (item for item in self._tree_containers(source, data) if item["id"] == container_id),
             {"id": container_id, "key": container_id, "name": container_id},
@@ -2078,6 +2158,9 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                     container_id,
                     parent_id=parent_id,
                     token=token,
+                    identity_secret=self.secrets.get(source.id, ""),
+                    cursor=cursor,
+                    supports_lazy_discovery=True,
                 )
                 if page is None and not hasattr(connector, "get_source"):
                     documents = self._lazy_documents(
@@ -2107,6 +2190,8 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                 "pages": pages,
                 "target": target,
                 "from_cache": from_cache,
+                "next_cursor": getattr(page, "next_cursor", None) if page is not None else None,
+                "append": bool(cursor),
             }
 
         def done(result: dict[str, Any]) -> None:
@@ -2120,6 +2205,11 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             if parent_id not in loaded_parents:
                 loaded_parents.append(parent_id)
             state["loaded_parents"] = loaded_parents
+            child_cursors = state.setdefault("child_cursors", {})
+            if result.get("next_cursor"):
+                child_cursors[parent_id] = result["next_cursor"]
+            else:
+                child_cursors.pop(parent_id, None)
             current["pages"] = self._tree_pages(current)
             current["loaded_at"] = now_iso()
             if self._active_page_container == container_id:
@@ -2219,7 +2309,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                 "Expanda uma pasta ou página-pai para buscar os filhos."
             ).format(count=len(pages))
         )
-        self.page_load_more_button.setVisible(False)
+        self.page_load_more_button.setVisible(bool(state.get("next_cursor")))
 
     def _populate_page_tree(
         self,
@@ -2427,35 +2517,44 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
     def _update_preview(self) -> None:
         try:
             self._sync_markdown_controls()
-            source = (
-                self.project.sources[0]
-                if self.project.sources
-                else SourceConfig(name=translate_text("Exemplo"))
+            configured_source = next(
+                (
+                    source
+                    for source in self.project.sources
+                    if source.source_type == "confluence_rest"
+                ),
+                None,
             )
-            root = {
-                "id": "100",
-                "title": translate_text("Manual do Produto"),
-                "space": {
-                    "key": source.space_key or "EXEMPLO",
-                    "name": source.space_name or translate_text("Exemplo"),
-                },
-            }
-            fake = _PreviewClient(source)
+            source = configured_source or SourceConfig(
+                name=translate_text("Exemplo"),
+                base_url="https://example.test",
+                space_key="EXEMPLO",
+                space_name=translate_text("Espaço de exemplo"),
+            )
+            source = source.model_copy(
+                update={
+                    "base_url": source.base_url or "https://example.test",
+                    "space_key": source.space_key or "EXEMPLO",
+                    "space_name": source.space_name
+                    or translate_text("Espaço de exemplo"),
+                }
+            )
             page = sample_page(translate_text)
-            transformer = MarkdownTransformer(
-                fake,
+            page["space"] = {
+                "key": source.space_key,
+                "name": source.space_name,
+            }
+            document = ConfluenceDocumentParser(
                 source,
-                root,
                 self.project.markdown,
-                translator=translate_text,
+            ).parse(page)
+            renderer = KnowledgeDocumentRenderer(self.project.markdown)
+            prepared = renderer.prepare(document, source)
+            self._preview_after_raw = renderer.render_prepared(
+                prepared,
+                "2026-07-26T15:00:00-03:00",
+                "preview",
             )
-            technical = transformer.technical_markdown(page)
-            metadata = page_metadata(page, source, root)
-            content_hash = sha256_text(transformer.hash_input(metadata, technical))
-            rendered = transformer.full_document(
-                metadata, technical, content_hash, "2026-07-26T15:00:00-03:00", "preview"
-            )
-            self._preview_after_raw = rendered
             self._render_preview_mode()
         except Exception as exc:
             self.preview_after.setPlainText(f"Não foi possível gerar a prévia:\n{exc}")
@@ -2880,8 +2979,8 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
     def _append_log(self, message: str) -> None:
         self.operation_controller.append_log(message)
 
-    def _worker_failed(self, message: str, detail: str) -> None:
-        self.operation_controller.worker_failed(message, detail)
+    def _worker_failed(self, error: Exception | str, detail: str) -> None:
+        self.operation_controller.worker_failed(error, detail)
 
     def _worker_finished(self) -> None:
         self.operation_controller.worker_finished()
@@ -3150,10 +3249,6 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             event.accept()
         else:
             event.ignore()
-class _PreviewClient:
-    def __init__(self, source: SourceConfig) -> None:
-        self.source = source
-        self.base_url = source.base_url
 
 
 def run_app(mode: str = "complete") -> None:

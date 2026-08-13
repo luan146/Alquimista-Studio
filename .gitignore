@@ -63,19 +63,6 @@ AGENTS.md
 *.refactor
 requirements.freeze.txt
 
-# Análises arquiteturais e evidências locais
-docs/analise_arquitetura1.md
-docs/Analise_Arquitetural2.md
-docs/analise_arquitetural3.md
-docs/ANALISE_ARQUITETURa4.md
-docs/ANALISE_ARQUITETURAL5.md
-docs/analise_arquitetural6.md
-docs/ANALISE_ARQUITETURAL7.md
-docs/ANALISE_ARQUITETURAL8.md
-docs/ANALISE_ARQUITETURAL_*.md
-docs/ANALISE_ARQUITETURAL_DEFINITIVA.md
-docs/ANEXO_EVIDENCIAS_ARQUITETURA.md
-
 # Configurações de editor e sistema operacional
 .vscode/
 .idea/

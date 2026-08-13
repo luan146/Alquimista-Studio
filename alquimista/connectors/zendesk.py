@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
-from ..errors import AuthenticationError, InvalidResponseError, ResourceNotFoundError
+from ..errors import AuthenticationError, InvalidResponseError
 from ..models import (
     ConnectorCapabilities,
     ExtractionOptions,
@@ -16,6 +16,7 @@ from ..models import (
     KnowledgeDocument,
     KnowledgeDocumentMetadata,
     KnowledgeSource,
+    MarkdownOptions,
     SourceConfig,
 )
 from ..runtime import CancellationToken, LogCallback
@@ -75,6 +76,7 @@ class ZendeskGuideConnector(KnowledgeSourceConnector):
         token: CancellationToken | None = None,
         log: LogCallback | None = None,
         client: ApiHttpClient | None = None,
+        markdown_options: MarkdownOptions | None = None,
     ) -> None:
         if source.source_type != self.SOURCE_TYPE:
             raise ValueError("A configuração não pertence ao conector Zendesk Guide.")
@@ -87,6 +89,7 @@ class ZendeskGuideConnector(KnowledgeSourceConnector):
             subdomain = hostname.split(".", 1)[0]
         self.source = source
         self.options = options
+        self.markdown_options = markdown_options or MarkdownOptions()
         self.secret = secret
         self.token = token or CancellationToken()
         self.log = log or (lambda _message: None)
@@ -145,6 +148,7 @@ class ZendeskGuideConnector(KnowledgeSourceConnector):
         *,
         params: dict[str, Any] | None = None,
         maximum: int = 5000,
+        fail_on_truncate: bool = True,
     ) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         next_path: str | None = path
@@ -165,10 +169,20 @@ class ZendeskGuideConnector(KnowledgeSourceConnector):
             # The official API returns an absolute next URL. Keep it opaque and
             # avoid accidentally duplicating query parameters from the cursor.
             next_params = {}
+        if next_path and len(items) >= maximum and fail_on_truncate:
+            raise InvalidResponseError(
+                f"A API do Zendesk excedeu o limite de {maximum} itens para {key}; "
+                "a coleção está incompleta e não foi importada."
+            )
         return items[:maximum]
 
     def validate_connection(self) -> dict[str, Any]:
-        categories = self._paged(self._localized_path("categories.json"), "categories", maximum=1)
+        categories = self._paged(
+            self._localized_path("categories.json"),
+            "categories",
+            maximum=1,
+            fail_on_truncate=False,
+        )
         return {
             "subdomain": self.config.subdomain,
             "locale": self.config.locale or "default",
@@ -245,8 +259,7 @@ class ZendeskGuideConnector(KnowledgeSourceConnector):
             if container_id and (str(container_id), str(document_id)) in self._documents
             else next((item for item in self._documents if item[1] == str(document_id)), None)
         )
-        if not key:
-            raise ResourceNotFoundError("O artigo Zendesk não foi descoberto nesta sessão.")
+        key = key or (str(container_id or "__default__"), str(document_id))
         raw = self.client.get_json(
             self._localized_path(f"articles/{quote(str(document_id), safe='')}.json"),
             params={"include": "translations"},
@@ -258,7 +271,7 @@ class ZendeskGuideConnector(KnowledgeSourceConnector):
             dict(article_value) if isinstance(article_value, dict) else dict(raw)
         )
         merged = {
-            **self._documents[key],
+            **self._documents.get(key, {}),
             **article,
             "_container_id": key[0],
             "_etag": getattr(self.client, "last_response_headers", {}).get("etag"),

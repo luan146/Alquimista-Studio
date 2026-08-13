@@ -5,12 +5,12 @@ import json
 import re
 import unicodedata
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from urllib.parse import quote, urljoin
+from urllib.parse import quote
 
-from bs4 import BeautifulSoup, Comment
-from markdownify import markdownify
+from bs4 import BeautifulSoup
 
 from .client import ConfluenceClient
 from .models import KnowledgeDocument, MarkdownOptions, SourceConfig
@@ -249,51 +249,13 @@ class MarkdownTransformer:
             macro.replace_with(wrapper)
 
     def technical_markdown(self, page: dict[str, Any]) -> str:
-        page_id = str(page["id"])
-        html = str(page.get("body", {}).get("storage", {}).get("value") or "")
-        if not html:
-            return ""
-        soup = BeautifulSoup(html, "html.parser")
-        if self.options.remove_html_comments:
-            for comment in soup.find_all(string=lambda value: isinstance(value, Comment)):
-                comment.extract()
-        if self.options.remove_noise:
-            for tag in soup(["script", "style", "noscript"]):
-                tag.decompose()
-            for selector in (
-                ".page-metadata",
-                ".page-actions",
-                ".content-byline",
-                "#breadcrumbs",
-                ".labels-section",
-                ".comment-threads",
-                "#comments-section",
-                ".page-tree",
-                ".plugin_pagetree",
-            ):
-                for element in soup.select(selector):
-                    element.decompose()
-        self._replace_macros(soup, page_id)
-        if not self.options.include_images:
-            for image in soup.find_all("img"):
-                image.decompose()
-        if not self.options.include_tables:
-            for table in soup.find_all("table"):
-                table.replace_with(table.get_text(" | ", strip=True))
-        if not self.options.include_videos:
-            for item in soup.find_all(["iframe", "video"]):
-                item.decompose()
-        if not self.options.include_links:
-            for anchor in soup.find_all("a"):
-                anchor.unwrap()
-        if self.options.absolute_links:
-            for tag in soup.find_all(True):
-                for attribute in ("href", "src"):
-                    value = tag.get(attribute)
-                    if isinstance(value, str) and value.startswith("/"):
-                        tag[attribute] = urljoin(self.client.base_url + "/", value.lstrip("/"))
-        result = markdownify(str(soup), heading_style="ATX", bullets="-")
-        return normalize_markdown(result)
+        from .connectors.confluence_parser import ConfluenceDocumentParser
+
+        return ConfluenceDocumentParser(
+            self.source,
+            self.options,
+            translator=self.translator,
+        ).parse(page).content
 
     def hash_input(self, metadata: dict[str, Any], technical: str) -> str:
         if self.options.hash_scope == "content":
@@ -420,6 +382,25 @@ class KnowledgeDocumentRenderer:
     def __init__(self, options: MarkdownOptions) -> None:
         self.options = options
 
+    def prepare(
+        self,
+        document: KnowledgeDocument,
+        source: SourceConfig,
+        *,
+        metadata_overrides: dict[str, Any] | None = None,
+    ) -> "PreparedKnowledgeDocument":
+        """Prepare the canonical renderer input shared by preview and extraction."""
+        metadata = knowledge_document_metadata(document, source)
+        if metadata_overrides:
+            metadata.update(metadata_overrides)
+        content = normalize_markdown(document.content)
+        content_hash = sha256_text(self.hash_input(metadata, content))
+        return PreparedKnowledgeDocument(
+            metadata=metadata,
+            content=content,
+            content_hash=content_hash,
+        )
+
     def hash_input(self, metadata: dict[str, Any], content: str) -> str:
         if self.options.hash_scope == "content":
             return content
@@ -441,6 +422,21 @@ class KnowledgeDocumentRenderer:
         collected_at: str,
         status: str,
     ) -> str:
+        return self.render_prepared(
+            PreparedKnowledgeDocument(metadata, content, content_hash),
+            collected_at,
+            status,
+        )
+
+    def render_prepared(
+        self,
+        prepared: "PreparedKnowledgeDocument",
+        collected_at: str,
+        status: str,
+    ) -> str:
+        metadata = prepared.metadata
+        content = prepared.content
+        content_hash = prepared.content_hash
         options = self.options
         fields = [
             ("document_id", "ID do documento", metadata["document_id"], options.include_page_id),
@@ -448,7 +444,11 @@ class KnowledgeDocumentRenderer:
             ("source_name", "Fonte", metadata["source_name"], options.include_source_name),
             ("container_id", "ID do contêiner", metadata["container_id"], options.include_space_key),
             ("container_name", "Contêiner", metadata["container_name"], options.include_space_name),
+            ("root_title", "Página raiz", metadata.get("root_title", ""), options.include_root),
+            ("module", "Módulo", metadata.get("module", ""), options.include_module),
+            ("submodule", "Submódulo", metadata.get("submodule", ""), options.include_submodule),
             ("path", "Caminho", " > ".join(metadata["path"]), options.include_path),
+            ("version", "Versão", metadata.get("confluence_version"), options.include_version),
             ("updated_at", "Última atualização", format_updated_at(metadata["updated_at"]), options.include_updated_at),
             ("author", "Autor", metadata["author"], options.include_author),
             ("labels", "Rótulos", metadata["labels"], options.include_labels),
@@ -493,6 +493,15 @@ class KnowledgeDocumentRenderer:
         if options.include_document_markers:
             lines.append(f'<!-- ALQUIMISTA_DOCUMENT_END key="{marker_key}" -->')
         return normalize_markdown("\n".join(lines)) + "\n"
+
+
+@dataclass(frozen=True)
+class PreparedKnowledgeDocument:
+    """Canonical, deterministic input for final Markdown rendering."""
+
+    metadata: dict[str, Any]
+    content: str
+    content_hash: str
 
 
 def sample_page(translator: Callable[[str], str] | None = None) -> dict[str, Any]:

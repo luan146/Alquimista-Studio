@@ -1,0 +1,19 @@
+{
+  "id": "page-empty",
+  "title": "Página vazia",
+  "type": "page",
+  "ancestors": [],
+  "space": {"key": "DOCS", "name": "Documentação"},
+  "version": {
+    "number": 1,
+    "when": "2026-08-12T16:00:00Z",
+    "by": {"displayName": "Equipe ALQuimista"}
+  },
+  "metadata": {"labels": {"results": []}},
+  "body": {
+    "storage": {
+      "value": "  <!-- conteúdo removido --><script>não deve aparecer</script>  "
+    }
+  },
+  "_links": {"webui": "/pages/viewpage.action?pageId=page-empty"}
+}

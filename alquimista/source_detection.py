@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from urllib.parse import unquote, urlparse
 
 from .confluence_url import parse_confluence_url
+from .connectors.registry import ConnectorRegistry, default_registry
 
 
 @dataclass(frozen=True)
@@ -38,7 +39,33 @@ def _extract_notion_id(path: str) -> str:
     return _last_path_value(path)
 
 
-def detect_source_url(value: str) -> DetectedSource:
+def _detected(
+    registry: ConnectorRegistry,
+    source_type: str,
+    *,
+    base_url: str,
+    space_key: str = "",
+    space_name: str = "",
+    root_mode: str = "title",
+    root_value: str = "",
+) -> DetectedSource:
+    descriptor = registry.get(source_type)
+    return DetectedSource(
+        source_type=source_type,
+        display_name=descriptor.display_name,
+        base_url=base_url,
+        api_name=descriptor.integration_name,
+        space_key=space_key,
+        space_name=space_name,
+        root_mode=root_mode,
+        root_value=root_value,
+    )
+
+
+def detect_source_url(
+    value: str,
+    registry: ConnectorRegistry | None = None,
+) -> DetectedSource:
     """Detect a supported knowledge platform from its public URL shape.
 
     Detection is deliberately local. Credentials are not requested and no API
@@ -56,30 +83,29 @@ def detect_source_url(value: str) -> DetectedSource:
     host = (parsed.hostname or "").casefold()
     origin = _origin(parsed)
     path = parsed.path.casefold()
+    registry = registry or default_registry()
 
-    if host == "api.notion.com" or host.endswith(".notion.so") or host.endswith(".notion.site"):
+    if host == "api.notion.com" or host.endswith((".notion.so", ".notion.site")):
         root_value = _extract_notion_id(parsed.path)
-        return DetectedSource(
-            source_type="notion_api",
-            display_name="Notion",
+        return _detected(
+            registry,
+            "notion_api",
             base_url="https://api.notion.com/v1",
-            api_name="API oficial do Notion",
             root_mode="id" if root_value else "title",
             root_value=root_value,
         )
 
-    if "sharepoint.com" in host or host.endswith(".office.com"):
-        return DetectedSource(
-            source_type="sharepoint_graph",
-            display_name="SharePoint",
+    if host == "sharepoint.com" or host.endswith((".sharepoint.com", ".office.com")):
+        return _detected(
+            registry,
+            "sharepoint_graph",
             base_url="https://graph.microsoft.com/v1.0",
-            api_name="Microsoft Graph",
             space_key=host,
             root_mode="title",
             root_value="",
         )
 
-    if host == "api.gitbook.com" or host.endswith(".gitbook.io") or host.endswith(".gitbook.com"):
+    if host == "api.gitbook.com" or host.endswith((".gitbook.io", ".gitbook.com")):
         parts = [unquote(part).strip() for part in parsed.path.split("/") if part.strip()]
         org_id = ""
         space_id = ""
@@ -89,11 +115,10 @@ def detect_source_url(value: str) -> DetectedSource:
             space_id = parts[parts.index("s") + 1]
         
         space_key = org_id or space_id or _last_path_value(parsed.path)
-        return DetectedSource(
-            source_type="gitbook_api",
-            display_name="GitBook",
+        return _detected(
+            registry,
+            "gitbook_api",
             base_url="https://api.gitbook.com/v1",
-            api_name="API REST oficial do GitBook",
             space_key=space_key,
             root_mode="space",
             root_value=space_id,
@@ -101,11 +126,10 @@ def detect_source_url(value: str) -> DetectedSource:
 
     if host.endswith(".zendesk.com") or host == "zendesk.com":
         subdomain = host.split(".", 1)[0] if "." in host else ""
-        return DetectedSource(
-            source_type="zendesk_guide",
-            display_name="Zendesk",
+        return _detected(
+            registry,
+            "zendesk_guide",
             base_url=f"{origin}/api/v2",
-            api_name="Help Center API do Zendesk",
             space_key=subdomain,
             root_mode="space",
         )
@@ -116,25 +140,22 @@ def detect_source_url(value: str) -> DetectedSource:
         try:
             parsed_confluence = parse_confluence_url(raw)
             root_mode = parsed_confluence.root_mode or ("space" if parsed_confluence.space_key else "title")
-            return DetectedSource(
-                source_type="confluence_rest",
-                display_name="Confluence",
+            return _detected(
+                registry,
+                "confluence_rest",
                 base_url=parsed_confluence.base_url,
-                api_name="API REST oficial do Confluence",
                 space_key=parsed_confluence.space_key or "",
                 root_mode=root_mode,
                 root_value=parsed_confluence.root_value or "",
             )
         except ValueError:
             base_url = f"{origin}/wiki" if host.endswith(".atlassian.net") else origin
-            return DetectedSource(
-                source_type="confluence_rest",
-                display_name="Confluence",
+            return _detected(
+                registry,
+                "confluence_rest",
                 base_url=base_url,
-                api_name="API REST oficial do Confluence",
             )
 
-    raise ValueError(
-        "Não foi possível identificar a plataforma por esta URL. "
-        "Use um endereço do Confluence, Zendesk, Notion, SharePoint ou GitBook."
-    )
+    if parsed.scheme == "https":
+        return _detected(registry, "generic_web", base_url=raw, root_mode="id", root_value=raw)
+    raise ValueError("Generic Web exige uma URL HTTPS pública.")

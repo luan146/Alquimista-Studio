@@ -4,7 +4,7 @@ from typing import Any
 
 from PySide6.QtWidgets import QMessageBox
 
-from ..models import ProjectConfig
+from ..models import KnowledgeSelection, ProjectConfig
 from ..runtime import CancellationToken
 from ..services import ConsolidationService, ExtractionService, SourceRuntime
 from ..storage import MANIFEST_NAME, ManifestStore
@@ -24,9 +24,12 @@ def prepare_runtimes(
 
 
 def run_extraction(
-    window: Any, *, partial_update_keys: set[str] | None = None
+    window: Any,
+    *,
+    partial_update_keys: set[str] | None = None,
+    project_override: ProjectConfig | None = None,
 ) -> None:
-    snapshot = window._validated_project_snapshot()
+    snapshot = project_override or window._validated_project_snapshot()
     if snapshot is None:
         return
 
@@ -59,43 +62,47 @@ def retry_failures(window: Any) -> None:
         document = ManifestStore(
             window._base_path() / MANIFEST_NAME, window.project
         ).load()
-        failed: dict[str, list[str]] = {
-            entry.source_id: []
+        failed_entries = [
+            entry
             for entry in document.entries
             if entry.status.value in {"failed", "preserved_after_error"}
-        }
-        for entry in document.entries:
-            if entry.status.value in {"failed", "preserved_after_error"}:
-                failed.setdefault(entry.source_id, []).append(entry.page_id)
-        if not any(failed.values()):
+        ]
+        if not failed_entries:
             QMessageBox.information(
                 window,
                 translate_text("Falhas"),
                 translate_text("Não há páginas com falha para repetir."),
             )
             return
-        original = {
-            source.id: list(source.selected_page_ids)
-            for source in window.project.sources
-        }
         partial_update_keys = {
-            f"{source_id}:{page_id}"
-            for source_id, page_ids in failed.items()
-            for page_id in page_ids
+            entry.document_key
+            if entry.document_key.count(":") >= 2
+            else f"{entry.source_id}:{entry.container_id or entry.space_key or '__legacy__'}:{entry.page_id}"
+            for entry in failed_entries
         }
-        try:
-            for source in window.project.sources:
-                source.selected_page_ids = failed.get(source.id, [])
-            # SelectionStore is the canonical source of truth for rendering.
-            # The legacy mutation above did not update it, so rebuild it from
-            # project.selections to avoid a stale store desync.
-            window._rebuild_selection_store()
-            window.project.extraction.force_reprocess = True
-            window.run_extraction(partial_update_keys=partial_update_keys)
-        finally:
-            for source in window.project.sources:
-                source.selected_page_ids = original[source.id]
-            window.project.extraction.force_reprocess = False
+        failed_keys = set(partial_update_keys)
+        retry_project = window.project.model_copy(deep=True)
+        retry_project.selections = [
+            KnowledgeSelection(
+                source_id=entry.source_id,
+                container_id=entry.container_id or entry.space_key or "__legacy__",
+                document_id=entry.document_id or entry.page_id,
+                selected=True,
+            )
+            for entry in failed_entries
+        ]
+        for source in retry_project.sources:
+            source.selected_page_ids = [
+                entry.document_id or entry.page_id
+                for entry in failed_entries
+                if entry.source_id == source.id
+            ]
+        retry_project.extraction.force_reprocess = True
+        run_extraction(
+            window,
+            partial_update_keys=failed_keys,
+            project_override=retry_project,
+        )
     except Exception as exc:
         QMessageBox.warning(window, translate_text("Falhas"), str(exc))
 

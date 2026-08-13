@@ -1,0 +1,11 @@
+{
+  "id": "page-partial",
+  "credentials": {
+    "authorization": "Bearer GOLDEN_SECRET_MUST_NOT_LEAK"
+  },
+  "metadata": {
+    "labels": {
+      "results": [null, {}, {"name": "parcial"}]
+    }
+  }
+}
