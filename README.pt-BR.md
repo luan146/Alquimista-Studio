@@ -16,17 +16,6 @@ Cole a URL de uma fonte, conecte-se, escolha as páginas e exporte conteúdo est
 
 > 🌐 **Leia este README em:** [English](README.md) · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md)
 
-## ⬇️ Download
-
-O ALQuimista Studio é distribuído em formatos portátil e instalado. Os pacotes
-portáteis podem ser extraídos e executados sem instalação; o instalador do
-Windows cria atalhos e mantém as preferências no perfil do usuário. Ambos os
-formatos incluem Português (Brasil), English e Español.
-
-Os pacotes portáteis são `ALQuimista-Studio-windows-portable.zip` e
-`ALQuimista-Studio-linux-portable.tar.gz`. O instalador do Windows é
-`ALQuimista-Studio-windows-installer-<versao>.exe`.
-
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Painel do ALQuimista Studio" width="100%">
 </p>
@@ -205,6 +194,17 @@ Isso torna o conhecimento exportado mais fácil de rastrear até a origem e de p
 ---
 
 ## ⚡ Início rápido
+
+### 📦 Baixar a versão portátil
+
+O ALQuimista Studio é distribuído em formatos portátil e instalado. Os pacotes
+portáteis podem ser extraídos e executados sem instalação; o instalador do
+Windows cria atalhos e mantém as preferências no perfil do usuário. Ambos os
+formatos incluem Português (Brasil), English e Español.
+
+Os pacotes portáteis são `ALQuimista-Studio-windows-portable.zip` e
+`ALQuimista-Studio-linux-portable.tar.gz`. O instalador do Windows é
+`ALQuimista-Studio-windows-installer-<versao>.exe`.
 
 ### Windows
 
