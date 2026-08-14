@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 from urllib.parse import quote, urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
 
-from ..errors import AuthenticationError, InvalidResponseError, ResourceNotFoundError
+from ..errors import InvalidResponseError
 from ..markdown import normalize_markdown
 from ..models import (
     ConnectorCapabilities,

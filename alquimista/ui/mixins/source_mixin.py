@@ -856,5 +856,26 @@ class SourceMixin:
         self._active_page_container = None
         self._active_selection_container = None
 
+    def _pick_local_file(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            translate_text("Selecionar Arquivo de Conhecimento"),
+            "",
+            translate_text(
+                "Todos os Documentos Suportados (*.pdf *.docx *.xlsx *.pptx *.epub *.html *.txt *.md);;"
+                "PDF (*.pdf);;Word (*.docx *.rtf *.odt);;Excel / Planilhas (*.xlsx *.xls *.csv *.tsv);;"
+                "PowerPoint (*.pptx *.odp);;E-books (*.epub);;HTML (*.html *.htm);;Texto / Markdown (*.txt *.md *.mdx);;"
+                "Imagens (*.png *.jpg *.jpeg *.webp);;Todos os Arquivos (*.*)"
+            ),
+        )
+        if file_path:
+            self.source_url_input.setText(file_path)
 
-
+    def _pick_local_folder(self) -> None:
+        folder_path = QFileDialog.getExistingDirectory(
+            self,
+            translate_text("Selecionar Pasta de Documentos"),
+            "",
+        )
+        if folder_path:
+            self.source_url_input.setText(folder_path)

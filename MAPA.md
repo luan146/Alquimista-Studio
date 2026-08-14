@@ -1,1039 +1,992 @@
 # MAPA DO CÓDIGO — ALQuimista Studio 3.0
 
-Guia de referência rápida para direcionar a IA ao arquivo certo quando um problema
-ocorrer em uma tela específica do programa. Use junto com o prompt:
-"Problema na <tela>: <sintoma>. Comece investigando <arquivo> e confirme o fluxo antes de alterar."
+Guia de referência rápida para agentes de IA e desenvolvedores. Fonte da verdade é **sempre o código atual**; este mapa indica **onde começar** a investigação.
+
+**Última reconstrução:** 2026-08-14 — gerado por inspeção completa do repositório.
+
+---
+
+## MÉTRICAS REAIS
+
+| Métrica | Valor |
+|---|---|
+| Arquivos `.py` no pacote `alquimista/` | 129 |
+| Linhas de código (pacote) | ~30.500 |
+| Conectores implementados | 28 |
+| Processadores de documentos | 8 (PDF, Word, Spreadsheet, Presentation, Ebook, HTML, Image, Text) |
+| Controllers em `ui/controllers/` | 11 arquivos (10 controllers + `__init__.py`) |
+| Mixins em `ui/mixins/` | 3 (connection, selection, source) |
+| Páginas em `ui/pages/` | 9 |
+| Arquivos de teste | 31 (+ 2 em `contracts/`) |
+| Funções de teste | ~233 |
+| Linhas de teste | ~6.500 |
+| Versão do schema | 4 (`SCHEMA_VERSION` em `models.py`) |
+| Versão do pacote | 0.9 (`__version__` em `__init__.py`) |
+| Python | 3.12 |
+| Framework UI | PySide6 ≥ 6.10 |
+| Dependências runtime | pydantic ≥ 2.9, requests ≥ 2.31, beautifulsoup4 ≥ 4.12, markdownify ≥ 1.2 |
+
+---
 
 ## COMO USAR ESTE MAPA
 
-Este mapa indica **onde começar a investigação** diante de um sintoma ou solicitação — não é fonte absoluta da verdade. A estrutura do código muda; confirme sempre os fluxos lendo os arquivos antes de alterar. Use o mapa como ponto de partida, não como substituto de inspeção.
-
-**Fluxo recomendado:**
-1. Localize a tela ou componente no mapa (ou use a tabela abaixo).
-2. Abra o arquivo indicado e confirme que os símbolos citados ainda existem.
-3. Verifique dependências e raio de impacto listados na seção do componente.
-4. Faça a alteração seguindo o checklist de validação, quando houver.
-5. Rode os testes diretamente relacionados listados em `tests/`.
+1. Localize a área ou sintoma na tabela de roteamento abaixo.
+2. Abra o arquivo indicado e confirme que os símbolos citados existem.
+3. Verifique dependências e callers no código antes de alterar.
+4. Faça alteração mínima, rode testes relacionados.
 
 ### Quero mudar X → onde investigar
 
 | Quero mudar… | Comece investigando… | Confirme também… |
 |---|---|---|
 | Adicionar/editar uma fonte | `ui/mixins/source_mixin.py` + `source_detection.py` | `models.py:SourceConfig`, `storage.py` |
-| Autenticação de uma fonte | `ui/mixins/connection_mixin.py` + `auth.py` | `connectors/<plataforma>.py`, `controllers.py:RuntimeSecrets` |
-| Comportamento da árvore de seleção | `ui/mixins/selection_mixin.py` + `tree_mixin.py` | `tree_models.py`, conector `list_document_children` |
-| Conversão HTML→Markdown | `markdown.py:MarkdownTransformer` | `models.py:MarkdownOptions` |
-| Extração de páginas | `services.py:ExtractionService` | conector `get_document`, `process_workers.py` |
-| Consolidação de saída | `services.py:ConsolidationService` | `storage.py`, `markdown.py:demote_headings` |
-| Atualização incremental | `services.py` (SHA-256) + `manifest_index.py` | `models.py:SCHEMA_VERSION` |
-| Adicionar novo conector | `connectors/base.py` (ABC) + conector existente como referência | `registry.py`, `connector_forms.py`, `source_detection.py` |
-| Cancelamento de operação | `runtime.py:CancellationToken` | chamador do token (worker/mixin) |
-| Tema/visual de uma tela | `ui/pages/<tela>.py` + `components.py` | `theme.py`, mixin correspondente |
-| Relatório de execução | `reports.py` | `services.py` (gera `ExecutionReport`) |
+| Autenticação de uma fonte | `ui/mixins/connection_mixin.py` + `auth.py` | `connectors/<plataforma>.py`, `controllers/runtime_controller.py:RuntimeSecrets` |
+| Árvore de seleção | `ui/mixins/selection_mixin.py` | `tree_models.py`, `controllers/tree_loader_controller.py` |
+| Conversão HTML→Markdown | `markdown/transformer.py` | `markdown/renderer.py`, `models.py:MarkdownOptions` |
+| Extração de páginas | `services/extraction.py` | conector `get_document`, `services/runtime.py:SourceRuntime` |
+| Consolidação de saída | `services/consolidation.py` | `storage.py`, `services/helpers.py:demote_headings` |
+| Atualização incremental | `services/extraction.py` (SHA-256) + `manifest_index.py` | `models.py:SCHEMA_VERSION` |
+| Adicionar novo conector | `connectors/base.py` (ABC) + conector existente como referência | `connectors/registry.py`, `source_detection.py` |
+| Cancelamento de operação | `runtime.py:CancellationToken` | chamador do token no controller/worker |
+| Tema/visual de uma tela | `ui/pages/<tela>.py` + `components.py` | `theme.py` |
+| Relatório de execução | `reports.py` | `services/extraction.py` (gera `ExecutionReport`) |
+| Navegação entre telas | `controllers/navigation_controller.py` | `main_window.py:_show_page` |
+| Preview de markdown | `controllers/preview_controller.py` | `markdown/preview.py`, `markdown/renderer.py` |
+| Consolidação UI | `controllers/consolidation_controller.py` | `services/consolidation.py` |
 
 ---
 
 ## VISÃO GERAL DA ARQUITETURA
 
 ```
-alquimista/                  # Núcleo (sem UI)
-├── models.py                # Contrato de dados central
-├── client.py                # Cliente REST legado (Confluence)
-├── services.py              # Motor de domínio (extração/consolidação)
-├── storage.py               # Persistência atômica
-├── markdown.py              # Conversão HTML→Markdown
-├── auth.py                  # Autenticação (browser/basic/bearer)
-├── selection.py             # Estado de seleção do usuário
-├── runtime.py               # Cancelamento cooperativo (threads)
+alquimista/                  # Pacote principal (sem UI)
+├── __init__.py              # Exports: ProjectConfig, SourceConfig, opções
+├── __main__.py              # Entry point: python -m alquimista
+├── models.py                # Contrato de dados central (pydantic v2)
+├── auth.py                  # Login interativo via Playwright
+├── client.py                # Cliente REST legado Confluence
 ├── errors.py                # Hierarquia de erros tipados
-├── reports.py               # Relatórios de execução
-├── logging_utils.py          # Logs JSON com redação de segredos
-├── manifest_index.py        # Indexação p/ atualização incremental
-├── session_store.py         # Persistência local criptografada (DPAPI) de sessão de browser
-├── source_detection.py      # Detecta plataforma pela URL
-├── confluence_url.py        # Parse de URLs do Confluence
-├── connectors/              # Conectores por plataforma
-│   ├── base.py              # Contrato ABC comum
-│   ├── confluence.py        # Conector de referência
-│   ├── gitbook.py
-│   ├── notion.py
-│   ├── sharepoint.py
-│   ├── zendesk.py
-│   ├── http.py              # HTTP compartilhado
-│   └── registry.py          # Catálogo/instanciação
-└── browser/                 # Navegador embutido (Playwright)
-    ├── contracts.py         # Tipos de discovery
-    ├── service.py           # Orquestração
-    ├── adapters.py          # Adaptação Playwright
-    └── cache.py             # Cache SQLite de metadados/discovery (sem credenciais nem conteúdo)
-
-alquimista/ui/               # Interface (PySide6)
-├── main_window.py           # MainWindow (orquestra tudo)
-├── components.py            # Widgets reutilizáveis
-├── theme.py                 # Estilos QSS
-├── tree_models.py           # Dados→estrutura de árvore
-├── controllers.py           # RuntimeBuilder + RuntimeSecrets
-├── execution_controller.py  # Prepara runtimes de extração
-├── operation_controller.py  # Dispatcher de workers (QThreadPool)
-├── process_workers.py       # Workers de processos pesados
-├── workers.py               # Worker Qt (wrapper threadpool)
-├── page_registry.py         # Roteamento página→builder
-├── connector_forms.py       # Formulários dinâmicos por conector
-├── project_controller.py     # Carregar/salvar projetos
-├── source_controller.py     # Operações de fonte (alto nível)
-├── state.py                 # Estado global compartilhado
-├── mixins/                  # Comportamentos da MainWindow
-│   ├── selection_mixin.py   # Seleção na árvore
-│   ├── source_mixin.py      # CRUD de fontes
-│   ├── connection_mixin.py  # Autenticação
-│   └── tree_mixin.py        # Lazy loading da árvore
-└── pages/                   # Telas (uma por arquivo)
-    ├── dashboard_page.py
-    ├── sources_page.py
-    ├── connection_page.py
-    ├── selection_page.py
-    ├── review_page.py       # Revisão/Extração
-    ├── extraction_page.py
-    ├── consolidation_page.py
-    ├── markdown_page.py
-    └── results_page.py
+├── runtime.py               # CancellationToken, RateLimiter, ProgressCallback
+├── selection.py             # SelectionStore (estado sem Qt)
+├── storage.py               # Persistência atômica, FileTransaction, ManifestStore
+├── reports.py               # ExecutionReport, DocumentResult, SourceReport
+├── logging_utils.py         # Logs JSON com redação de segredos
+├── manifest_index.py        # Índice SQLite sidecar do manifest
+├── session_store.py         # Sessão de browser criptografada (DPAPI/Windows)
+├── source_detection.py      # Detecta plataforma por URL sem rede
+├── source_discovery.py      # Facade de compatibilidade → discovery/
+├── confluence_url.py        # Parser de URLs Confluence
+│
+├── services/                # Motor de domínio
+│   ├── extraction.py        # ExtractionService (~48KB)
+│   ├── consolidation.py     # ConsolidationService (~16KB)
+│   ├── reconciliation.py    # InventoryReconciliationService
+│   ├── runtime.py           # SourceRuntime, SelectedDocumentRef
+│   └── helpers.py           # sanitize_filename, demote_headings
+│
+├── connectors/              # 28 conectores por plataforma
+│   ├── base.py              # ABC KnowledgeSourceConnector
+│   ├── capabilities.py      # Protocols: Hierarchical, Searchable, MarkdownConfigurable
+│   ├── registry.py          # ConnectorRegistry, ConnectorDescriptor, default_registry()
+│   ├── http.py              # ApiHttpClient compartilhado
+│   ├── confluence.py        # Confluence Cloud & Server
+│   ├── confluence_parser.py # Parser HTML→MD Confluence
+│   ├── notion.py            # Notion API
+│   ├── notion_parser.py     # Parser de blocos Notion
+│   ├── gitbook.py           # GitBook API v1
+│   ├── sharepoint.py        # SharePoint Graph
+│   ├── zendesk.py           # Zendesk Guide
+│   ├── freshdesk.py         # Freshdesk Solutions
+│   ├── outline.py           # Outline KB
+│   ├── helpscout.py         # Help Scout Docs
+│   ├── document360.py       # Document360 API v2
+│   ├── bookstack.py         # BookStack API
+│   ├── github_docs.py       # GitHub Repos Docs
+│   ├── gitlab.py            # GitLab Wikis & Docs
+│   ├── intercom.py          # Intercom Help Center
+│   ├── salesforce.py        # Salesforce Knowledge
+│   ├── hubspot.py           # HubSpot KB
+│   ├── helpjuice.py         # Helpjuice KB
+│   ├── guru.py              # Guru Cards
+│   ├── slite.py             # Slite Channels
+│   ├── mediawiki.py         # MediaWiki API
+│   ├── readme.py            # ReadMe Dev Hub
+│   ├── wordpress.py         # WordPress REST v2
+│   ├── ghost.py             # Ghost Content API
+│   ├── strapi.py            # Strapi CMS
+│   ├── contentful.py        # Contentful CDA
+│   ├── sanity.py            # Sanity GROQ
+│   ├── local_files.py       # Importador de arquivos/pastas locais
+│   ├── generic_web.py       # Scraping de página web única
+│   └── generic_docs.py      # Descoberta de documentações web
+│
+├── markdown/                # Pipeline HTML→Markdown
+│   ├── transformer.py       # MarkdownTransformer (macros, links, imagens)
+│   ├── renderer.py          # KnowledgeDocumentRenderer, PreparedKnowledgeDocument
+│   ├── metadata.py          # page_metadata, knowledge_document_metadata
+│   ├── normalization.py     # normalize_markdown, sha256_text
+│   └── preview.py           # sample_page (prévia da tela Markdown)
+│
+├── discovery/               # Descoberta universal web
+│   ├── service.py           # SourceDiscoveryService
+│   ├── crawler.py           # WebCrawler (profundidade + rate limit)
+│   ├── sitemap.py           # Parsing de sitemaps XML
+│   ├── llms_txt.py          # Extração de llms.txt
+│   ├── frameworks.py        # Detecção de frameworks (Docusaurus, MkDocs, etc.)
+│   ├── normalization.py     # Normalização de URLs e escopo
+│   └── models.py            # DiscoveryResult, DiscoveredResource, DiscoveryStrategy
+│
+├── document_processing/     # Processamento de arquivos locais
+│   ├── base.py              # ABC DocumentProcessor
+│   ├── registry.py          # DocumentProcessorRegistry singleton
+│   ├── pdf.py               # PDF (PyMuPDF/pypdf)
+│   ├── word.py              # Word (DOCX, ODT, RTF)
+│   ├── spreadsheet.py       # Excel, CSV, TSV, ODS
+│   ├── presentation.py      # PowerPoint, ODP
+│   ├── ebook.py             # EPUB
+│   ├── html.py              # HTML/HTM
+│   ├── image.py             # PNG, JPG, etc. (OCR opcional)
+│   └── text.py              # TXT, MD, RST
+│
+├── browser/                 # Navegador embutido (Playwright) + cache
+│   ├── contracts.py         # Protocols e tipos de discovery
+│   ├── service.py           # LazyDiscoveryService (síncrono, thread-safe)
+│   ├── adapters.py          # ConnectorDiscoveryAdapter
+│   └── cache.py             # BrowserCache (SQLite, sem credenciais)
+│
+└── ui/                      # Interface (PySide6)
+    ├── __init__.py           # Exports: run_app
+    ├── main_window.py        # MainWindow (~90KB, 2369 linhas, 134 métodos)
+    ├── components.py         # Widgets reutilizáveis (~39KB)
+    ├── theme.py              # Cores, constantes visuais, apply_theme
+    ├── tree_models.py        # Dados→árvore (tree_pages, ordered_pages, etc.)
+    ├── state.py              # MainWindowState (estado mutável fora de widgets)
+    ├── i18n.py               # Internacionalização PT-BR/EN/ES
+    ├── translation_fallbacks.py # Fallbacks de tradução
+    ├── workers.py            # Worker(QRunnable) + WorkerSignals
+    ├── connector_forms.py    # Facade → registry.ConnectorFormSpec
+    ├── controllers/          # Controllers (sem acoplamento Qt forte)
+    │   ├── runtime_controller.py    # RuntimeBuilder + RuntimeSecrets
+    │   ├── execution_controller.py  # prepare_runtimes, run_extraction, etc.
+    │   ├── operation_controller.py  # WorkerOperationController
+    │   ├── navigation_controller.py # Pilha de páginas e navegação
+    │   ├── tree_controller.py       # Apresentação visual de árvores
+    │   ├── tree_loader_controller.py # Discovery, lazy loading, browser cache (~34KB)
+    │   ├── preview_controller.py    # Preview de Markdown, presets, debounce
+    │   ├── consolidation_controller.py # UI de consolidação (~18KB)
+    │   ├── results_controller.py    # Resultados, métricas, exportação
+    │   ├── project_controller.py    # CRUD de projetos
+    │   └── source_controller.py     # Normalização de fontes
+    ├── mixins/               # Comportamentos da MainWindow
+    │   ├── source_mixin.py      # CRUD de fontes (~37KB, 28 métodos)
+    │   ├── selection_mixin.py   # Árvore de seleção (~28KB, 21 métodos)
+    │   └── connection_mixin.py  # Autenticação (~17KB, 8 métodos)
+    ├── pages/                # Construtores de tela
+    │   ├── dashboard_page.py
+    │   ├── sources_page.py
+    │   ├── connection_page.py
+    │   ├── selection_page.py
+    │   ├── review_page.py
+    │   ├── extraction_page.py
+    │   ├── markdown_page.py
+    │   ├── consolidation_page.py
+    │   └── results_page.py
+    ├── translations/         # Catálogos QM/TS (EN, ES, PT-BR)
+    ├── page_registry.py      # [INATIVO] Define page_builders — sem callers no runtime
+    ├── process_workers.py    # [APENAS TESTES] Workers multiprocessing (testado em test_process_workers)
+    ├── execution_controller.py   # [FACADE] → controllers/execution_controller
+    ├── operation_controller.py   # [FACADE] → controllers/operation_controller
+    ├── project_controller.py     # [FACADE] → controllers/project_controller
+    └── source_controller.py      # [FACADE] → controllers/source_controller
 ```
 
-Fluxo de uso: **Dashboard → Fontes → Conexão → Seleção → Revisão → Markdown → Consolidação → Resultados**.
+**Fluxo de uso:** Dashboard → Fontes → Conexão → Seleção → Markdown → Revisão/Extração → Consolidação → Resultados.
 
 ---
 
-## 1. DASHBOARD — Tela inicial
+## 1. MODELOS E CONTRATO DE DADOS
 
-**Arquivo da tela:** `alquimista/ui/pages/dashboard_page.py`
-**Método na MainWindow:** `_dashboard_page`
-**Widgets:** `components.py` — `SourceCard`, `AlchemistIconAtlas`, `card`
+### models.py — Contrato central (584 linhas, 21KB)
 
-**O que faz:** Mostra hero icon, título, subtítulo e cards de fontes. Click num card → navega para Fontes (`_source_card_clicked`).
-
-**Problemas típicos:**
-| Sintoma | Arquivo |
-|---|---|
-| Layout/visual quebrado | `pages/dashboard_page.py` + `components.py` |
-| Ícone não aparece | `components.py` (`AlchemistIconAtlas`) |
-| Click não navega | `main_window.py:_source_card_clicked` |
-| Métricas erradas | `main_window.py:_metric` / `_refresh_dashboard` |
-
----
-
-## 2. FONTES — Lista e edita fontes
-
-**Arquivo da tela:** `alquimista/ui/pages/sources_page.py`
-**Mixin de lógica:** `alquimista/ui/mixins/source_mixin.py` (~29KB)
-**Método na MainWindow:** `_sources_page`
-**Modelo:** `models.py` — `SourceConfig`
-**Persistência:** `storage.py` — `save_project`/`load_project`
-**Detecção:** `source_detection.py`
-
-**O que faz:** Adicionar/editar/remover fontes. Cola URL, escolhe plataforma, define nome. Botão "detectar plataforma" usa `source_detection.py`.
-
-**Problemas típicos:**
-| Sintoma | Arquivo |
-|---|---|
-| "Não mostra a fonte que adicionei" | `pages/sources_page.py` + `mixins/source_mixin.py` |
-| "Não salva a fonte" | `mixins/source_mixin.py` + `models.py:SourceConfig` + `storage.py` |
-| "Não detecta plataforma pela URL" | `source_detection.py` |
-| "Campo do formulário some/erra" | `ui/connector_forms.py` (`form_spec`) |
-
----
-
-## 3. CONEXÃO — Autenticação
-
-**Arquivo da tela:** `alquimista/ui/pages/connection_page.py`
-**Mixin de lógica:** `alquimista/ui/mixins/connection_mixin.py`
-**Método na MainWindow:** `_connection_page`
-**Núcleo:** `auth.py` — `browser_login`, `delete_session`
-**Navegador:** `browser/service.py`, `browser/cache.py`
-**Cofre:** `controllers.py` — `RuntimeSecrets` (segredos em memória, nunca serializados)
-
-**O que faz:** Autenticação por fonte. Modos: Pública, Basic (usuário+token), Bearer (token), Navegador (OAuth interativo). Botão "Testar conexão" chama `validate_connection` do conector.
-
-**Problemas típicos:**
-| Sintoma | Arquivo |
-|---|---|
-| "Botão testar conexão não funciona" | `mixins/connection_mixin.py` + `connectors/<plataforma>.py` |
-| "Login pelo navegador não abre/fecha" | `auth.py` (`browser_login`) + `browser/service.py` |
-| "Credencial não persiste" | Por design em `session_store.py` + `controllers.py:RuntimeSecrets` |
-| "Formulário erra por conector" | `ui/connector_forms.py` (`form_spec`) |
-| "Erro de auth/token expirado" | `auth.py` + `connectors/http.py` (retries) |
-
----
-
-## 4. SELEÇÃO — Árvore de páginas (tela mais sensível)
-
-**Arquivo da tela:** `alquimista/ui/pages/selection_page.py`
-**Mixin de seleção:** `alquimista/ui/mixins/selection_mixin.py` (~35KB)
-**Mixin de árvore:** `alquimista/ui/mixins/tree_mixin.py` (~4,4KB)
-**Modelos de árvore:** `alquimista/ui/tree_models.py`
-**Widgets:** `components.py` — `SortableTreeItem`, `VisibilityBadgeDelegate`
-**Método na MainWindow:** `_selection_page` / `_pages_page`
-
-**O que faz:** Mostra (1) contêineres (espaços/sections/categorias) e (2) páginas em árvore hierárquica. Usuário marca o que extrair. Lazy loading: ao expandir um nó, carrega filhos do conector.
-
-### Fluxo de carregamento
-1. UI pede contêineres → `connector.list_containers()` → `tree_models.tree_containers`
-2. Expande contêiner → `tree_models.tree_pages` + `ordered_pages` ordenam
-3. Se conector suporta filhos → `tree_mixin._lazy_method` decide síncrono vs lazy
-4. Expande página → `connector.list_document_children()` → `_lazy_state` guarda cursor
-5. Seleção → `selection_mixin._selection_changed` coleta leafs → `SelectionStore`
-
-### Funções-chave da árvore (main_window.py)
-- `_populate_page_tree_lazy` — versão lazy (Confluence)
-- `_populate_page_tree` — versão síncrona
-- `_page_tree_item_expanded` — dispara ao expandir nó
-- `_load_document_children` — carrega filhos de um documento
-- `_load_expanded_document` — carrega documento expandível
-
-### Funções-chave de seleção (selection_mixin.py)
-- `_populate_selection_tree` — monta QTreeWidget
-- `_selection_tree_item_expanded` — lazy loading na seleção
-- `_selection_changed` — reage a check/uncheck
-- `_leaf_items` — coleta itens-folha marcados
-- `walk` — percorre árvore recursivamente
-
-### Funções-chave de tree_models.py
-- `page_container_id` — id do contêiner de uma página
-- `tree_pages` — extrai páginas planas de `data[container_id]`
-- `ordered_pages` — ordena páginas por posição/parent/title
-- `tree_containers` — lista de contêineres para raiz da árvore
-- `lazy_state` — estado de lazy loading (cursor pendente)
-
-### Funções-chave de tree_mixin.py
-- `_lazy_method` — decide síncrono vs lazy por capacidade do conector
-- `_lazy_state` — accessor do estado de cursor
-- `_leaf_items` — percorre folhas
-
-**Problemas típicos:**
-| Sintoma | Arquivo |
-|---|---|
-| "Árvore não carrega" | `mixins/tree_mixin.py` + `connectors/<plataforma>.py` |
-| "Demora/para no meio" | `connectors/confluence.py:_collect_lazy_pages` |
-| "Páginas fora de ordem" | `tree_models.py:ordered_pages` |
-| "Filhos aparecem antes do pai" | `tree_models.py:tree_pages` + `page_container_id` |
-| "Não consigo marcar/desmarcar" | `mixins/selection_mixin.py:_selection_changed` |
-| "Seleção some ao trocar de aba" | `mixins/selection_mixin.py` + `selection.py:SelectionStore` |
-| "Badge público/privado errado" | `connectors/confluence.py:_explicit_visibility` + `tree_models.py` |
-| "Não expande filhos" | `mixins/tree_mixin.py:_lazy_method` + `main_window.py:_load_document_children` |
-| "Contêineres vazios" | `connectors/<plataforma>.py:list_containers` + `registry.py` |
-
----
-
-## 5. REVISÃO / EXTRAÇÃO — Prévia e disparo
-
-**Arquivo da tela:** `alquimista/ui/pages/review_page.py`
-**Método na MainWindow:** `_review_page`, `_review_page_legacy`
-**Controle de execução:** `execution_controller.py` — `prepare_runtimes`
-**Dispatcher:** `operation_controller.py` — submete workers em QThreadPool
-**Workers:** `process_workers.py` (processos pesados), `workers.py` (wrapper Qt)
-**Cancelamento:** `runtime.py` — `CancellationToken`
-**Núcleo:** `services.py` — `ExtractionService`, `SourceRuntime`
-
-**O que faz:** Antes de extrair, mostra prévia da seleção e dispara a extração. `page_registry.py` mapeia "extraction" e "review" pro mesmo builder.
-
-**Funções-chave (main_window.py):**
-- `_refresh_review` — atualiza prévia
-- `run_extraction` — dispara extração
-- `execute_selected_operation` — operação selecionada
-- `retry_failures` — retentar falhas
-- `run_complete` — fluxo completo
-- `_prepare_runtimes` — prepara runtimes
-
-**Problemas típicos:**
-| Sintoma | Arquivo |
-|---|---|
-| "Prévia não mostra tudo" | `pages/review_page.py` + `mixins/selection_mixin.py` |
-| "Contagem errada" | `mixins/selection_mixin.py:_leaf_items` |
-| "Extração não inicia" | `execution_controller.py:prepare_runtimes` |
-| "Trava/congela" | `operation_controller.py` + `process_workers.py` |
-| "Não cancela" | `runtime.py:CancellationToken` |
-| "Extrai mas arquivo sai errado" | `services.py:ExtractionService` + conector `get_document` |
-| "Atualização incremental não detecta mudança" | `services.py` (SHA-256) + `manifest_index.py` |
-
----
-
-## 6. MARKDOWN — Opções de conversão
-
-**Arquivo da tela:** `alquimista/ui/pages/markdown_page.py`
-**Método na MainWindow:** `_markdown_page`
-**Núcleo:** `markdown.py` — `MarkdownTransformer`, `page_metadata`, `sample_page`, `sha256_text`
-**Modelo:** `models.py` — `MarkdownOptions`
-
-**O que faz:** Opções de conversão HTML→Markdown: normalizar títulos, preservar links, baixar imagens, frontmatter, etc.
-
-**Funções-chave (main_window.py):**
-- `_load_markdown_controls` — carrega opções salvas
-- `_sync_markdown_controls` — sincroniza UI→modelo
-- `_apply_preset` — aplica preset (Confluence/GitBook/etc.)
-- `_schedule_preview` — agenda prévia
-- `_update_preview` — renderiza prévia
-- `_render_preview_mode` — modo de renderização
-
-**Problemas típicos:**
-| Sintoma | Arquivo |
-|---|---|
-| "Sai com formatação estranha" | `markdown.py` (`MarkdownTransformer`) |
-| "Tabelas quebradas" | `markdown.py` (conversão HTML tabela) |
-| "Imagens não vêm" | `markdown.py` (download de imagens) |
-| "Links quebrados" | `markdown.py` (normalização de links) |
-| "Opções não aplicam" | `pages/markdown_page.py` + `models.py:MarkdownOptions` |
-| "Frontmatter errado" | `markdown.py:page_metadata` |
-| "Prévia não atualiza" | `main_window.py:_update_preview` + `markdown.py:sample_page` |
-
----
-
-## 7. CONSOLIDAÇÃO — Junção em arquivo único
-
-**Arquivo da tela:** `alquimista/ui/pages/consolidation_page.py`
-**Método na MainWindow:** `_consolidation_page`, `_consolidation_page_legacy`
-**Núcleo:** `services.py` — `ConsolidationService`, `demote_headings`
-**Modelo:** `models.py` — `ConsolidationOptions`
-**Persistência:** `storage.py` — `PACKAGE_INDEX_NAME`
-
-**O que faz:** Define modo de consolidação (arquivo único, pacote, índice), separadores, profundidade. Junta páginas num arquivo ou pacote.
-
-**Funções-chave (main_window.py):**
-- `_sync_consolidation_ui` — sincroniza UI
-- `_sync_consolidation_controls` — sincroniza controles
-- `_depth_choice_changed` — mudança de profundidade
-- `_consolidation_example_paths` — exemplos de caminhos
-- `_update_depth_examples` — atualiza exemplos
-- `_update_consolidation_summary` — resumo
-- `_mark_consolidation_preview_stale` — marca prévia stale
-
-**Problemas típicos:**
-| Sintoma | Arquivo |
-|---|---|
-| "Consolidação não junta nada" | `pages/consolidation_page.py` + `services.py:ConsolidationService` |
-| "Ordem errada" | `services.py` (ordenação) |
-| "Arquivo consolidado mal formatado" | `services.py:demote_headings` + `markdown.py` |
-| "Índice do pacote errado" | `storage.py:PACKAGE_INDEX_NAME` + `services.py` |
-| "Profundidade não respeita" | `pages/consolidation_page.py` + `services.py` |
-
----
-
-## 8. RESULTADOS — Pós-extração
-
-**Arquivo da tela:** `alquimista/ui/pages/results_page.py`
-**Método na MainWindow:** `_results_page`, `_output_page`
-**Núcleo:** `reports.py` — geração de relatórios
-**Serviço:** `services.py` — gera `FAILURES_NAME`/`REPORT_NAME`
-
-**Problemas típicos:**
-| Sintoma | Arquivo |
-|---|---|
-| "Relatório não mostra falhas" | `pages/results_page.py` + `reports.py` |
-| "Lista incompleta" | `reports.py` + `services.py` |
-| "Não abre pasta de saída" | `pages/results_page.py` (QDesktopServices) |
-
----
-
-## 9. CONFIGURAÇÕES — Preferências globais
-
-**Método na MainWindow:** `_settings_page`
-**Visual:** `theme.py`
-
-**Problemas típicos:**
-| Sintoma | Arquivo |
-|---|---|
-| "Tema não aplica" | `theme.py` + `main_window.py:_settings_page` |
-| "Preferência não salva" | `main_window.py` + `models.py:ProjectConfig` |
-
----
-
-## NÚCLEO — Referência rápida por arquivo
-
-### models.py — Contrato de dados (19.4 KB, 480 linhas)
-Contrato central do pydantic. `SCHEMA_VERSION = 4` — incrementar ao mudar a serialização (invalida manifestos antigos).
+`SCHEMA_VERSION = 4` — incrementar ao mudar serialização (invalida manifestos antigos).
 
 | Classe/Função | Responsabilidade |
 |---|---|
-| `AuthMode` (StrEnum) | Modos: `public`/`basic`/`bearer`/`browser`. |
-| `ConnectorStatus` (StrEnum) | Status do conector: `active`/`inactive`. |
-| `EntryStatus` (StrEnum) | Status da entrada do manifest. |
-| `Model` | BaseModel pydantic base de todos os modelos (config serialização). |
-| `ConnectorCapabilities` | Capacidades do conector (lazy, search, root_documents). |
-| `KnowledgeSource` | Fonte de conhecimento (conector + containers). |
-| `KnowledgeContainer` | Contêiner (espaço/seção/categoria). |
-| `KnowledgeDocumentMetadata` | Metadados de documento (sem conteúdo). |
-| `KnowledgeDocument` | Documento com conteúdo. |
-| `KnowledgeSelection` | Seleção do usuário. |
-| `SourceConfig` | Configuração de uma fonte (URL, tipo, auth, root_mode, root_value). |
-| `MarkdownOptions` | Opções de conversão Markdown (frontmatter, títulos, imagens, links). |
-| `ExtractionOptions` | Opções de extração (página por arquivo, override, etc.). |
-| `ConsolidationOptions` | Opções de consolidação (arquivo único/pacote/índice, ordenação, prefixos). |
-| `ProjectConfig` | Projeto completo: `sources[]`, `options`, metadados. |
-| `ManifestEntry` | Entrada do manifest (uma página extraída: key, status, hashes). |
-| `ManifestDocument` | Documento do manifest (lista de `ManifestEntry`). (Não confundir com `MarkdownDocument` legado.) |
-| `validate_source_identifier(value)` | Valida identificador de fonte via `SOURCE_ID_PATTERN`. |
-| `stable_json_hash(data)` | Hash estável p/ comparação incremental (independe de ordem de chaves). |
-| `slugify(value, maxlen=80)` | Normaliza string p/ nome de arquivo. |
-| `now_iso()` | Timestamp ISO atual (UTC). |
-| `default_project()` | Projeto padrão vazio. |
+| `AuthMode` (StrEnum) | Modos: `public`, `browser_session`, `basic`, `bearer` |
+| `ConnectorStatus` (StrEnum) | `available`, `experimental`, `development`, `disabled`, `unavailable` |
+| `EntryStatus` (StrEnum) | Status de entradas do manifest (12 valores) |
+| `Model` (BaseModel) | Base pydantic com `extra="ignore"`, `validate_assignment=True` |
+| `ConnectorCapabilities` | 18 flags booleanas de capacidades |
+| `KnowledgeAttachment` | Anexo de documento |
+| `KnowledgeSource` | Fonte: type, name, base_url |
+| `KnowledgeContainer` | Contêiner: espaço/seção/categoria |
+| `KnowledgeDocumentMetadata` | Metadados sem conteúdo |
+| `KnowledgeDocument` | Documento completo com conteúdo |
+| `KnowledgeSelection` | Seleção: source_id/container_id/document_id |
+| `SourceConfig` | Configuração de fonte (URL, tipo, auth, root, connector_options) |
+| `MarkdownOptions` | 37 opções de conversão + presets (minimum/recommended/traceability/rag) |
+| `ExtractionOptions` | Timeout, retry, proxy, lazy budgets, path_layout |
+| `ConsolidationOptions` | Grouping, sort, limits, separators, demote_headings |
+| `ProjectConfig` | Projeto: sources[], selections[], markdown, extraction, consolidation |
+| `ManifestEntry` | Entrada do manifest (hashes, status, metadata) |
+| `ManifestDocument` | Documento do manifest (lista de entradas) |
+| `stable_json_hash(data)` | Hash SHA-256 estável (sort_keys) |
+| `slugify(value)` | Normaliza string → nome de arquivo |
+| `now_iso()` | Timestamp ISO UTC |
+| `default_project()` | Projeto padrão vazio |
 
-**Regra de ouro:** ao adicionar/remover campos, mantenha `stable_json_hash` compatível para não invalidar manifestos existentes.
+**Regra:** ao adicionar/remover campos, mantenha `stable_json_hash` compatível.
 
-### services.py — Motor de domínio (52.7 KB, 1145 linhas)
-O coração do pipeline de extração e consolidação. Cada classe orquestra conectores, markdown e storage.
+**Callers:** praticamente todo o pacote depende de `models.py`.
 
-| Classe/Função | Responsabilidade |
-|---|---|
-| `SourceRuntime` | Runtime por fonte: empacota conector + manifest parcial + cancelamento. |
-| `SourceRuntime.is_generic` | Indica modo genérico (seleção não-lazy) vs legado. |
-| `SourceRuntime.selected_document_keys` | Documentos marcados pelo usuário (keys estáveis). |
-| `sanitize_filename(value, maximum=120)` | Normaliza nome de arquivo (remove acentos, junto). |
-| `ExtractionService` | Extração de páginas via conector + escrita atômica via `FileTransaction`. |
-| `ExtractionService.run` / `_run` | Ponto de entrada: despacha `_run_generic` ou `_run_legacy`. |
-| `ExtractionService._run_generic` | Modo genérico: extrai selecionados, converte via `KnowledgeDocumentRenderer`, atualiza manifest. |
-| `ExtractionService._run_legacy` | Modo legado (Confluence antigo): extração síncrona sem lazy. |
-| `ExtractionService._relative_page_path` | Caminho relativo da página no diretório de saída. |
-| `ExtractionService._metadata_hash` / `_summary_metadata_hash` | Hash de metadados p/ detectar mudança (atualização incremental). |
-| `ExtractionService._structured_report` | Monta `ExecutionReport` a partir dos resultados. |
-| `demote_headings(markdown, levels)` | Rebaixa todos os cabeçalhos Markdown em `levels` (usado na consolidação). |
-| `ConsolidationService` | Consolidação em arquivo único / pacote / índice. |
-| `ConsolidationService.preview` | Prévia do resultado da consolidação (sem gravar). |
-| `ConsolidationService.run` / `_run` | Dispara consolidação real (grava via `FileTransaction`). |
-| `ConsolidationService._group_key` | Agrupa entradas por fonte/espaço/sessão conforme opções. |
-| `ConsolidationService._entries` | Carrega `ManifestDocument` + filtra entradas selecionadas. |
-| `ConsolidationService._page_text` | Lê o Markdown gravado de uma entrada. |
-| `ConsolidationService._sort` | Ordena entradas (por título, data, manual, etc.). |
-| `ConsolidationService._estimate_overhead` | Estima overhead de cabeçalhos para calcular tamanho final. |
-| `ConsolidationService._unique_package_filename` | Evita colisão de nome de arquivo no pacote. |
+---
 
-**Sintoma-chave:** "extração não grava nada" → `ExtractionService._run_generic`/`_run` + `FileTransaction.commit`. "consolidação faltam páginas" → `_entries`/`_group_key` filtraram.
+## 2. PERSISTÊNCIA E STORAGE
 
-**Dependências:** `ExtractionService` depende de `connectors/<plataforma>.py` (conector), `markdown.py` (`KnowledgeDocumentRenderer`), `storage.py` (`FileTransaction`, `ManifestStore`) e `runtime.py` (`CancellationToken`). `ConsolidationService` depende de `storage.py` (`ManifestStore`, `PACKAGE_INDEX_NAME`), `markdown.py` (`demote_headings`) e `models.py` (`ConsolidationOptions`).
-
-### storage.py — Persistência atômica (12.9 KB, 262 linhas)
-Todas as escritas são **atómicas** (tmp + rename). `FileTransaction` acumula mudanças e só grava no `commit`.
+### storage.py (314 linhas, 14KB)
 
 | Função/Classe | Responsabilidade |
 |---|---|
-| `confined_path(base, relative)` | Protege path traversal — rejeita `..` e caminhos fora de `base`. |
-| `atomic_write_text(path, content, backup=False)` | Escrita atômica de texto (tmp + rename). `backup` preserva `.bak`. |
-| `atomic_write_json(path, data, backup=False)` | Escrita atômica de JSON (usa `atomic_write_text` + `json.dumps`). |
-| `FileTransaction` | Transação de arquivos: `stage_text`/`stage_json`/`stage_delete` acumulam; `commit` grava tudo de uma vez. |
-| `FileTransaction.stage_text` / `stage_json` / `stage_delete` | Adiciona operação à transação (não grava ainda). |
-| `FileTransaction.commit` | Efetiva: renomeia todos os tmp e remove os deletados. |
-| `FileTransaction.close` | Aborta transação (remove tmp sem gravar). |
-| `load_json(path, default=None)` | Carrega JSON; retorna `default` se não existir. |
-| `save_project(path, project)` | Salva `ProjectConfig` (via `atomic_write_json`). |
-| `load_project(path)` | Carrega `ProjectConfig`; migra schemas antigos se preciso. |
-| `ManifestStore` | Store do manifest (`manifesto_alquimista.json`): carrega e salva `ManifestDocument`. |
-| `MANIFEST_NAME` / `MANIFEST_INDEX_NAME` / `FAILURES_NAME` / `REPORT_NAME` / `PACKAGE_INDEX_NAME` | Nomes canônicos dos arquivos de saída. |
+| `confined_path(base, relative)` | Proteção contra path traversal |
+| `atomic_write_text/json(path, content)` | Escrita atômica (tmp + rename) |
+| `FileTransaction` | Transação: `stage_text`, `stage_json`, `stage_delete`, `commit`, `close` |
+| `load_json(path, default)` | Carrega JSON com fallback |
+| `save_project/load_project` | CRUD de `ProjectConfig` com migração de schema |
+| `ManifestStore` | Store do manifest (`manifesto_alquimista.json`) |
+| Constantes: `MANIFEST_NAME`, `MANIFEST_INDEX_NAME`, `FAILURES_NAME`, `REPORT_NAME`, `PACKAGE_INDEX_NAME` | Nomes canônicos |
 
-**Sintoma-chave:** "arquivo gravado mas desaparece" → `commit` não foi chamado (transação abortou). "arquivo temporário sobra" → transação não fechou.
+**Dependências:** `errors.py`, `manifest_index.py`, `models.py`.
+**Callers:** `services/extraction.py`, `services/consolidation.py`, `controllers/project_controller.py`.
 
-**Dependências:** `FileTransaction` é usado por `services.py` (`ExtractionService`, `ConsolidationService`). `save_project`/`load_project` consomem `models.py` (`ProjectConfig`). `ManifestStore` consome `models.py` (`ManifestDocument`). `confined_path` protege todos os caminhos de saída contra path traversal.
+### manifest_index.py (45 linhas, 4KB)
 
-### connectors/confluence.py — Conector de referência (25.3 KB, 625 linhas)
-O conector mais completo. Implementa o ABC `KnowledgeSourceConnector` com lazy loading, busca e detecção de visibilidade.
-
-| Método/Função | Responsabilidade |
-|---|---|
-| `ConfluenceRestConnector.__init__(...)` | Configura URL, auth, root, `ConfluenceClient`. |
-| `get_source_type` / `get_source` / `get_capabilities` | Metadados do conector. |
-| `validate_connection` | Testa conexão/credencial (botão "Testar conexão"). |
-| `list_containers` | Lista espaços (`KnowledgeContainer[]`). |
-| `_client_for_container(container_id)` | Cria `ConfluenceClient` p/ o contêiner. |
-| `list_documents(container_id)` | Lista páginas-raiz de um espaço. |
-| `get_document(document)` | Conteúdo de uma página (via `ConfluenceClient.fetch_page`). |
-| `get_document_children(document)` | Filhos de uma página (síncrono). |
-| `_lazy_request(...)` / `_collect_lazy_pages(...)` | **Motor de paginação** com cursor (lazy loading). |
-| `list_root_documents` / `list_document_children` | Raízes e filhos no modo lazy. |
-| `search_documents(query)` | Busca por texto (CQL). |
-| `normalize_document(raw)` | Converte documento cru em `KnowledgeDocument`. |
-| `_metadata` / `_browser_metadata` | Constrói metadados a partir de payload cru. |
-| `_discovery_metadata` | Metadados p/ o subsistema browser (lazy discovery). |
-| `_explicit_visibility(page)` | Detecção público/privado (campo restrictions). |
-| `_visibility_from_restriction_payload(payload)` | Detecção por payload de restrição (view/edit). |
-| `_explicit_has_children(page)` | Indica se a página tem filhos (p/ ícone de expandir). |
-| `_ordered_pages(client, container_id)` | Ordena páginas por ancestralidade/posição. |
-| `close` | Fecha o cliente HTTP. |
-
-**Sintoma-chave:** "páginas não carregam/buscam/expandem" → este arquivo. "extração de conteúdo falha" → `get_document` + `client.py:fetch_page`.
-
-**Dependências:** `ConfluenceRestConnector` depende de `connectors/http.py` (`ApiHttpClient`), `connectors/base.py` (ABC), `client.py` (`ConfluenceClient`), `models.py` (`KnowledgeDocument`, `KnowledgeContainer`) e `browser/cache.py` (cache de discovery quando aplicável).
-
-### ui/tree_models.py — Dados→árvore
-| Função | Responsabilidade |
-|---|---|
-| `page_container_id` | Id do contêiner |
-| `tree_pages` | Páginas planas de `data` |
-| `ordered_pages` | Ordena páginas |
-| `tree_containers` | Contêineres para raiz |
-| `lazy_state` | Estado de cursor lazy |
-
-### errors.py — Hierarquia de erros tipados
-Erros **funcionais** (não crash). A UI captura e mostra amigavelmente. Use o erro mais específico no `raise`.
-
-| Classe | Quando usar / capturar |
-|---|---|
-| `AlquimistaError` | Base de todos os erros funcionais. `except AlquimistaError` pega tudo. |
-| `AuthenticationError` | Falha de login/token. UI mostra "não autenticado". |
-| `PermissionDeniedError` | Usuário sem acesso ao recurso. |
-| `ResourceNotFoundError` | Página/espaço não existe (404). |
-| `ApiConnectionError` | Falha genérica de conexão com API (reutilizável p/ qualquer conector). |
-| `ApiRateLimitError` | API retornou 429 / limite excedido. |
-| `ConfluenceConnectionError` | Falha específica de Confluence (legado). |
-| `RateLimitError` | Rate limit específico de Confluence (legado). |
-| `InvalidResponseError` | Confluence devolveu JSON inválido. |
-| `InvalidProjectError` | `ProjectConfig` inválido (campo obrigatório faltando). |
-| `ManifestError` | Manifest corrompido / incompatível. |
-| `StorageError` | Falha de leitura/escrita em disco. |
-| `ExtractionCancelledError` | Usuário cancelou a extração (não é bug). |
-
-**Dica didática:** ao adicionar tratamento de erro numa tela, capture o erro mais específico, não `AlquimistaError`. Ex.: `except ApiRateLimitError` para mostrar "aguarde e tente de novo".
-
-### runtime.py — Cancelamento e rate limit
-| Classe/Função | Responsabilidade |
-|---|---|
-| `CancellationToken` | Cancelamento cooperativo entre threads. Métodos: `cancel()`, `cancelled`, `check()` (levanta se cancelado), `wait(seconds)`. |
-| `RateLimiter` | Limita requisições/segundo com suporte a cancelamento. |
-| `ProgressCallback` | Type alias: `Callable[[int, int, str], None]` (atual, total, mensagem). Usado em todo o sistema p/ reportar progresso. |
-| `LogCallback` | Type alias: `Callable[[str], None]`. Para mensagens de log no worker. |
-
-**Onde aparece:** passado a quase todo método de extração. Se "extração não cancela" ou "progresso não atualiza", o token/callback foi ignorado no chamador.
-
-### selection.py — Estado de seleção do usuário
-| Classe/Função | Responsabilidade |
-|---|---|
-| `SelectionStore` | Estado de seleção **independente do Qt**. Sobrevive a troca de aba porque não é widget. |
-| `SelectionStore.set(key, value)` | Marca/desmarca item. Chave = `(source, container, document)`. |
-| `SelectionStore.is_selected(key)` | Consulta se está selecionado. |
-| `SelectionStore.keys_for_source(source)` | Todas as chaves de uma fonte. |
-| `SelectionStore.selections()` | Lista de seleções para extração. |
-| `SelectionStore.count_by_container(source_id=None)` | Conta seleções agrupadas por (source, container). |
-| `SelectionStore.clear()` | Limpa toda a seleção. |
-| `SelectionStore.from_selections(list)` | Cria store a partir de lista. |
-
-**Sintoma-chave:** "seleção some ao trocar de aba" → seElect/store não está sendo usado; widget guarda estado local que some.
-
-### session_store.py — Persistência local criptografada de sessão (DPAPI)
-Cookies e estado de sessão de browser são persistidos localmente e criptografados com **Windows DPAPI** (`CryptProtectData`). **Não contém credenciais de API** — tokens bearer e segredos ficam em memória, em `controllers.py:RuntimeSecrets`, e nunca são serializados. O `session_store.py` apenas persiste a sessão de browser entre execuções para reaproveitar login (logout via `delete_session`).
-
-| Função | Responsabilidade |
-|---|---|
-| `session_directory()` | Caminho seguro (anti path traversal) da pasta de sessões. |
-| `session_path(source_id)` | Caminho do arquivo de sessão de uma fonte. |
-| `save_session(source_id, state)` | Grava sessão criptografada com DPAPI. |
-| `load_session(source_id)` | Carrega e descriptografa sessão. |
-| `session_exists(source_id)` | Verifica se existe sessão salva. |
-| `delete_session_file(source_id)` | Remove arquivo de sessão (logout). |
-| `_crypt_protect` / `_crypt_unprotect` | Wrappers de Windows DPAPI (não usar diretamente). |
-| `_DataBlob` | Struct ctypes para interoperar com DPAPI. |
-
-**Sintoma-chave:** "credencial não persiste entre sessões" → por design para tokens; já "login pelo navegador perdeu sessão" → verifica DPAPI/disponibilidade do `LOCALAPPDATA`.
-
-### source_detection.py — Detecção de plataforma por URL
-| Classe/Função | Responsabilidade |
-|---|---|
-| `DetectedSource` | Dataclass: `source_type`, `display_name`, `base_url`, `api_name`, `space_key`, `space_name`, `root_mode`, `root_value`. |
-| `detect_source_url(value)` | Detecta plataforma **sem chamada de rede** (parser de URL). Reconhece: Confluence, Notion (`api.notion.com`), GitBook, Zendesk, SharePoint. |
-| `_extract_notion_id(path)` | Extrai ID 32-hex de URLs Notion. |
-| `_origin(parsed)` | Normaliza origem (scheme/host). |
-| `_last_path_value(path)` | Último segmento da URL. |
-
-**Sintoma-chave:** "não detecta plataforma X pela URL" → adicione/ajuste padrão aqui. Normalmente não é necessário alterar o conector.
-
-### confluence_url.py — Parse de URLs Confluence
-| Classe/Função | Responsabilidade |
-|---|---|
-| `ParsedConfluenceUrl` | Dataclass: `base_url`, `space_key`, `root_mode`, `root_value`, `title`, `page_id`, `entire_space`. |
-| `parse_confluence_url(value)` | Aceita múltiplos formatos: `/display/SPACE/Title`, `/spaces/SPACE/pages/ID`, query params `pageId`/`spaceKey`. |
-
-**Onde aparece:** base de `source_detection.py` para Confluence. Se "URL Confluence não parseia", comece aqui.
-
-### manifest_index.py — Índice SQLite do manifest
-| Classe/Função | Responsabilidade |
-|---|---|
-| `ManifestIndex` | Índice sidecar SQLite para lookup rápido em manifestos grandes. |
-| `ManifestIndex.rebuild(document)` | Reconstrói atomicamente a partir do JSON (fonte da verdade). Cria tabela `manifest_entries` com `document_key` como PK. |
-
-**Por que importa:** atualização incremental e revisão dependem desse índice. Se "atualização incremental não detecta mudança", o índice pode estar desatualizado — `rebuild` recria do JSON.
-
-### auth.py — Autenticação interativa (browser)
-| Função | Responsabilidade |
-|---|---|
-| `browser_login(source, ready, token, timeout_seconds)` | Login OAuth interativo via Playwright. Abre navegador, espera, fecha. |
-| `_authenticated_identity(payload)` | Valida se o payload de login tem identidade real (não anônimo). |
-| `delete_session(source)` | Remove sessão salva (logout). |
-| `_browser_session_closed(browser, page)` | Detecta se sessão foi fechada manualmente. |
-
-**Sintoma-chave:** "login pelo navegador não abre/fecha/trava" → `browser_login` + `browser/service.py`.
-
-**Dependências:** `browser_login` usa `browser/service.py` (Playwright) e persiste sessão via `session_store.py` (DPAPI). `delete_session` remove a sessão persistida. Tokens bearer ficam em `controllers.py:RuntimeSecrets` (memória), não neste módulo.
-
-### logging_utils.py — Logs JSON com redação de segredos
-| Classe/Função | Responsabilidade |
-|---|---|
-| `JsonFormatter` | Formatador de log em JSON com timestamp ISO. |
-| `redact(value)` | Mascara `authorization`, `bearer`, `token`, `password`, `senha`, `cookie`, `secret` → `***`. |
-| `SENSITIVE` | Regex de detecção de segredos. |
-| `configure_logging(log_path)` | Configura logger "alquimista" com handler de arquivo UTF-8. Fallback p/ temp se pasta não gravável. |
-| `default_log_path()` | Caminho padrão (`LOCALAPPDATA\ALQuimista Studio`). |
-
-**Sintoma-chave:** "vazamento de segredo em log" → redação aqui. **Nunca** logue headers de Authorization brutos.
-
-### reports.py — Relatórios de execução
 | Classe | Responsabilidade |
 |---|---|
-| `DocumentResult` | Resultado de uma página (sucesso/falha, erro, caminho). |
-| `ContainerReport` | Relatório por contêiner (espaço/seção). |
-| `SourceReport` | Relatório por fonte. |
-| `ExecutionReport` | Relatório estável (pydantic) consumido pela tela de Resultados e exportável a JSON. |
-
-**Onde aparece:** `services.py` gera `ExecutionReport`; `results_page.py` consome. Se "relatório não mostra falhas", verifique `DocumentResult` preenchido aqui.
-
-### client.py — Cliente REST legado Confluence (21.1 KB, 513 linhas)
-Cliente REST de baixo nível para Confluence. Conectores usam este via `ConfluenceRestConnector`.
-
-| Método/Função | Responsabilidade |
-|---|---|
-| `session_directory()` / `session_path(source_id)` | Caminhos de sessão (legado; `session_store.py` é o atual). |
-| `ConfluenceClient.__init__(...)` | Configura URL/auth, cria sessão HTTP. |
-| `ConfluenceClient.base_url` | URL base normalizada. |
-| `_configure_session` / `close` / `__enter__` / `__exit__` | Session HTTP + context manager. |
-| `_retry_delay(response, attempt)` | Backoff exponencial + jitter para 429/5xx. |
-| `_request(...)` | **Motor de requisições** com retry, rate limit e cancelamento. |
-| `test_connection` | Testa conexão (GET no endpoint base). |
-| `list_spaces(maximum=1000)` | Lista espaços. |
-| `list_pages(maximum=5000)` | Lista todas as páginas (top-level). |
-| `_list_content_page(...)` | Paginação interna de conteúdo. |
-| `list_root_pages` / `list_child_pages` | Raízes e filhos de uma página. |
-| `fetch_page(page_id)` | **Busca conteúdo de uma página** (HTML + metadados). |
-| `fetch_tree` | Busca árvore de páginas de uma vez (modo síncrono antigo). |
-| `fetch_html_fallback(page_id)` | Fallback de HTML quando a API principal falha. |
-| `search_pages(query)` | Busca por texto (CQL). |
-| `resolve_root` | Resolve a raiz de extração (root_mode/root_value). |
-| `_enrich_page_restrictions(page)` / `_has_restriction_details` / `_read_restriction_payload` | Enriquece página com restrições (p/ visibilidade). |
-| `source_url(base_url, page)` | Monta URL canônica de uma página. |
-| `_deduplicate(items)` | Remove duplicatas de listas de páginas. |
-
-**Onde aparece:** usado por `ConfluenceRestConnector`. **Prefira `connectors/confluence.py`** para código novo. Aqui só se a camada HTTP estiver com problema (timeout, retry, rate limit).
-
-### markdown.py — Conversão HTML→Markdown (22.3 KB, 476 linhas)
-Converte HTML de páginas em Markdown. Lida com Confluence macros, anexos, links, tabelas.
-
-| Função/Classe | Responsabilidade |
-|---|---|
-| `normalize_markdown(text)` | Normaliza espaços/quebras do Markdown final. |
-| `format_updated_at(value)` | Formata timestamp ISO p/ exibição. |
-| `sha256_text(text)` | Hash p/ dedup de imagens/conteúdo/identidade incremental. |
-| `_normalize_ancestors(value)` | Normaliza lista de ancestores de uma página. |
-| `relative_ancestor_titles(page, root_id)` | Títulos de ancestores relativos à raiz de extração (ignora acima da raiz). |
-| `page_metadata(...)` | Extrai metadados (título, ancestors, data, space) p/ frontmatter. |
-| `MarkdownTransformer` | Classe principal: HTML → Markdown com `MarkdownOptions`. |
-| `MarkdownTransformer._attachment_url(page_id, filename)` | Monta URL de anexo de Confluence. |
-| `MarkdownTransformer._replace_links(soup, page_id)` | Substitui links internos do Confluence por links relativos (se local). |
-| `MarkdownTransformer._replace_macros(soup, page_id)` | Substitui macros do Confluence (códã, info, etc.) por Markdown. |
-| `MarkdownTransformer.technical_markdown(page)` | Markdown técnico (sem frontmatter). |
-| `MarkdownTransformer.hash_input(metadata, technical)` | Hash do conteúdo p/ atualização incremental. |
-| `MarkdownTransformer.full_document(...)` | Documento completo (frontmatter + corpo). |
-| `MarkdownTransformer.knowledge_document_metadata(...)` | Metadados no formato `KnowledgeDocument`. |
-| `KnowledgeDocumentRenderer` | Renderiza `KnowledgeDocument` aplicando `MarkdownOptions` (frontmatter, níveis de cabeçalho, etc.). |
-| `KnowledgeDocumentRenderer.render(...)` | Renderiza documento completo com opções. |
-| `sample_page()` | Página de exemplo p/ prévia da tela Markdown. |
-
-**Sintoma-chave:** "tabelas/links/imagens/macros saem errados" → `MarkdownTransformer` (métodos `_replace_*`). "frontmatter errado" → `page_metadata`. "prévia da tela não funciona" → `sample_page`.
-
-**Dependências:** `MarkdownTransformer` consome `models.py` (`MarkdownOptions`) e é chamado por `services.py` (`ExtractionService._run_generic` via `KnowledgeDocumentRenderer`). `sample_page` alimenta a prévia em `main_window.py:_update_preview`.
-
-### models.py — Classes adicionais (complemento)
-A tabela anterior lista o essencial. O modelo tem ainda (pydantic `BaseModel`):
-
-| Classe/Função | Responsabilidade |
-|---|---|
-| `ConnectorStatus` (StrEnum) | Status do conector (active/inactive). |
-| `EntryStatus` (StrEnum) | Status da entrada do manifest. |
-| `ConnectorCapabilities` | Capacidades do conector (lazy, search, root_documents). |
-| `KnowledgeSource` | Fonte de conhecimento (conector + containers). |
-| `KnowledgeContainer` | Contêiner (espaço/seção/categoria). |
-| `KnowledgeDocumentMetadata` | Metadados de documento (sem conteúdo). |
-| `KnowledgeDocument` | Documento com conteúdo. |
-| `KnowledgeSelection` | Seleção do usuário. |
-| `ManifestDocument` | Documento do manifest (não confundir com `MarkdownDocument` legado). |
-| `validate_source_identifier(value)` | Valida identificador de fonte. |
-
-> _Dica: ao adicionar um campo a qualquer modelo, a serialização (`from_dict`/`to_dict`) e o `stable_json_hash` precisam continuar estáveis para não invalidar manifestos antigos._
-
+| `ManifestIndex` | Índice SQLite sidecar. `rebuild(document)` reconstrói atomicamente. |
 
 ---
 
-## CONECTORES — Referência por plataforma
-Cada conector implementa o ABC `KnowledgeSourceConnector`.
+## 3. SERVIÇOS (MOTOR DE DOMÍNIO)
 
-> **Atenção — possível desatualização:** os conectores são a parte mais volátil do projeto. Antes de editar, confirme assinaturas e campos em `connectors/base.py` e `models.py`. Se a tabela abaixo divergir do código, o código prevalece; atualize o mapa.
+### services/extraction.py — ExtractionService (~48KB, maior arquivo do pacote)
 
-Confluence é o mais completo; os demais seguem o mesmo contrato mas podem não ter lazy loading.
-
-### connectors/base.py — Contrato ABC comum
 | Método | Responsabilidade |
 |---|---|
-| `get_source_type()` | String única da plataforma (ex.: `confluence_rest`). |
-| `get_source()` | Metadados da fonte (`KnowledgeSource`). |
-| `get_capabilities()` | `ConnectorCapabilities` (lazy? search? root_documents?). |
-| `validate_connection()` | Testa conexão/credencial. Usado pelo botão "Testar conexão". |
-| `list_containers()` | Lista espaços/seções/categorias. |
-| `list_documents(container)` | Lista páginas-raiz de um contêiner. |
-| `get_document(document)` | Conteúdo de uma página. |
-| `list_root_documents()` | (opcional) Raízes lazy. |
-| `list_document_children(document)` | (opcional) Filhos lazy. |
-| `search_documents(query)` | (opcional) Busca por texto. |
+| `ExtractionService(project, runtimes, project_dir)` | Construtor |
+| `run() / _run()` | Despacha `_run_generic` ou `_run_legacy` |
+| `_run_generic()` | Extração moderna: fetch → KnowledgeDocumentRenderer → FileTransaction |
+| `_run_legacy()` | Extração legada (Confluence antigo, sem lazy) |
+| `_relative_page_path()` | Caminho relativo no output |
+| `_metadata_hash() / _summary_metadata_hash()` | Hash para detecção incremental |
+| `_structured_report()` | Monta `ExecutionReport` |
 
-**Adicionar novo conector:** crie classe herdando de `KnowledgeSourceConnector`, registre em `registry.py`, adicione spec em `ui/connector_forms.py` e detector em `source_detection.py`.
+**Dependências:** `connectors/<plataforma>.py`, `markdown/renderer.py`, `storage.py`, `runtime.py`.
+**Callers:** `ui/controllers/execution_controller.py`.
 
-**Checklist de validação (`tests/`):**
-1. Cadastre a nova fonte na UI e salve o projeto (.alquimista) → recarregue, confirme persistência.
-2. "Testar conexão" com credencial válida e inválida (erro esperado e tratado).
-3. Carregue a árvore de seleção (síncrono e, se aplicável, lazy) e expanda um contêiner.
-4. Extraia 1–2 páginas e verifique o método `get_document` no `manifest_index.json`.
-5. Rode `pytest tests/ -k <conector>` e `tests/test_registry.py` se existirem.
-6. Gere o relatório de execução via `reports.py` e confira a presença do novo `source_type`.
+### services/consolidation.py — ConsolidationService (~16KB)
 
-### connectors/http.py — API HTTP compartilhada
+| Método | Responsabilidade |
+|---|---|
+| `preview()` | Prévia sem gravar |
+| `run() / _run()` | Consolida e grava via FileTransaction |
+| `_group_key()` | Agrupa por fonte/espaço/módulo |
+| `_entries()` | Filtra entradas elegíveis |
+| `_sort()` | Ordena (path/title/updated/id) |
+
+**Callers:** `ui/controllers/consolidation_controller.py`, `ui/controllers/execution_controller.py`.
+
+### services/reconciliation.py — InventoryReconciliationService
+
+Compara manifest local com fonte remota; marca `REMOVED` entradas deletadas remotamente.
+
+### services/runtime.py — SourceRuntime, SelectedDocumentRef
+
 | Classe | Responsabilidade |
 |---|---|
-| `ApiHttpClient` | HTTP compartilhado: **exige HTTPS**, retries com backoff exponencial+jitter, respeita `RateLimiter` e `CancellationToken`, **nunca loga Authorization**. |
+| `SourceRuntime` | Empacota conector + manifest parcial + cancelamento por fonte |
+| `SelectedDocumentRef` | Referência a documento selecionado |
 
-**Sintoma-chave:** "timeout", "rate limit", "conexão recusada" em **qualquer** conector → `ApiHttpClient`. Normalmente a correção fica no cliente HTTP, não no conector.
+### services/helpers.py
 
-### connectors/registry.py — Catálogo e instanciação
-| Classe/Função | Responsabilidade |
+| Função | Responsabilidade |
 |---|---|
-| `ConnectorDescriptor` | Frozen dataclass: metadados do conector (`source_type`, classe, status). |
-| `ConnectorRegistry` | Catálogo de conectores por `source_type`. Normaliza status legado p/ `ConnectorStatus`. |
-| `default_registry()` | Instância singleton com todos os conectores registrados. |
-
-**Sintoma-chave:** "conector não aparece" ou "não registrado" → `registry.py`.
-
-### connectors/gitbook.py
-| Classe/Função | Responsabilidade |
-|---|---|
-| `GitBookConfig` | Pydantic: valida `organization_id`, aceita `access_token`. |
-| `GitBookConnector` | Implementa `KnowledgeSourceConnector` via `ApiHttpClient`. `page_limit` até 1000. |
-
-### connectors/notion.py
-| Classe/Função | Responsabilidade |
-|---|---|
-| `NotionConnector` | `SOURCE_TYPE="notion_api"`. Header `Notion-Version: 2022-06-28`. Via `ApiHttpClient`. |
-
-### connectors/sharepoint.py
-| Classe/Função | Responsabilidade |
-|---|---|
-| `SharePointConnector` | `SOURCE_TYPE="sharepoint_graph"`. Usa Microsoft Graph (`graph.microsoft.com/v1.0`). |
-
-### connectors/zendesk.py
-| Classe/Função | Responsabilidade |
-|---|---|
-| `ZendeskConfig` | Pydantic: valida `subdomain`, `page_size` até 100. |
-| `ZendeskGuideConnector` | Converte HTML do Help Center via `BeautifulSoup`+`markdownify`. |
+| `sanitize_filename(value)` | Normaliza nomes de arquivo |
+| `demote_headings(md, levels)` | Rebaixa cabeçalhos Markdown |
 
 ---
 
-## BROWSER — Navegador embutido (Playwright)
-Subsistema de discovery com cache. ** importante:** contratos são serializáveis mas **sem credenciais, sem conteúdo de documento**.
+## 4. CONECTORES
 
-### browser/contracts.py — Tipos de discovery
+### connectors/base.py — ABC KnowledgeSourceConnector
+
+| Método | Tipo |
+|---|---|
+| `get_source_type()` | Obrigatório |
+| `get_source()` | Obrigatório |
+| `get_capabilities()` | Obrigatório |
+| `validate_connection()` | Obrigatório |
+| `list_containers()` | Obrigatório |
+| `list_documents(container_id)` | Obrigatório |
+| `get_document(document, container_id)` | Obrigatório |
+| `get_document_children(document_id)` | Opcional |
+| `normalize_document(raw)` | Opcional |
+| `close()` | Opcional |
+
+### connectors/capabilities.py — Protocols
+
+| Protocol | Métodos |
+|---|---|
+| `HierarchicalDiscoveryConnector` | `list_root_documents`, `list_document_children` |
+| `SearchableConnector` | `search_documents` |
+| `MarkdownConfigurableConnector` | `configure_markdown` |
+
+### connectors/registry.py — Catálogo central (1177 linhas, 43KB)
+
 | Classe | Responsabilidade |
 |---|---|
-| `Visibility` (StrEnum) | Público/privado/restrito. |
-| `SpaceMetadata` | Metadados de espaço (sem credenciais). |
-| `DocumentMetadata` | Metadados de documento (sem conteúdo). |
-| `PageRequest` | Requisição de página (cursor/offset). |
-| `DiscoveryPage[T]` | Página genérica de resultados (cursor p/ próxima). |
-| `SearchResult` | Resultado de busca. |
-| `CancellationLike` | Protocol de cancelamento (compat com `CancellationToken`). |
-| `DiscoveryAdapter` | Protocol que conectores implementam p/ discovery. |
+| `ConnectorFormSpec` | Metadados de formulário UI |
+| `ConnectorCardSpec` | Metadados de card dashboard |
+| `ConnectorDescriptor` | Metadados completos: type, factory, capabilities, form, card, status |
+| `ConnectorRegistry` | Catálogo. `get(type)`, `create(config)`, `list()`, `list_operational()` |
+| `default_registry()` | Singleton com 28 conectores |
 
-### browser/service.py — Orquestração
-| Classe | Responsabilidade |
-|---|---|
-| `LazyDiscoveryService` | Orquestra discovery com cache, **síncrono** (thread-safe com `Lock`/`RLock`). TTL e `stale_if_error`. |
-| `CacheMissError` | Erro: `not-modified` sem cache local. |
+### connectors/http.py — ApiHttpClient
 
-### browser/adapters.py — Adaptação de conectores
-| Classe/Função | Responsabilidade |
-|---|---|
-| `ConnectorDiscoveryAdapter` | Adapta conectores ao contrato `DiscoveryAdapter`. |
-| `DiscoveryCapabilityError` | Conector não suporta lazy. |
-| `_offset(cursor)` | Converte cursor em offset. |
-| `_space_metadata` / `_document_page` / `_document_metadata` | Conversões de tipos. |
+HTTP compartilhado: HTTPS obrigatório, retry com backoff exponencial+jitter, rate limit, cancellation, nunca loga Authorization.
 
-### browser/cache.py — Cache SQLite durável
-| Função/Classe | Responsabilidade |
-|---|---|
-| `BrowserCache` | Cache SQLite de **apenas metadados**. |
-| `_SENSITIVE_PARTS` | Garante que cookies/content/body **nunca** sejam armazenados. |
-| `_query_key(query)` | Normaliza chave de busca. |
-| `_safe_metadata` / `_safe_space` / `_safe_document` | Sanitiza antes de gravar. |
+**Callers:** todos os conectores que usam APIs REST.
 
-**Sintoma-chave:** "cache desatualizado" → `BrowserCache` + TTL em `service.py`. "vazamento em cache" → `_SENSITIVE_PARTS`.
+### Tabela de conectores (28)
 
----
+| Conector | source_type | Auth | Hierárquico | Busca |
+|---|---|---|---|---|
+| Confluence | `confluence_rest` | Basic/Bearer | ✓ | ✓ |
+| Notion | `notion_api` | Bearer | ✓ | ✓ |
+| GitBook | `gitbook_api` | Bearer | | |
+| SharePoint | `sharepoint_graph` | Bearer | | |
+| Zendesk | `zendesk_guide` | Bearer | ✓ | |
+| Freshdesk | `freshdesk_solutions` | Bearer | | |
+| BookStack | `bookstack_api` | Bearer | ✓ | ✓ |
+| Outline | `outline_api` | Bearer | | |
+| Help Scout | `helpscout_docs` | Bearer | | |
+| Document360 | `document360_api` | Bearer | | |
+| GitHub Docs | `github_docs` | Bearer | | |
+| GitLab | `gitlab_docs` | Bearer | | |
+| Intercom | `intercom_api` | Bearer | | |
+| Salesforce | `salesforce_api` | Bearer | | |
+| HubSpot | `hubspot_api` | Bearer | | |
+| Helpjuice | `helpjuice` | Bearer | | |
+| Guru | `guru` | Bearer | | |
+| Slite | `slite` | Bearer | | |
+| MediaWiki | `mediawiki` | Público | | |
+| ReadMe | `readme` | Bearer | | |
+| WordPress | `wordpress` | Público/Bearer | | |
+| Ghost | `ghost` | Bearer | | |
+| Strapi | `strapi` | Bearer | | |
+| Contentful | `contentful_api` | Bearer | | |
+| Sanity | `sanity` | Bearer | | |
+| Local Files | `local_files` | — | | |
+| Generic Web | `generic_web` | Público | | |
+| Generic Docs | `generic_docs` | Público | | |
 
-## UI — Controllers e auxiliares
-Camadas entre `main_window.py` e o núcleo. Alguns são **sem Qt** (testáveis isoladamente).
-
-### ui/state.py — Estado mutável fora dos widgets
-| Classe | Responsabilidade |
-|---|---|
-| `MainWindowState` | Dataclass: `trees`, `selection_store`, `connected_sources`, `connection_states`, `last_result`, `last_consolidation_preview`, `operation_status`, `operation_error`. |
-
-**Sintoma-chave:** "perde estado entre telas" → aqui, não nos widgets.
-
-### ui/page_registry.py — Rotas → builders
-| Função | Responsabilidade |
-|---|---|
-| `page_builders(window)` | Mapeia rotas → builders: `dashboard`, `sources`, `connection`, `pages`/`selection` (mesmo builder), `markdown`, `consolidation`, `extraction`/`review`/`output` (mesmo builder), `results`, `settings`. |
-
-**Sintoma-chave:** "navegação quebrada/loop" → verifique aliases aqui (`pages`→`selection`, `extraction`/`review`/`output`→`review_page`).
-
-### ui/controllers.py — Segredos e runtimes
-| Classe | Responsabilidade |
-|---|---|
-| `RuntimeSecrets` | Segredos em **memória**, nunca serializados. Tokens bearer ficam aqui. |
-| `RuntimeBuilder` | `build_connectors()`: descobre contêineres e documenta runtimes. |
-
-**Sintoma-chave:** "token some ao salvar projeto" → por design (`RuntimeSecrets` não persiste).
-
-### ui/execution_controller.py — Preparação e disparo
-| Função | Responsabilidade |
-|---|---|
-| `prepare_runtimes(...)` | Prepara runtimes antes de extrair. |
-| `validated_project_snapshot(window)` | Valida `ProjectConfig`; retorna `None` se inválido. |
-| `run_extraction(...)` | Dispara extração. |
-| `execute_selected_operation(window)` | Executa operação selecionada (extração/consolidação). |
-| `retry_failures(window)` | Retenta falhas. |
-| `run_complete(window)` | Fluxo completo. |
-
-**Sintoma-chave:** "extração não inicia" → `validated_project_snapshot` rejeitou o projeto.
-
-### ui/operation_controller.py — Ciclo de vida do worker
-| Classe | Responsabilidade |
-|---|---|
-| `WorkerOperationController` | Dono do worker. `start()` rejeita se já existe worker ativo. Gerencia `operation_status`/`token`. |
-
-**Sintoma-chave:** "UI trava/congela" → worker ativo sem descartar (bug aqui ou chamador não chamou cleanup).
-
-### ui/process_workers.py — Workers em processo
-| Classe/Função | Responsabilidade |
-|---|---|
-| `WorkerMessage` | Frozen dataclass serializável (cross-process). |
-| `TaskContext` | Cancelamento cooperativo no child process. |
-| `ProcessWorker` | Worker em processo separado (multiprocessing `spawn`). |
-| `TaskSerializationError` | Erro de pickling. |
-| `TaskCancelled` | Cancelamento no child process. |
-| `_worker_main(...)` | Entry point do child process. |
-
-**Sintoma-chave:** "pickling falhou" ou "processo filho morre" → aqui. Objetos não serializáveis (ex.: widgets Qt) não podem ser passados.
-
-### ui/workers.py — Wrapper Qt para threadpool
-| Classe | Responsabilidade |
-|---|---|
-| `Worker(QRunnable)` | Wrapper Qt p/ QThreadPool. |
-| `WorkerSignals` | Sinais: `succeeded`, `failed(str, str)`, `progress(int,int,str)`, `log(str)`, `finished`. |
-
-**Sintoma-chave:** "progresso/log não chega à UI" → `WorkerSignals` não conectado ou payload não serializável.
-
-### ui/project_controller.py — CRUD de projeto (sem Qt)
-| Função | Responsabilidade |
-|---|---|
-| `resolve_project_dir(...)` | Resolve diretório do projeto. |
-| `validate_project_snapshot(project)` | Valida `ProjectConfig`. |
-| `load_project_file(path)` | Carrega `ProjectConfig`. |
-| `save_project_file(path, project)` | Salva `ProjectConfig`. |
-
-**Sintoma-chave:** "projeto não carrega/salva" → aqui antes de `storage.py`.
-
-### ui/source_controller.py — Normalização de fonte (sem Qt)
-| Função/Classe | Responsabilidade |
-|---|---|
-| `normalize_source_config(...)` | Constrói `SourceConfig` a partir de `DetectedSource`. |
-| `ComboDataProvider` | Protocol p/ data provider de combo de fontes. |
-| `source_by_index` / `source_by_identifier` / `source_by_combo` | Lookup de fonte por diferentes chaves. |
-| `build_source_snapshot` / `build_source_snapshots` | Snapshots p/ UI. |
-
-**Sintoma-chave:** "URL detectada mas fonte criada errada" → `normalize_source_config`.
-
-### ui/connector_forms.py — Especificação de formulários por conector
-| Classe/Função | Responsabilidade |
-|---|---|
-| `ConnectorFormSpec` | Dataclass: `url_label`, `url_placeholder`, `scope_label`, `supports_scope`, `supports_root`, `bearer_only`, `help_text`. |
-| `form_spec(source_type)` | Retorna spec por `source_type` (confluence_rest, gitbook_api, zendesk_guide, notion_api, sharepoint_graph). |
-
-**Sintoma-chave:** "campo errado aparece no formulário da fonte" → spec do conector aqui.
-
-### ui/theme.py — Cores e constantes visuais
-| Item | Responsabilidade |
-|---|---|
-| `LIGHT` / `DARK` | Dicionários de cores por tema. |
-| Constantes de card | `SOURCE_CARD_MIN_HEIGHT`, `BLUR_RADIUS_*`, `ANIMATION_DURATION_*`. |
-| Gradientes | Gradientes usados pelos cards. |
-
-**Sintoma-chave:** "tema não aplica" ou "card com tamanho errado" → aqui além de `main_window.py:_settings_page`.
-
-### ui/components.py — Widgets reutilizáveis
-| Classe/Função | Responsabilidade |
-|---|---|
-| `FlowLayout` | Layout de fluxo (empacotamento automático). |
-| `AlchemistIconAtlas` | Atlas de ícones (hero icons). |
-| `HorizontalScrollArea` | ScrollArea com barra que trata wheel como scroll lateral (usado em listas de cards de fontes). |
-| `SourceCard` | Card de fonte no dashboard. |
-| `CollapsibleSection` | Seção colapsável. |
-| `SortableTreeItem` | Item de árvore ordenável. |
-| `VisibilityBadgeDelegate` | Delegate de badge público/privado. |
-| `ResponsiveOutputControls` | Controles de saída responsivos. |
-| `GlowButton` / `animated_button` | Botões animados. |
-| `card()` / `page_header()` / `button()` | Factories de widgets. |
-| `repair_mojibake` / `repair_mojibake_text` | Correção de encoding quebrado em textos. |
-| `timestamp_sort_value` | Valor de ordenação de timestamp. |
-
-**Sintoma-chave:** "quebra visual genérica" → localize a classe aqui (`SourceCard`, `SortableTreeItem`, `VisibilityBadgeDelegate`).
-
-
-### ui/mixins/ — Comportamentos da MainWindow (lógica de tela)
-Os mixins são **métodos da `MainWindow`** separados por responsabilidade. A `MainWindow` herda de todos. Cada mixin é ~18–36KB e concentra a maior parte da lógica de UI — `main_window.py` (126.6 KB, 132 métodos) apenas orquestra e mantém estado.
-
-| Mixin | Responsabilidade | Sintoma típico |
-|---|---|---|
-| `source_mixin.py` (~30KB) | Lista/edita/salva fontes; detecta plataforma via URL; teste de lookup de página; import/export de perfil. Métodos: `apply_source`, `add_source`, `duplicate_source`, `remove_selected_sources`, `_preview_detected_source`, `_commit_source_from_form`, `_lookup_page_details`. | "fonte não salva/detecta" → aqui + `source_detection.py` |
-| `connection_mixin.py` (~18KB) | Autenticação por modo (`public`/`basic`/`bearer`/`browser`); `test_connection`; `start_browser_login`; `remove_session`; armazena runtime secret. | "connexion/login não funciona" → aqui + `auth.py` |
-| `selection_mixin.py` (~36KB) | Árvore de seleção: carrega contêineres, expande, filtra, marca/desmarca, inverte, coleta leafs. Métodos: `_populate_selection_tree`, `_selection_tree_item_expanded`, `_leaf_items`, `_set_selection`, `_invert_selection`, `_selection_changed`, `_apply_selection_state`. | "não marca/expande/filtra" → aqui + `tree_mixin.py` |
-| `tree_mixin.py` (~4,4KB) | Ponte entre árvore e dados: `_tree_pages`, `_tree_containers`, `_lazy_state`, `_lazy_method`, `_page_visibility`. Decide síncrono vs lazy. | "árvore não carrega/expande" → aqui + conector |
-
-**Regra de ouro:** ao depurar um problema de UI, o mixin costuma ser o primeiro lugar a procurar — antes do `main_window.py`. O `main_window.py` principalmente conecta mixins a widgets, embora possa conter handlers locais.
-
-### ui/pages/ — Construtores de tela (uma por rota)
-Cada `build_*_page(window) -> QWidget` monta a UI da rota. Recebem `window` (= `MainWindow`) para acessar mixins e estado. Em geral são **majoritariamente visuais** — a maior parte da lógica de comportamento costuma ficar em mixins/controllers, mas builders podem conter lógica leve e handlers locais; verifique o builder específico antes de assumir.
-
-| Página | Builder | Tela correspondente |
-|---|---|---|
-| `dashboard_page.py` | `build_dashboard_page` | Painel inicial |
-| `sources_page.py` | `build_sources_page` | Lista de fontes (seção 2) |
-| `connection_page.py` | `build_connection_page` | Autenticação (seção 3) |
-| `selection_page.py` | `build_selection_page` | Árvore de páginas (seção 4) |
-| `review_page.py` | `build_review_page` | Prévia/extração (seção 5) |
-| `markdown_page.py` | `build_markdown_page` | Opções Markdown (seção 6) |
-| `consolidation_page.py` | `build_consolidation_page` | Consolidação (seção 7) |
-| `extraction_page.py` | `build_extraction_page` | Disparo de extração |
-| `results_page.py` | `build_results_page` | Resultados (seção 8) |
-
-**Sintoma-chave:** "widget não aparece" ou "layout quebrado de uma tela" → aqui. "comportamento errado" → mixin correspondente, não aqui.
-
-### ui/main_window.py — Orquestrador da MainWindow (126.6 KB, 2733 linhas, 132 métodos)
-A `MainWindow` herda dos mixins (grande parte da lógica de comportamento) e orquestra: mantém estado (`MainWindowState`), constrói páginas, conecta sinais e gerencia workers. **Comece investigando o mixin correspondente** antes de procurar lógica aqui — embora existam handlers locais, a maior parte do comportamento está nos mixins.
-
-**Por categoria de responsabilidade:**
-
-| Categoria | Métodos representativos | Sintoma típico |
-|---|---|---|
-| **Builders de página** | `_dashboard_page`, `_sources_page`, `_connection_page`, `_selection_page`/`_pages_page`, `_markdown_page`, `_consolidation_page` (e `_legacy`), `_review_page` (e `_legacy`), `_extraction_page`, `_results_page`/`_output_page`, `_settings_page` | "tela não aparece" — mas a lógica está no mixin |
-| **Navegação** | `_show_page(key)`, `_page_go_back`, `_source_card_clicked` | "click não navega" |
-| **Carregamento de árvore** | `load_tree`, `_load_tree_via_connector`, `_load_all_containers`, `_load_container_for_source`, `_populate_page_tree(_lazy)`, `_load_document_children`, `_load_expanded_document` | "árvore não carrega/expande" |
-| **Workers** | `_start_worker(function,...)`, `_on_progress`, `_worker_failed`, `_worker_finished`, `_operation_done`, closures `work`/`done` (5×) | "extração/consolidação trava" → aqui ou no mixin |
-| **Prévia Markdown** | `_schedule_preview`, `_update_preview`, `_render_preview_mode`, `_load_markdown_controls`, `_sync_markdown_controls` | "prévia não atualiza" |
-| **Consolidação** | `preview_consolidation`, `run_consolidation`, `_sync_consolidation_ui`/`_controls`, `_update_consolidation_summary`, `_render_consolidation_preview`, `_mark_consolidation_preview_stale`, `_consolidation_example_paths` | "consolidação não pré-visualiza/roda" |
-| **Output/Resultados** | `_update_output_preview`, `_render_consolidation_preview`, `_page_stat`, `_set_page_stat`, `_refresh_page_summary` | "resultados não aparecem" |
-| **Estado/Projeto** | `save_project`, `save_project_as`, `_load_project_ui`, `_sync_project_ui(strict=...)`, `_update_load_context`, propriedades `last_result`/`selection_store`/`last_consolidation_preview`/`connection_states` | "projeto não salva/carrega" |
-| **Colunas/ restore** | `_move_page_column`, `_send_page_column`, `_restore_table_columns` | "colunas não restauram" |
-| **Cancelamento/loading** | `_set_tree_loading(loading)`, `_cancel_tree_operation` | "loading não some", "cancelar não funciona" |
-| **Serviço browser** | `_lazy_discovery_page`, `_browser_cache_path`, `_browser_cache_scope`, `_lazy_state`, `_lazy_method`, `_page_render_key` | "cache/lazy do browser" |
-
-**Regra de ouro:** ao depurar comportamento, comece pelo mixin correspondente antes de atribuir ao `main_window.py`. Esta classe conecta sinais e orquestra; pode haver handlers locais, mas a maior parte do comportamento vive nos mixins.
-
-> _main_window.py tem 132 métodos distribuídos em 8 categorias acima. Embora grande, é majoritariamente orquestração (conexão de sinais, estado e workers); o comportamento de maior peso está espalhado pelos 4 mixins (~87 KB no total), mas handlers locais existem e devem ser verificados._
-
----
-
-## ENTRY POINTS, CONFIGURAÇÃO E SCRIPTS
-Arquivos de entrada, configuração e manutenção do projeto, organizados por responsabilidade.
+### Parsers especializados
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `tools/legacy/alquimista_core.py` | Facade de compatibilidade. Re-exporta `ConfluenceClient`, modelos, serviços, storage, erros. Mantém nomes históricos p/ scripts antigos. **Detalhe:** docstring diz "Studio 5" mas o projeto é "3.0" — inconsistência a corrigir. |
-| `tools/legacy/alquimista_gui.py` | Entry point legado da UI PySide6. Importa e expõe `run_app` de `alquimista.ui`. |
-| `alquimista/__main__.py` | Entry point oficial: `python -m alquimista` inicia o fluxo completo. |
-| `tools/legacy/alquimista_studio_completo.py` | Launcher legado do fluxo completo, mantido fora da raiz. |
-| `tools/legacy/alquimista_studio_extrator.py` | Launcher legado → agora chama `run_app("complete")`. |
-| `tools/legacy/alquimista_studio_consolidador.py` | Launcher legado → agora chama `run_app("complete")`. |
-| `packaging/ALQuimista Studio.spec` | Spec do PyInstaller; inclui assets e catálogos `.qm`. |
-| `packaging/ALQuimista Studio.iss` | Instalador Windows com idiomas e atalhos. |
-| `tools/build/gerar_distribuicoes.ps1` | Gera Portable Windows e chama o instalador Inno Setup. |
-| `tools/build/gerar_portable_linux.sh` | Gera o pacote Portable Linux `.tar.gz`. |
-| `tools/install/instalar_windows.bat` / `tools/install/instalar_linux.sh` | Dependências de desenvolvimento; Linux também suporta `--install`. |
-| `tools/install/instalar_navegador.bat` | Instala browsers Playwright. |
-| `tools/legacy/test_alquimista_studio.py` | Launcher legado de pytest (apenas delega para `pytest`). Os testes reais ficam em `tests/` (19 arquivos, ver seção abaixo). |
-| `docs/examples/config.example.json` | Config de exemplo. |
-| `projeto_alquimista.json` | Projeto de demonstração. |
-| `docs/archive/REFACTORING_SUMMARY.md` | Documento histórico do refactoring recente. |
-| `tests/` | Suíte de testes (19 arquivos `test_*.py` + `conftest.py`): `test_auth`, `test_browser_cache`, `test_client`, `test_confluence_url`, `test_connectors`, `test_lazy_confluence`, `test_markdown`, `test_models_storage`, `test_process_workers`, `test_services`, `test_session_store`, `test_source_detection`, `test_ui*`, `test_fixes_regression`, `test_build_documentation`. Marker `integration` p/ APIs reais. |
-| `docs/` | `architecture.md` + `connectors/<plataforma>.md` + `manifest-index.md` + `screenshots/` (PNGs das 9 telas). |
-| `tools/` | `capture_ui.py`, `normalize_utf8.py` e scripts de distribuição/instalação. |
-| `alquimista/ui/i18n.py` | Idiomas PT-BR/EN/ES, preferência portable/instalada e troca em runtime. |
-| `assets/icons/` | `alchemist_icon_atlas.png` usado por `components.py:AlchemistIconAtlas`. |
-| `ALQuimista_Base/` | Diretório reservado (vazio por padrão). Excluído do ruff/mypy. |
-| `config/pyproject.toml` | Configuração ruff (py312, line 120, F/I/B) + mypy. |
-| `config/pytest.ini` | `qt_api=pyside6`, `testpaths=tests`, markers (`real_confluence`, `integration`, `build`, `slow`). |
-| `config/constraints.txt` | Versões fixas validadas p/ Python 3.12/Windows (reprodutível). |
-| `config/requirements*.txt` | `requirements.txt` (runtime) + `-browser` + `-dev` + `.freeze`. |
-| `config/python-version.txt` | `Python 3.12` ( usado por gerenciadores de versão). |
-| `abrir_completo.bat` | Atalho Windows p/ abrir o fluxo completo. |
-
-**Regra:** código novo vai em `alquimista/`. Facades e launchers legados ficam em `tools/legacy/`.
-
-## DUPLICAÇÕES E ARMADILHAS (ATALHO DE EDIÇÃO)
-Alguns módulos definem a MESMA função duas vezes. A segunda definição sobrescreve a primeira, que fica órfã/morta no arquivo. **Antes de editar uma dessas funções, localize todas as definições com `rg -n "^def <nome>" <arquivo>` e edite apenas a última (a ativa).**
-
-| Arquivo | Função | Estado |
-|---|---|---|
-| `ui/mixins/selection_mixin.py` | `_populate_selection_tree`, `_leaf_items`, `_set_selection`, `_invert_selection`, `_selection_changed`, `_apply_selection_state`, `_filter_selection` | 7 duplicações; a primeira ocorrência de cada é **morta**, a última é a ativa. |
-| `ui/mixins/connection_mixin.py` | `_connection_source_changed`, `enter_confluence`, `_store_runtime_secret` | 3 duplicações; última ocorrência é a ativa. |
-| `ui/execution_controller.py` | `validated_project_snapshot` | Definida duas vezes no arquivo; a **primeira** ocorrência é wrapper simples **morto**, a **segunda** é a implementação ativa com validação completa. |
-| `auth.py` | `browser_login` | Definida duas vezes no arquivo; a **primeira** ocorrência é **morta**, a **segunda** é a ativa. |
-
-### Sem referências estáticas encontradas
-- `ui/page_registry.py` e `ui/process_workers.py` não aparecem em imports estáticos do pacote (`rg -n "page_registry|process_workers"`). Mantidos como código reserva; podem ser invocados dinamicamente ou reativados futuramente — se uma funcionalidade de roteamento/workers de processo for ativada, comece por aqui.
-
-
-## COMO PEDIR PRA IA TRABALHAR — Fórmulas práticas
-
-### Template básico
-> "Problema na **<tela>**: <sintoma>. Comece investigando **<arquivo>**."
-
-### Por sintoma (quando não souber a tela)
-> "O programa está <sintoma>. Qual arquivo investigar?"
-
-### Por arquivo (quando já souber)
-> "Comece investigando `<arquivo>`, função `<função>`. Quero que <mudança>."
-
-### Exemplos comuns
-- "Na **seleção**, a árvore não carrega filhos ao expandir. Comece investigando `tree_mixin.py` e `confluence.py`."
-- "Na **conexão**, o login pelo navegador não fecha. Comece investigando `auth.py`."
-- "Na **markdown**, as tabelas saem quebradas. Comece investigando `markdown.py`."
-- "Na **consolidação**, o índice do pacote está errado. Comece investigando `services.py`."
-- "Na **fontes**, não detecta GitBook pela URL. Comece investigando `source_detection.py`."
-- "Na **seleção**, páginas vêm fora de ordem. Comece investigando `tree_models.py`."
-- "Na **extração**, não cancela. Comece investigando `runtime.py`."
-
-### Quando o problema é visual/layout
-> "Na **<tela>**, <elemento> está <visual errado>. Comece investigando `pages/<tela>.py` e `components.py`."
-
-### Quando o problema é de autenticação
-> "Na **conexão**, <erro de auth>. Comece investigando `connection_mixin.py`, `auth.py` e `connectors/<plataforma>.py`."
+| `confluence_parser.py` | HTML Confluence → Markdown canônico |
+| `notion_parser.py` | JSON blocos Notion → Markdown canônico |
 
 ---
 
-## OBSERVAÇÕES IMPORTANTES
+## 5. MARKDOWN — Pipeline de conversão
 
-1. **main_window.py é o orquestrador** (126.6 KB, 132 métodos). Se a tela não tiver arquivo em `pages/`, o comportamento está em `main_window.py`.
-2. **Mixins** extraem comportamento da MainWindow: `selection_mixin.py` (seleção), `source_mixin.py` (CRUD fontes), `connection_mixin.py` (auth), `tree_mixin.py` (lazy loading).
-3. **Conectores** seguem o ABC em `connectors/base.py`. O Confluence é o mais completo. Demais (GitBook/Notion/SharePoint/Zendesk) implementam as mesmas operações mas podem não ter lazy loading.
-4. **Segredos nunca persistem**: `controllers.py:RuntimeSecrets` mantém em memória. `session_store.py` é efêmero.
-5. **Atualização incremental** usa SHA-256 em `services.py` + `manifest_index.py`.
-6. **Facades de compatibilidade** (`alquimista_*.py` na raiz): usar só p/ scripts antigos. Código novo vai em `alquimista/`.
-7. **`.bat` e `.spec`** são setup Windows / PyInstaller. Raramente precisam alteração salvo mudar dependências ou ícone do exe.
+### markdown/transformer.py — MarkdownTransformer (11KB)
+
+Converte HTML em Markdown usando BeautifulSoup. Substitui macros Confluence, resolve links/imagens, normaliza.
+
+### markdown/renderer.py — KnowledgeDocumentRenderer (6KB)
+
+| Classe | Responsabilidade |
+|---|---|
+| `PreparedKnowledgeDocument` | Documento preparado (normalizado, hashado) |
+| `KnowledgeDocumentRenderer` | `prepare()` → `render()`/`render_prepared()`. Injeta frontmatter, markers, títulos |
+
+### markdown/metadata.py — Metadados (5KB)
+
+`page_metadata()`, `knowledge_document_metadata()` — extrai metadados para frontmatter.
+
+### markdown/normalization.py
+
+`normalize_markdown()`, `sha256_text()`, `format_updated_at()`.
+
+### markdown/preview.py
+
+`sample_page()` — página de exemplo para preview na UI.
+
+---
+
+## 6. DISCOVERY — Descoberta web
+
+### discovery/service.py — SourceDiscoveryService
+
+Pipeline: platform match → `llms.txt` → sitemap → crawler. Retorna `DiscoveryResult` com `DiscoveryStrategy`.
+
+### discovery/crawler.py — WebCrawler
+
+Crawl seguro com profundidade e rate limit. Retorna lista de `DiscoveredResource`.
+
+### discovery/models.py
+
+`DiscoveredResource`, `DiscoveryResult`, `DiscoveryStrategy` (enum: OFFICIAL_API, LLMS_TXT, SITEMAP, CRAWL).
+
+### discovery/frameworks.py
+
+`detect_documentation_framework()` — assinaturas de Docusaurus, MkDocs, VitePress, etc.
+
+---
+
+## 7. PROCESSAMENTO DE DOCUMENTOS
+
+### document_processing/base.py — ABC DocumentProcessor
+
+`supported_extensions`, `supported_mimetypes`, `can_process()`, `process_file()`, `process_bytes()`.
+
+### document_processing/registry.py — DocumentProcessorRegistry
+
+Singleton: `register()`, `get_processor()`, `process_file()`, `process_bytes()`. MAX 100 MiB. Fallback → TextProcessor.
+
+### Processadores
+
+| Arquivo | Formatos |
+|---|---|
+| `pdf.py` | PDF (PyMuPDF/pypdf, tabelas) |
+| `word.py` | DOCX, ODT, RTF |
+| `spreadsheet.py` | XLSX, XLS, CSV, TSV, ODS |
+| `presentation.py` | PPTX, ODP |
+| `ebook.py` | EPUB |
+| `html.py` | HTML, HTM |
+| `image.py` | PNG, JPG, WEBP, TIFF, BMP (OCR opcional) |
+| `text.py` | TXT, MD, MDX, RST |
+
+---
+
+## 8. BROWSER — Navegador e cache
+
+### browser/contracts.py
+
+Protocols e tipos: `Visibility`, `SpaceMetadata`, `DocumentMetadata`, `DiscoveryPage[T]`, `DiscoveryAdapter`, `CancellationLike`.
+
+### browser/service.py — LazyDiscoveryService
+
+Orquestra discovery com cache SQLite. Síncrono, thread-safe (Lock/RLock). TTL com `stale_if_error`.
+
+### browser/adapters.py — ConnectorDiscoveryAdapter
+
+Adapta conectores `HierarchicalDiscoveryConnector`/`SearchableConnector` ao contrato `DiscoveryAdapter`.
+
+### browser/cache.py — BrowserCache
+
+Cache SQLite de **apenas metadados** (nunca credenciais/conteúdo). `_SENSITIVE_PARTS` garante sanitização.
+
+---
+
+## 9. AUTENTICAÇÃO
+
+### auth.py (162 linhas, 6KB)
+
+| Função | Responsabilidade |
+|---|---|
+| `browser_login(source, ready, token, timeout_seconds)` | Login OAuth interativo via Playwright |
+| `delete_session(source)` | Remove sessão + purga cache de discovery |
+| `_authenticated_identity(payload)` | Valida identidade (não anônimo) |
+| `_browser_session_closed(browser, page)` | Detecta navegador fechado |
+
+**Dependências:** `browser/cache.py`, `client.py:session_path`, `session_store.py`, `runtime.py`.
+
+### session_store.py (5KB)
+
+Sessão de browser criptografada com Windows DPAPI. Funções: `save_session`, `load_session`, `session_exists`, `delete_session_file`.
+
+**Regra:** tokens bearer NÃO são persistidos aqui. Ficam em `RuntimeSecrets` (memória).
+
+---
+
+## 10. MÓDULOS AUXILIARES DO NÚCLEO
+
+### runtime.py (45 linhas)
+
+| Classe/Type | Responsabilidade |
+|---|---|
+| `CancellationToken` | `cancel()`, `cancelled`, `check()`, `wait(seconds)` |
+| `RateLimiter` | Limita requisições/segundo |
+| `ProgressCallback` | `Callable[[int, int, str], None]` |
+| `LogCallback` | `Callable[[str], None]` |
+
+### selection.py (65 linhas) — SelectionStore
+
+Estado de seleção **independente do Qt**. Métodos: `set`, `is_selected`, `keys_for_source`, `selections`, `count_by_container`, `clear`, `from_selections`.
+
+### errors.py (56 linhas) — Hierarquia tipada
+
+```
+AlquimistaError (RuntimeError)
+├── ConnectorError
+│   ├── AuthenticationError
+│   ├── PermissionDeniedError
+│   ├── ResourceNotFoundError
+│   └── ApiConnectionError
+│       ├── ApiRateLimitError
+│       └── InvalidResponseError
+├── InvalidProjectError
+├── ManifestError
+├── StorageError
+└── ExtractionCancelledError
+```
+
+Aliases de compatibilidade: `ConfluenceConnectionError = ApiConnectionError`, `RateLimitError = ApiRateLimitError`.
+
+### reports.py (69 linhas)
+
+`DocumentResult`, `ContainerReport`, `SourceReport`, `ExecutionReport` — modelos pydantic para relatório de execução.
+
+### logging_utils.py
+
+`configure_logging()`, `redact()` (mascara segredos), `JsonFormatter`, `default_log_path()`.
+
+### source_detection.py (388 linhas, 12KB)
+
+`detect_source_url(value)` — detecta plataforma **sem rede** por padrões de URL. Retorna `DetectedSource`. Suporta: local_files, Confluence, Notion, GitBook, SharePoint, Zendesk, e todos os 28 conectores via registry.
+
+### confluence_url.py
+
+`parse_confluence_url(value)` → `ParsedConfluenceUrl` — múltiplos formatos de URL Confluence.
+
+### source_discovery.py
+
+**Facade de compatibilidade** → `alquimista.discovery`. Não usar em código novo.
+
+### client.py (24KB) — Cliente REST Confluence legado
+
+`ConfluenceClient` com retry, rate limit, cancellation. Usado por `ConfluenceRestConnector`.
+
+---
+
+## 11. UI — INTERFACE (PySide6)
+
+### Hierarquia de herança da MainWindow
+
+```python
+class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
+```
+
+### main_window.py (2369 linhas, 90KB, 134 métodos)
+
+Orquestrador principal. Herda 3 mixins. Constrói páginas, conecta sinais, gerencia workers.
+
+| Categoria | Métodos representativos |
+|---|---|
+| Builders de página | `_dashboard_page`, `_sources_page`, `_connection_page`, `_selection_page`, `_markdown_page`, `_consolidation_page`, `_review_page`, `_extraction_page`, `_results_page`, `_settings_page` |
+| Navegação | `_show_page(key)`, `_page_go_back` |
+| Workers | `_start_worker(...)`, `_on_progress`, `_worker_failed`, `_worker_finished` |
+| Estado/Projeto | `save_project`, `save_project_as`, `_load_project_ui`, `_sync_project_ui` |
+
+### mixins/ — Comportamentos da MainWindow
+
+| Mixin | Arquivo | Tamanho | Responsabilidade |
+|---|---|---|---|
+| `SourceMixin` | `source_mixin.py` | 37KB, 28 métodos | CRUD de fontes, detecção de plataforma, import/export de perfil |
+| `SelectionMixin` | `selection_mixin.py` | 28KB, 21 métodos | Árvore de seleção, lazy loading, marcar/desmarcar, filtrar |
+| `ConnectionMixin` | `connection_mixin.py` | 17KB, 8 métodos | Autenticação, test_connection, browser_login, runtime secrets |
+
+### controllers/ — Camada de aplicação (10 controllers)
+
+| Controller | Arquivo | Responsabilidade |
+|---|---|---|
+| `RuntimeSecrets` + `RuntimeBuilder` | `runtime_controller.py` (12KB) | Segredos em memória + construção de runtimes |
+| `ExecutionController` (funções) | `execution_controller.py` (7KB) | `prepare_runtimes`, `run_extraction`, `run_consolidation`, `run_complete`, `retry_failures` |
+| `WorkerOperationController` | `operation_controller.py` (11KB) | Ciclo de vida do worker Qt, cancelamento |
+| `NavigationController` | `navigation_controller.py` (4KB) | Pilha de páginas, botões de navegação |
+| `TreeController` | `tree_controller.py` (8KB) | Apresentação de árvores, colunas, ordenação |
+| `TreeLoaderController` | `tree_loader_controller.py` (34KB) | Discovery, lazy loading, paginação, browser cache |
+| `PreviewController` | `preview_controller.py` (9KB) | Preview Markdown, presets, debounce |
+| `ConsolidationController` | `consolidation_controller.py` (18KB) | UI de consolidação, validação, exemplos |
+| `ResultsController` | `results_controller.py` (6KB) | Métricas, clipboard, exportação |
+| `ProjectController` (funções) | `project_controller.py` (1KB) | CRUD de projetos |
+| `SourceController` (funções) | `source_controller.py` (4KB) | Normalização, lookup em combos |
+
+### pages/ — Construtores de tela (9 telas)
+
+Cada arquivo exporta `build_<tela>_page(window) → QWidget`.
+
+| Tela | Arquivo | Rota(s) |
+|---|---|---|
+| Dashboard | `dashboard_page.py` | `dashboard` |
+| Fontes | `sources_page.py` | `sources` |
+| Conexão | `connection_page.py` | `connection` |
+| Seleção | `selection_page.py` | `pages`, `selection` |
+| Revisão | `review_page.py` | `extraction`, `review`, `output` |
+| Extração | `extraction_page.py` | (embutido no review) |
+| Markdown | `markdown_page.py` | `markdown` |
+| Consolidação | `consolidation_page.py` | `consolidation` |
+| Resultados | `results_page.py` | `results` |
+
+### components.py (~39KB)
+
+Widgets reutilizáveis: `FlowLayout`, `AlchemistIconAtlas`, `HorizontalScrollArea`, `SourceCard`, `CollapsibleSection`, `SortableTreeItem`, `VisibilityBadgeDelegate`, `ResponsiveOutputControls`, `GlowButton`, `animated_button`, `card()`, `page_header()`, `button()`, `repair_mojibake()`.
+
+### theme.py (15KB)
+
+`LIGHT`/`DARK` dicionários, constantes de card, gradientes, `apply_theme()`.
+
+### tree_models.py (11KB)
+
+`page_container_id()`, `tree_pages()`, `ordered_pages()`, `tree_containers()`, `lazy_state()`.
+
+### state.py — MainWindowState
+
+Dataclass: `trees`, `selection_store`, `connected_sources`, `connection_states`, `last_result`, `last_consolidation_preview`, `operation_status`, `operation_error`.
+
+### workers.py — Worker + WorkerSignals
+
+`Worker(QRunnable)`: executa função com token/progress/log. `WorkerSignals`: `succeeded`, `failed`, `progress`, `log`, `finished`.
+
+### i18n.py (11KB)
+
+`LanguageManager`, `translate_text()`, `create_settings()`, `LANGUAGE_NAMES`. Suporta PT-BR, EN, ES.
+
+---
+
+## 12. FACADES DE COMPATIBILIDADE
+
+Módulos no raiz de `ui/` que apenas re-exportam de `ui/controllers/`:
+
+| Facade | Redireciona para |
+|---|---|
+| `ui/execution_controller.py` | `controllers/execution_controller` |
+| `ui/operation_controller.py` | `controllers/operation_controller` |
+| `ui/project_controller.py` | `controllers/project_controller` |
+| `ui/source_controller.py` | `controllers/source_controller` |
+| `source_discovery.py` | `discovery/` |
+
+**Regra:** código novo importa direto de `controllers/` ou `discovery/`. Facades mantidas apenas para compatibilidade.
+
+---
+
+## 13. CÓDIGO INATIVO / RESERVA
+
+| Arquivo | Status | Evidência |
+|---|---|---|
+| `ui/page_registry.py` | **Inativo** | `page_builders()` definida mas sem callers no runtime ou testes |
+| `ui/process_workers.py` | **Reserva/teste** | Sem callers no pacote; importado apenas por `test_process_workers.py` |
+| `ui/components.py.bak*` | **Backups** | 3 arquivos `.bak` — lixo de refatoração |
+| `ui/main_window.*.bak*` | **Backups** | 3 arquivos `.bak` — lixo de refatoração |
+| `source_discovery.py` | **Facade** | Redireciona para `discovery/` |
+
+---
+
+## 14. ENTRY POINTS, BUILD E SCRIPTS
+
+### Entry points
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `alquimista/__main__.py` | `python -m alquimista` → `run_app("complete")` |
+| `alquimista/__init__.py` | Exports: ProjectConfig, SourceConfig, opções |
+| `abrir_completo.bat` | Atalho Windows → `python -m alquimista` |
+
+### Legacy launchers (tools/legacy/)
+
+| Arquivo | Status |
+|---|---|
+| `alquimista_core.py` | Re-exporta nomes históricos para scripts antigos |
+| `alquimista_gui.py` | Entry point legado da UI |
+| `alquimista_studio_completo.py` | Launcher legado |
+| `alquimista_studio_extrator.py` | Launcher legado → `run_app("complete")` |
+| `alquimista_studio_consolidador.py` | Launcher legado → `run_app("complete")` |
+| `test_alquimista_studio.py` | Launcher legado de pytest |
+
+### Build e packaging
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `packaging/ALQuimista Studio.spec` | PyInstaller spec |
+| `packaging/ALQuimista Studio.iss` | Inno Setup installer |
+| `tools/build/gerar_distribuicoes.ps1` | Portable Windows + Inno Setup |
+| `tools/build/gerar_executavel.bat` | Gera executável |
+| `tools/build/gerar_pacote_portatil.bat` | Portable Windows |
+| `tools/build/gerar_portable_linux.sh` | Portable Linux tar.gz |
+| `tools/install/instalar_windows.bat` | Dependências Windows |
+| `tools/install/instalar_linux.sh` | Dependências Linux |
+| `tools/install/instalar_navegador.bat` | Browsers Playwright |
+
+### Ferramentas
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `tools/capture_ui.py` | Captura screenshots da UI |
+| `tools/normalize_utf8.py` | Normalização UTF-8 |
+
+### Configuração
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `config/pyproject.toml` | ruff (py312, F/I/B, line 120) + mypy |
+| `config/pytest.ini` | `qt_api=pyside6`, markers: `real_confluence`, `integration`, `build`, `slow` |
+| `config/requirements.txt` | Runtime: PySide6, pydantic, requests, bs4, markdownify |
+| `config/requirements-browser.txt` | playwright |
+| `config/requirements-dev.txt` | pytest, ruff, mypy, etc. |
+| `config/constraints.txt` | Versões fixas validadas para Python 3.12/Windows |
+| `config/python-version.txt` | Python 3.12 |
+
+---
+
+## 15. TESTES
+
+### Suíte (33 arquivos, ~233 funções)
+
+| Arquivo | Área coberta | Qtd testes |
+|---|---|---|
+| `test_connectors.py` | Todos os 28 conectores | 22 |
+| `test_ui.py` | MainWindow, mixins, navegação | 38 |
+| `test_services.py` | Extraction, consolidation | 15 |
+| `test_client.py` | ConfluenceClient REST | 15 |
+| `test_models_storage.py` | Models, storage, FileTransaction | 14 |
+| `test_lazy_confluence.py` | Lazy loading Confluence | 13 |
+| `test_markdown_goldens.py` | Golden tests de markdown | 12 |
+| `test_ui_registry_routing.py` | Registry, routing, metadata | 8 |
+| `test_browser_cache.py` | BrowserCache SQLite | 8 |
+| `test_ui_controllers.py` | Controllers | 7 |
+| `test_i18n.py` | Internacionalização | 6 |
+| `test_process_workers.py` | ProcessWorker | 6 |
+| `test_error_hierarchy.py` | Hierarquia de erros | 6 |
+| `test_registry_metadata.py` | Registry metadata | 6 |
+| `test_document_processors.py` | Processadores de documentos | 6 |
+| `test_markdown.py` | Transformer, renderer | 6 |
+| `test_confluence_url.py` | Parse de URLs | 4 |
+| `test_ui_lazy_regressions.py` | Regressões lazy | 4 |
+| `test_auth.py` | Autenticação | 3 |
+| `test_session_store.py` | Session store DPAPI | 3 |
+| `test_source_discovery.py` | Discovery | 3 |
+| `test_fixes_regression.py` | Regressões gerais | 3 |
+| `test_build_documentation.py` | Build docs | 3 |
+| `test_distribution_scripts.py` | Scripts de distribuição | 3 |
+| `test_source_detection.py` | Detecção de plataforma | 2 |
+| `test_service_desk.py` | Service desk | 2 |
+| `test_logging_utils.py` | Logging | 1 |
+| `test_live_root_discovery.py` | Root discovery (integration) | 1 |
+| `test_local_files.py` | Local files connector | 1 |
+| `test_extraction_goldens.py` | Golden tests de extração | 1 |
+| `test_ui_browser_cache_integration.py` | Browser cache + UI | 1 |
+| `contracts/test_connector_contract.py` | Contrato de conectores | 6 |
+| `contracts/cases.py` | Casos de contrato (64KB) | 1 |
+
+### Fixtures
+
+- `conftest.py` — fixtures compartilhadas
+- `golden_helpers.py` — helpers para golden tests
+- `fixtures/goldens/` — golden files para testes de snapshot
+
+---
+
+## 16. DOCUMENTAÇÃO E ASSETS
+
+| Diretório | Conteúdo |
+|---|---|
+| `docs/architecture.md` | Arquitetura de alto nível |
+| `docs/connectors/` | Docs por conector |
+| `docs/manifest-index.md` | Índice do manifest |
+| `docs/screenshots/` | PNGs das telas |
+| `docs/archive/` | Documentos históricos |
+| `assets/icons/` | `alchemist_icon_atlas.png` |
+| `ALQuimista_Base/` | Diretório de saída padrão |
+
+---
+
+## 17. DUPLICAÇÕES E ARMADILHAS
+
+### Duplicações resolvidas
+
+As duplicações documentadas no MAPA anterior (selection_mixin, connection_mixin, auth.py, execution_controller) foram **todas resolvidas** na refatoração recente. Cada função agora tem uma única definição ativa.
+
+### Armadilhas ativas
+
+| Risco | Detalhes |
+|---|---|
+| `page_registry.py` | Sem callers. Se ativar, precisa integrar com `main_window.py:_show_page` |
+| `process_workers.py` | Sem callers no runtime. Apenas testado. Se ativar, workers multiprocessing precisam de objetos picklable |
+| Facades em `ui/` root | Não editar — são apenas re-exports. Editar em `controllers/` |
+| `client.py` | Legado Confluence. Código novo deve usar `connectors/confluence.py` |
+| `source_discovery.py` | Facade. Código novo deve usar `discovery/` |
+| `main_window.py` | 90KB — alto risco de conflito. Prefira editar mixins/controllers/pages |
+| `components.py.bak*` / `main_window.*.bak*` | Backups. Ignorar. |
+
+---
+
+## ROTEAMENTO PARA AGENTES E SKILLS
+
+### Domínios independentes e suas fronteiras
+
+#### 1. DOMÍNIO: Interface (UI)
+**Escopo:** Telas, layout, widgets, navegação, tema, i18n.
+**Arquivos primários:**
+- `ui/pages/` (9 arquivos)
+- `ui/components.py`
+- `ui/theme.py`
+- `ui/main_window.py`
+- `ui/controllers/navigation_controller.py`
+- `ui/controllers/tree_controller.py`
+- `ui/i18n.py`, `ui/translation_fallbacks.py`, `ui/translations/`
+
+**Dependências de leitura:** `models.py` (para tipos), `ui/state.py`, `ui/tree_models.py`.
+**Fronteira:** NÃO mexer em services/, connectors/, storage/ ao editar UI. Controllers são a fronteira.
+
+#### 2. DOMÍNIO: Fontes (cadastro e detecção)
+**Escopo:** Adicionar/editar/remover fontes, detecção de plataforma por URL.
+**Arquivos primários:**
+- `ui/mixins/source_mixin.py`
+- `source_detection.py`
+- `confluence_url.py`
+- `models.py:SourceConfig`
+- `connectors/registry.py` (metadados de formulário)
+
+**Dependências de leitura:** `storage.py:save_project`, `ui/connector_forms.py`.
+**Fronteira:** NÃO mexer em auth, extração ou seleção.
+
+#### 3. DOMÍNIO: Autenticação
+**Escopo:** Login, tokens, sessão de browser, teste de conexão.
+**Arquivos primários:**
+- `ui/mixins/connection_mixin.py`
+- `auth.py`
+- `session_store.py`
+- `ui/controllers/runtime_controller.py:RuntimeSecrets`
+- `browser/service.py` (para login Playwright)
+
+**Dependências de leitura:** `connectors/http.py`, `models.py:AuthMode`, `browser/cache.py`.
+**Fronteira:** NÃO mexer em seleção, extração ou UI de páginas.
+
+#### 4. DOMÍNIO: Seleção (árvore de páginas)
+**Escopo:** Árvore, espaços, páginas, lazy loading, marcar/desmarcar.
+**Arquivos primários:**
+- `ui/mixins/selection_mixin.py`
+- `ui/tree_models.py`
+- `ui/controllers/tree_loader_controller.py`
+- `ui/controllers/tree_controller.py`
+- `selection.py:SelectionStore`
+
+**Dependências de leitura:** conectores `list_containers`/`list_documents`/`list_document_children`, `browser/` (discovery cache).
+**Fronteira:** NÃO mexer em extração, consolidação ou auth.
+
+#### 5. DOMÍNIO: Conectores / APIs
+**Escopo:** APIs, HTTP, discovery, browser cache, criação de novo conector.
+**Arquivos primários:**
+- `connectors/base.py`
+- `connectors/capabilities.py`
+- `connectors/registry.py`
+- `connectors/http.py`
+- `connectors/<plataforma>.py` (o conector específico)
+- `connectors/confluence_parser.py`, `connectors/notion_parser.py`
+
+**Dependências de leitura:** `models.py` (tipos), `errors.py`, `runtime.py:CancellationToken`.
+**Fronteira:** NÃO mexer em UI, services ou storage. Conector deve seguir ABC de `base.py`.
+
+#### 6. DOMÍNIO: Extração
+**Escopo:** Workers, threads, progresso, cancelamento, manifest, incremental.
+**Arquivos primários:**
+- `services/extraction.py`
+- `services/runtime.py`
+- `services/reconciliation.py`
+- `services/helpers.py`
+- `ui/controllers/execution_controller.py`
+- `ui/controllers/operation_controller.py`
+- `ui/workers.py`
+- `runtime.py:CancellationToken`
+
+**Dependências de leitura:** `connectors/<plataforma>.py:get_document`, `markdown/renderer.py`, `storage.py:FileTransaction`, `manifest_index.py`.
+**Fronteira:** NÃO mexer em UI de páginas, seleção ou consolidação.
+
+#### 7. DOMÍNIO: Markdown
+**Escopo:** HTML→Markdown, metadados, frontmatter, preview.
+**Arquivos primários:**
+- `markdown/transformer.py`
+- `markdown/renderer.py`
+- `markdown/metadata.py`
+- `markdown/normalization.py`
+- `markdown/preview.py`
+- `ui/controllers/preview_controller.py`
+
+**Dependências de leitura:** `models.py:MarkdownOptions`, `connectors/confluence_parser.py`, `connectors/notion_parser.py`.
+**Fronteira:** NÃO mexer em extração, storage ou conectores.
+
+#### 8. DOMÍNIO: Consolidação e Resultados
+**Escopo:** Juntar arquivos, pacotes, índice, relatórios.
+**Arquivos primários:**
+- `services/consolidation.py`
+- `reports.py`
+- `ui/controllers/consolidation_controller.py`
+- `ui/controllers/results_controller.py`
+- `ui/pages/consolidation_page.py`
+- `ui/pages/results_page.py`
+
+**Dependências de leitura:** `storage.py:ManifestStore`, `models.py:ConsolidationOptions`, `services/helpers.py:demote_headings`.
+**Fronteira:** NÃO mexer em extração, seleção ou conectores.
+
+#### 9. DOMÍNIO: Discovery web
+**Escopo:** llms.txt, sitemap, crawler, frameworks, normalização.
+**Arquivos primários:**
+- `discovery/service.py`
+- `discovery/crawler.py`
+- `discovery/sitemap.py`
+- `discovery/llms_txt.py`
+- `discovery/frameworks.py`
+- `discovery/models.py`
+- `discovery/normalization.py`
+
+**Dependências de leitura:** `connectors/generic_docs.py`, `connectors/generic_web.py`.
+**Fronteira:** NÃO mexer em connectors enterprise, UI ou extração.
+
+#### 10. DOMÍNIO: Processamento de documentos locais
+**Escopo:** PDF, Word, Excel, PowerPoint, EPUB, HTML, imagem, texto.
+**Arquivos primários:**
+- `document_processing/base.py`
+- `document_processing/registry.py`
+- Cada processador específico
+
+**Dependências de leitura:** `connectors/local_files.py`.
+**Fronteira:** Independente de todos os outros domínios exceto `local_files.py`.
+
+### Dependências entre domínios (grafo simplificado)
+
+```
+models.py ← (usado por TODOS)
+errors.py ← (usado por TODOS)
+runtime.py ← (usado por connectors, services, UI)
+storage.py ← (usado por services, controllers)
+
+UI ──→ Controllers ──→ Services ──→ Connectors
+                   └──→ Storage
+                   └──→ Markdown
+
+Seleção ──→ TreeLoader ──→ Browser/Cache ──→ Connectors
+Discovery ──→ Connectors (generic_web, generic_docs)
+DocumentProcessing ──→ local_files connector
+```
+
+### Módulos de alto acoplamento (editar com cuidado)
+
+| Módulo | Acoplamento | Razão |
+|---|---|---|
+| `models.py` | **Crítico** | Usado por todo o pacote. Mudanças de campo afetam manifest, storage, UI |
+| `main_window.py` | **Alto** | 90KB, orquestra tudo. Preferir editar mixins/controllers |
+| `connectors/registry.py` | **Alto** | 43KB, todos os conectores registrados aqui |
+| `services/extraction.py` | **Alto** | 48KB, motor principal de extração |
+| `ui/controllers/tree_loader_controller.py` | **Alto** | 34KB, orquestra discovery e lazy loading |
+
+### Limites arquiteturais que NÃO devem ser atravessados
+
+1. **Connectors NÃO importam UI.** Conectores são agnósticos de interface.
+2. **Services NÃO importam UI.** Lógica de domínio separada da apresentação.
+3. **Models NÃO importam nada do pacote** exceto `selection.py` (lazy import).
+4. **Storage NÃO importa connectors ou services.** Storage é camada inferior.
+5. **Facades NÃO contêm lógica.** São re-exports puros.
+6. **RuntimeSecrets NÃO é serializado.** Credenciais ficam apenas em memória.
+7. **BrowserCache NÃO armazena credenciais ou conteúdo.** Apenas metadados.

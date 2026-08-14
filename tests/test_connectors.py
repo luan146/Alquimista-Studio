@@ -88,17 +88,42 @@ def test_registry_exposes_confluence_and_gitbook_as_implemented() -> None:
     assert registry.get("sharepoint_graph").implemented is True
     assert registry.get("gitbook_api").implemented is True
     assert registry.get("zendesk_guide").implemented is True
+    assert registry.get("freshdesk_solutions").implemented is True
+    assert registry.get("outline_api").implemented is True
+    assert registry.get("helpscout_docs").implemented is True
+    assert registry.get("document360_api").implemented is True
     assert [item.source_type for item in registry.available()] == [
         "confluence_rest",
-        "gitbook_api",
         "zendesk_guide",
         "notion_api",
+        "sharepoint_graph",
+        "gitbook_api",
+        "generic_web",
+        "generic_docs",
+        "local_files",
         "bookstack_api",
         "github_docs",
-        "generic_web",
-        "sharepoint_graph",
+        "gitlab_docs",
+        "freshdesk_solutions",
+        "intercom_api",
+        "salesforce_api",
+        "hubspot_api",
+        "helpscout_docs",
+        "document360_api",
+        "outline_api",
+        "helpjuice_api",
+        "guru_api",
+        "slite_api",
+        "mediawiki_api",
+        "readme_api",
+        "wordpress_api",
+        "ghost_api",
+        "strapi_api",
+        "contentful_api",
+        "sanity_api",
     ]
     assert registry.get("notion_api").status_code is ConnectorStatus.AVAILABLE
+
 
 
 class FailingConnectorClient:

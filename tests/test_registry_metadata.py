@@ -22,14 +22,35 @@ def test_default_registry_is_the_single_source_for_form_and_card_metadata() -> N
 
     assert {item.source_type for item in descriptors} == {
         "confluence_rest",
-        "gitbook_api",
         "zendesk_guide",
         "notion_api",
+        "sharepoint_graph",
+        "gitbook_api",
+        "generic_web",
+        "generic_docs",
+        "local_files",
         "bookstack_api",
         "github_docs",
-        "sharepoint_graph",
-        "generic_web",
+        "gitlab_docs",
+        "freshdesk_solutions",
+        "intercom_api",
+        "salesforce_api",
+        "hubspot_api",
+        "helpscout_docs",
+        "document360_api",
+        "outline_api",
+        "helpjuice_api",
+        "guru_api",
+        "slite_api",
+        "mediawiki_api",
+        "readme_api",
+        "wordpress_api",
+        "ghost_api",
+        "strapi_api",
+        "contentful_api",
+        "sanity_api",
     }
+
     assert len({item.card.order for item in descriptors}) == len(descriptors)
     for descriptor in descriptors:
         assert descriptor.form is form_spec(descriptor)

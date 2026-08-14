@@ -70,6 +70,22 @@ class ConnectorCapabilities(Model):
     supports_multiple_languages: bool = False
     supports_document_download: bool = False
     supports_lazy_discovery: bool = False
+    supports_support_records: bool = False
+    supports_sitemap: bool = False
+    supports_llms_txt: bool = False
+    supports_crawler: bool = False
+    supports_local_files: bool = False
+
+
+class KnowledgeAttachment(Model):
+    id: str
+    document_id: str
+    filename: str
+    content_type: str = ""
+    size_bytes: int = 0
+    download_url: str = ""
+    relative_path: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class KnowledgeSource(Model):
@@ -181,18 +197,32 @@ class SourceConfig(Model):
         value = value.strip().rstrip("/")
         if not value:
             return ""
+        if (
+            value.startswith(("file://", "/", "\\\\", "./", "../"))
+            or (len(value) > 2 and value[1] == ":" and value[2] in "\\/")
+        ):
+            return value
         parsed = urlparse(value)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("A URL deve começar com http:// ou https:// e conter um host.")
+            raise ValueError("A URL deve começar com http:// ou https:// e conter um host (ou ser um caminho local válido).")
         if parsed.username or parsed.password:
             raise ValueError("Não inclua usuário ou senha na URL.")
         return value
 
     @model_validator(mode="after")
     def require_https_for_authenticated_access(self) -> "SourceConfig":
-        if self.base_url and self.auth_mode != AuthMode.PUBLIC and urlparse(self.base_url).scheme != "https":
+        if (
+            self.base_url
+            and not (
+                self.base_url.startswith(("file://", "/", "\\\\", "./", "../"))
+                or (len(self.base_url) > 2 and self.base_url[1] == ":" and self.base_url[2] in "\\/")
+            )
+            and self.auth_mode != AuthMode.PUBLIC
+            and urlparse(self.base_url).scheme != "https"
+        ):
             raise ValueError("A autenticação exige uma URL HTTPS.")
         return self
+
 
     @field_validator("connector_options")
     @classmethod

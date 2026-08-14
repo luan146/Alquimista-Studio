@@ -14,14 +14,35 @@ from .cases import CASES, ConnectorContractCase
 
 ACTIVE_SOURCE_TYPES = (
     "confluence_rest",
-    "gitbook_api",
     "zendesk_guide",
     "notion_api",
+    "sharepoint_graph",
+    "gitbook_api",
+    "generic_web",
+    "generic_docs",
+    "local_files",
     "bookstack_api",
     "github_docs",
-    "generic_web",
-    "sharepoint_graph",
+    "gitlab_docs",
+    "freshdesk_solutions",
+    "intercom_api",
+    "salesforce_api",
+    "hubspot_api",
+    "helpscout_docs",
+    "document360_api",
+    "outline_api",
+    "helpjuice_api",
+    "guru_api",
+    "slite_api",
+    "mediawiki_api",
+    "readme_api",
+    "wordpress_api",
+    "ghost_api",
+    "strapi_api",
+    "contentful_api",
+    "sanity_api",
 )
+
 
 
 @pytest.fixture(params=CASES, ids=lambda case: case.source_type)

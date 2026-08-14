@@ -283,13 +283,14 @@ class AlchemistIconAtlas:
     @classmethod
     def pixmap(cls, index: int, size: int = 64) -> QPixmap:
         atlas = cls._load()
-        if atlas.isNull() or not 0 <= index < 16:
+        if atlas.isNull():
             return QPixmap()
+        safe_index = index % 16 if index >= 0 else 0
         cell_width = atlas.width() // 4
         cell_height = atlas.height() // 4
         cell = atlas.copy(
-            (index % 4) * cell_width,
-            (index // 4) * cell_height,
+            (safe_index % 4) * cell_width,
+            (safe_index // 4) * cell_height,
             cell_width,
             cell_height,
         )
@@ -319,6 +320,46 @@ class AlchemistIconAtlas:
             "🚀": 7,
             "🔒": 2,
         }.get(fallback)
+
+
+def metric_card(
+    title: str, value: str = "0", subtext: str = ""
+) -> tuple[QFrame, QLabel, QLabel]:
+    """Create a modern 2026 metric card with value, title and subtext."""
+    frame = QFrame()
+    frame.setObjectName("metricCard")
+    layout = QVBoxLayout(frame)
+    layout.setContentsMargins(12, 10, 12, 10)
+    layout.setSpacing(4)
+
+    title_label = QLabel(title)
+    title_label.setObjectName("metricCardTitle")
+    layout.addWidget(title_label)
+
+    val_label = QLabel(value)
+    val_label.setObjectName("metricCardValue")
+    layout.addWidget(val_label)
+
+    sub_label = QLabel(subtext)
+    sub_label.setObjectName("metricCardSub")
+    sub_label.setVisible(bool(subtext))
+    layout.addWidget(sub_label)
+
+    return frame, val_label, sub_label
+
+
+def status_badge(text: str, level: str = "info") -> QLabel:
+    """Create a colored status pill."""
+    label = QLabel(text)
+    obj_names = {
+        "success": "statusBadgeSuccess",
+        "warning": "statusBadgeWarning",
+        "danger": "statusBadgeDanger",
+        "info": "statusBadgeInfo",
+    }
+    label.setObjectName(obj_names.get(level, "statusBadge"))
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    return label
 
 
 def button(

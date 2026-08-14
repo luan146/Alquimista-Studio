@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 # Shared component dimensions, colors, and animation timings.
 SOURCE_CARD_MIN_HEIGHT = 218
@@ -346,13 +346,145 @@ def stylesheet(colors: dict[str, str]) -> str:
     QProgressBar {{
         border: 0;
         background: {colors["surface_alt"]};
-        border-radius: 6px;
-        height: 12px;
+        border-radius: 8px;
+        height: 16px;
         text-align: center;
+        font-weight: 600;
+        font-size: 9pt;
     }}
     QProgressBar::chunk {{
-        background: {colors["primary"]};
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {colors["primary"]}, stop:1 {colors["primary_hover"]});
+        border-radius: 8px;
+    }}
+    QFrame#metricCard {{
+        background: {colors["surface"]};
+        border: 1px solid {colors["border"]};
+        border-radius: 12px;
+        padding: 10px;
+    }}
+    QFrame#metricCard:hover {{
+        border-color: {colors["primary"]};
+    }}
+    QLabel#metricCardValue {{
+        font-size: 18pt;
+        font-weight: 700;
+        color: {colors["text"]};
+    }}
+    QLabel#metricCardTitle {{
+        font-size: 9pt;
+        font-weight: 600;
+        color: {colors["muted"]};
+    }}
+    QLabel#statusBadge {{
+        padding: 3px 8px;
         border-radius: 6px;
+        font-size: 8.5pt;
+        font-weight: 600;
+    }}
+    QLabel#statusBadgeSuccess {{
+        background: {colors["surface_alt"]};
+        color: {colors["success"]};
+        border: 1px solid {colors["success"]};
+        border-radius: 6px;
+        padding: 3px 8px;
+        font-weight: 600;
+        font-size: 8.5pt;
+    }}
+    QLabel#statusBadgeWarning {{
+        background: {colors["surface_alt"]};
+        color: {colors["warning"]};
+        border: 1px solid {colors["warning"]};
+        border-radius: 6px;
+        padding: 3px 8px;
+        font-weight: 600;
+        font-size: 8.5pt;
+    }}
+    QLabel#statusBadgeDanger {{
+        background: {colors["surface_alt"]};
+        color: {colors["danger"]};
+        border: 1px solid {colors["danger"]};
+        border-radius: 6px;
+        padding: 3px 8px;
+        font-weight: 600;
+        font-size: 8.5pt;
+    }}
+    QLabel#statusBadgeInfo {{
+        background: {colors["surface_alt"]};
+        color: {colors["primary"]};
+        border: 1px solid {colors["primary"]};
+        border-radius: 6px;
+        padding: 3px 8px;
+        font-weight: 600;
+        font-size: 8.5pt;
+    }}
+    QPushButton#presetButton {{
+        background: {colors["surface_alt"]};
+        border: 1px solid {colors["border"]};
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-weight: 600;
+        font-size: 9.5pt;
+    }}
+    QPushButton#presetButton:hover {{
+        border-color: {colors["primary"]};
+        background: {colors["surface"]};
+    }}
+    QPushButton#presetButton[active="true"] {{
+        background: {colors["primary"]};
+        color: white;
+        border-color: {colors["primary"]};
+    }}
+    QFrame#spaceCard {{
+        background: {colors["surface"]};
+        border: 1px solid {colors["border"]};
+        border-radius: 12px;
+        padding: 12px;
+    }}
+    QFrame#spaceCard:hover {{
+        border-color: {colors["primary"]};
+        background: {colors["surface_alt"]};
+    }}
+    QFrame#logFilterBar {{
+        background: transparent;
+        border: 0;
+    }}
+    QPushButton#logFilterBtn {{
+        background: {colors["surface_alt"]};
+        border: 1px solid {colors["border"]};
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 8.5pt;
+        font-weight: 600;
+    }}
+    QPushButton#logFilterBtn:hover {{
+        border-color: {colors["primary"]};
+    }}
+    QPushButton#logFilterBtn[active="true"] {{
+        background: {colors["primary"]};
+        color: white;
+        border-color: {colors["primary"]};
+    }}
+    QLabel#wizardBadge {{
+        background: {colors["surface_alt"]};
+        color: {colors["text"]};
+        border: 1px solid {colors["border"]};
+        border-radius: 10px;
+        font-size: 8.5pt;
+        font-weight: 700;
+        padding: 2px 6px;
+    }}
+    QLabel#wizardBadge[active="true"] {{
+        background: {colors["primary"]};
+        color: white;
+        border-color: {colors["primary"]};
+    }}
+    QTextEdit#logTerminal {{
+        font-family: "Cascadia Code", "Consolas", "Courier New", monospace;
+        font-size: 9pt;
+        background: {colors["surface_alt"]};
+        border: 1px solid {colors["border"]};
+        border-radius: 8px;
+        line-height: 1.4;
     }}
     QScrollArea {{
         border: 0;

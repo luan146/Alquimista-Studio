@@ -73,6 +73,10 @@ class ApiHttpClient:
     def get_json(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
         return self._request_json("GET", path, params=params)
 
+    def get(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
+        """Compatibility alias for get_json."""
+        return self.get_json(path, params=params)
+
     def post_json(
         self,
         path: str,
@@ -82,9 +86,32 @@ class ApiHttpClient:
     ) -> Any:
         return self._request_json("POST", path, params=params, json_body=json_body)
 
-    def download(self, path: str, *, params: dict[str, Any] | None = None) -> bytes:
+    def post(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: Any = None,
+        json_body: Any = None,
+    ) -> Any:
+        """Compatibility alias for post_json."""
+        return self.post_json(
+            path, params=params, json_body=json if json is not None else json_body
+        )
+
+    def download(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> bytes:
         """Download a binary resource with bounded retries and cancellation."""
-        url = path if path.startswith(("http://", "https://")) else f"{self.base_url}/{path.lstrip('/')}"
+        url = (
+            path
+            if path.startswith(("http://", "https://"))
+            else f"{self.base_url}/{path.lstrip('/')}"
+        )
         last_error: Exception | None = None
         for attempt in range(1, self.options.retry_count + 1):
             self.token.check()
@@ -94,7 +121,11 @@ class ApiHttpClient:
                 response = self.session.get(
                     url,
                     params=params,
-                    timeout=(self.options.connect_timeout_seconds, self.options.timeout_seconds),
+                    headers=headers,
+                    timeout=(
+                        self.options.connect_timeout_seconds,
+                        self.options.timeout_seconds,
+                    ),
                 )
                 if response.status_code == 401:
                     raise AuthenticationError("A API recusou o token (HTTP 401).")

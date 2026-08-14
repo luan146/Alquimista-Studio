@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import re
-import socket
 from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -25,7 +24,6 @@ from ..models import (
 )
 from ..runtime import CancellationToken, LogCallback
 from .base import KnowledgeSourceConnector
-
 
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

@@ -48,10 +48,50 @@ from alquimista.storage import (
 )
 
 # Historical names kept for local integrations.
-AlquimistaError = AlquimistaError
 MultiSourceExtractor = ExtractionService
 Consolidator = ConsolidationService
 
 
 def clone_project(project: ProjectConfig) -> ProjectConfig:
-    return ProjectConfig.from_dict(project.to_dict())
+    return project.model_copy(deep=True)
+
+
+__all__ = [
+    "ConfluenceClient",
+    "MarkdownTransformer",
+    "normalize_markdown",
+    "page_metadata",
+    "relative_ancestor_titles",
+    "sha256_text",
+    "SCHEMA_VERSION",
+    "ConsolidationOptions",
+    "ExtractionOptions",
+    "ManifestDocument",
+    "ManifestEntry",
+    "MarkdownOptions",
+    "ProjectConfig",
+    "SourceConfig",
+    "default_project",
+    "now_iso",
+    "slugify",
+    "stable_json_hash",
+    "CancellationToken",
+    "ConsolidationService",
+    "ExtractionService",
+    "SourceRuntime",
+    "demote_headings",
+    "sanitize_filename",
+    "FAILURES_NAME",
+    "MANIFEST_NAME",
+    "PACKAGE_INDEX_NAME",
+    "REPORT_NAME",
+    "ManifestStore",
+    "atomic_write_json",
+    "atomic_write_text",
+    "load_json",
+    "load_project",
+    "save_project",
+    "MultiSourceExtractor",
+    "Consolidator",
+    "clone_project",
+]

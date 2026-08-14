@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any
 
@@ -28,6 +28,7 @@ def build_review_page(window: Any) -> QWidget:
     )
 
     step_bar = QHBoxLayout()
+    step_bar.setSpacing(12)
     for number, title, detail in [
         ("1", "Revisão das escolhas", "Confira e edite suas configurações"),
         ("2", "Pasta de saída", "Defina onde os arquivos serão salvos"),
@@ -36,11 +37,12 @@ def build_review_page(window: Any) -> QWidget:
         badge = QLabel(number)
         badge.setObjectName("consolidationStepNumber")
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        badge.setFixedSize(38, 38)
+        badge.setFixedSize(36, 36)
         step_bar.addWidget(badge)
         text = QVBoxLayout()
+        text.setSpacing(2)
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-weight: 700;")
+        title_label.setStyleSheet("font-weight: 700; font-size: 10.5pt;")
         detail_label = QLabel(detail)
         detail_label.setObjectName("subtitle")
         text.addWidget(title_label)
@@ -54,15 +56,15 @@ def build_review_page(window: Any) -> QWidget:
     layout.addLayout(step_bar)
 
     columns = QHBoxLayout()
-    columns.setSpacing(12)
+    columns.setSpacing(14)
 
     def step_card(number: str, title: str) -> tuple[QFrame, QVBoxLayout]:
         frame = QFrame()
         frame.setObjectName("reviewStepCard")
         frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         frame_layout = QVBoxLayout(frame)
-        frame_layout.setContentsMargins(14, 14, 14, 14)
-        frame_layout.setSpacing(10)
+        frame_layout.setContentsMargins(16, 16, 16, 16)
+        frame_layout.setSpacing(12)
         header = QHBoxLayout()
         badge = QLabel(number)
         badge.setObjectName("consolidationStepNumber")
@@ -85,14 +87,16 @@ def build_review_page(window: Any) -> QWidget:
         row = QFrame()
         row.setObjectName("reviewItem")
         row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(8, 7, 8, 7)
-        row_layout.setSpacing(8)
+        row_layout.setContentsMargins(10, 8, 10, 8)
+        row_layout.setSpacing(10)
         icon_label = QLabel(icon)
         icon_label.setObjectName("reviewItemIcon")
+        icon_label.setStyleSheet("font-size: 13pt;")
         row_layout.addWidget(icon_label)
         text = QVBoxLayout()
+        text.setSpacing(2)
         title_label = QLabel(label)
-        title_label.setStyleSheet("font-weight: 700;")
+        title_label.setStyleSheet("font-weight: 700; font-size: 9.5pt;")
         value = QLabel("Pendente")
         value.setObjectName("reviewItemValue")
         value.setWordWrap(True)
@@ -161,7 +165,8 @@ def build_review_page(window: Any) -> QWidget:
     operation_summary = QFrame()
     operation_summary.setObjectName("reviewOperationSummary")
     operation_summary_layout = QVBoxLayout(operation_summary)
-    operation_summary_layout.setContentsMargins(10, 6, 10, 6)
+    operation_summary_layout.setContentsMargins(12, 8, 12, 8)
+    operation_summary_layout.setSpacing(6)
     for key, title in [
         ("source", "Fonte"),
         ("connection", "Modo de acesso"),
@@ -211,6 +216,7 @@ def build_review_page(window: Any) -> QWidget:
     )
     execution_layout.addLayout(action_row)
     window.log_text = QTextEdit()
+    window.log_text.setObjectName("logTerminal")
     window.log_text.setReadOnly(True)
     window.log_text.setVisible(False)
     execution_layout.addWidget(window.log_text)

@@ -3,17 +3,17 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from ..client import ConfluenceClient
-from ..connectors import ConnectorRegistry, KnowledgeSourceConnector, default_registry
-from ..errors import AlquimistaError
-from ..models import (
+from ...client import ConfluenceClient
+from ...connectors import ConnectorRegistry, KnowledgeSourceConnector, default_registry
+from ...errors import AlquimistaError
+from ...models import (
     KnowledgeContainer,
     KnowledgeDocumentMetadata,
     ProjectConfig,
     now_iso,
 )
-from ..runtime import CancellationToken
-from ..services import SelectedDocumentRef, SourceRuntime
+from ...runtime import CancellationToken
+from ...services import SelectedDocumentRef, SourceRuntime
 
 
 class RuntimeSecrets:
@@ -51,13 +51,15 @@ class RuntimeBuilder:
         self.secrets = secrets
         self.registry = registry or default_registry()
 
-
     def build(
         self,
         project: ProjectConfig,
         token: CancellationToken,
         log: Any,
     ) -> list[SourceRuntime]:
+        import alquimista.ui.controllers as c_mod
+        confluence_client_cls = getattr(c_mod, "ConfluenceClient", ConfluenceClient)
+
         runtimes: list[SourceRuntime] = []
         for source in project.sources:
             token.check()
@@ -71,7 +73,7 @@ class RuntimeBuilder:
             data = self.trees.get(source.id)
             if data is None:
                 log(f"Carregando árvore de {source.name}…")
-                with ConfluenceClient(
+                with confluence_client_cls(
                     source,
                     project.extraction,
                     secret=self.secrets.get(source.id),
@@ -208,11 +210,15 @@ class RuntimeBuilder:
                 )
                 snapshot = self.trees.get(source.id) or {}
                 pages_by_container = snapshot.get("pages_by_container") or {}
-                structured = [item for item in project.selections
-                              if item.source_id == source.id and item.selected]
+                structured = [
+                    item
+                    for item in project.selections
+                    if item.source_id == source.id and item.selected
+                ]
                 if structured:
                     requested_refs = [
-                        (str(item.container_id), str(item.document_id)) for item in structured
+                        (str(item.container_id), str(item.document_id))
+                        for item in structured
                     ]
                 else:
                     requested_refs = []
@@ -221,7 +227,9 @@ class RuntimeBuilder:
                         if len(parts) == 3 and parts[0] == source.id:
                             requested_refs.append((parts[1], parts[2]))
                         else:
-                            requested_refs.append((str(source.space_key or "__legacy__"), str(key)))
+                            requested_refs.append(
+                                (str(source.space_key or "__legacy__"), str(key))
+                            )
                 if not requested_refs:
                     continue
                 documents: dict[str, dict[str, KnowledgeDocumentMetadata]] = {}
@@ -236,9 +244,12 @@ class RuntimeBuilder:
                     seen.add(key)
                     raw_items = pages_by_container.get(container_id) or []
                     metadata = next(
-                        (item for raw in raw_items
-                         if (item := self._snapshot_metadata(connector, raw, container_id))
-                         and str(item.id) == document_id),
+                        (
+                            item
+                            for raw in raw_items
+                            if (item := self._snapshot_metadata(connector, raw, container_id))
+                            and str(item.id) == document_id
+                        ),
                         None,
                     )
                     if metadata is None:
@@ -273,7 +284,9 @@ class RuntimeBuilder:
                         source=source,
                         root={},
                         pages_by_id={},
-                        selected_page_ids=[item.document_key for item in selected_documents],
+                        selected_page_ids=[
+                            item.document_key for item in selected_documents
+                        ],
                         secret=self.secrets.get(source.id),
                         connector=connector,
                         containers=container_map,
@@ -292,3 +305,6 @@ class RuntimeBuilder:
                 "Selecione ao menos uma página antes de executar."
             )
         return runtimes
+
+
+__all__ = ["RuntimeBuilder", "RuntimeSecrets"]
