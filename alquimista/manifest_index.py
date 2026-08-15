@@ -30,8 +30,10 @@ class ManifestIndex:
         connection: sqlite3.Connection | None = None
         try:
             connection = sqlite3.connect(temporary)
+            connection.execute("PRAGMA journal_mode = MEMORY")
+            connection.execute("PRAGMA synchronous = OFF")
+            connection.execute("PRAGMA temp_store = MEMORY")
             with connection:
-                connection.execute("PRAGMA journal_mode = DELETE")
                 connection.execute(
                     """
                     CREATE TABLE manifest_entries (

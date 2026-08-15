@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import tempfile
+import threading
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -65,6 +66,7 @@ class FileTransaction:
         self.directory = Path(
             tempfile.mkdtemp(prefix=".alquimista-txn-", dir=self.base)
         )
+        self._lock = threading.Lock()
         self.staged: dict[Path, Path] = {}
         self.deletions: set[Path] = set()
         self._committed = False
@@ -78,13 +80,16 @@ class FileTransaction:
 
     def stage_text(self, path: Path, content: str) -> None:
         target = self._target(path)
-        staged = self.directory / "staged" / f"{uuid.uuid4().hex}.tmp"
-        atomic_write_text(staged, content)
-        previous = self.staged.get(target)
-        if previous:
-            previous.unlink(missing_ok=True)
-        self.staged[target] = staged
-        self.deletions.discard(target)
+        staged_dir = self.directory / "staged"
+        staged_dir.mkdir(parents=True, exist_ok=True)
+        staged = staged_dir / f"{uuid.uuid4().hex}.tmp"
+        staged.write_text(content, encoding="utf-8", newline="\n")
+        with self._lock:
+            previous = self.staged.get(target)
+            if previous:
+                previous.unlink(missing_ok=True)
+            self.staged[target] = staged
+            self.deletions.discard(target)
 
     def stage_json(self, path: Path, data: Any) -> None:
         self.stage_text(
@@ -94,10 +99,11 @@ class FileTransaction:
 
     def stage_delete(self, path: Path) -> None:
         target = self._target(path)
-        staged = self.staged.pop(target, None)
-        if staged:
-            staged.unlink(missing_ok=True)
-        self.deletions.add(target)
+        with self._lock:
+            staged = self.staged.pop(target, None)
+            if staged:
+                staged.unlink(missing_ok=True)
+            self.deletions.add(target)
 
     def commit(self) -> None:
         backups = self.directory / "backups"

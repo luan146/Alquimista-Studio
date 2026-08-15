@@ -143,5 +143,5 @@ def delete_session_file(source_id: str) -> bool:
     path = session_path(source_id)
     if not path.exists():
         return False
-    path.unlink()
+    path.unlink(missing_ok=True)
     return True

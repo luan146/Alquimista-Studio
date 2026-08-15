@@ -20,6 +20,8 @@ Paste a source URL, connect, choose the pages you want, and export structured co
 
 ➡️ [Download the latest release](https://github.com/luan146/Alquimista-Studio/releases/latest) · [View all releases](https://github.com/luan146/Alquimista-Studio/releases)
 
+**Current release: `0.9.5`** · Windows Installer and Portable ZIP use the same version.
+
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="ALQuimista Studio dashboard" width="100%">
 </p>
@@ -62,7 +64,7 @@ Your exported content remains portable instead of being locked to a specific AI 
 | 🧠 **AI-ready** | Prepare content for AI assistants, RAG pipelines, NotebookLM, and other context-based workflows. |
 | 🗂️ **Knowledge-friendly** | Use exported Markdown in tools such as Obsidian or keep it as an offline archive. |
 | 🔎 **Traceable output** | Preserve source URLs, hierarchy, metadata, timestamps, and SHA-256 hashes. |
-| 🔄 **Incremental workflow** | Hash-based tracking helps identify content changes and avoid unnecessary work. |
+| 🔄 **Incremental synchronization** | Compare sources, detect new/updated/removed items, and download only what changed. |
 | 🔐 **Security-aware** | API secrets are kept out of project files, and browser sessions are handled separately. |
 
 ---
@@ -149,19 +151,54 @@ Typical destinations include:
 
 ## 🔌 Supported platforms
 
+ALQuimista currently registers **28 runnable connectors** through a shared registry. The exact capabilities and authentication requirements depend on the platform.
+
 | Platform | Integration | Status |
 |---|---|---|
-| **Confluence Server / Data Center** | REST API | 🟢 **Stable** |
-| **GitBook** | REST API v1 | 🟡 **Available** |
-| **Zendesk Guide** | Help Center API | 🟡 **Available** |
-| **Notion** | Official API | 🚧 **In development** |
-| **SharePoint Online** | Microsoft Graph | 🚧 **In development** |
-| **Generic websites** | — | 🗺️ **Planned** |
+| **Confluence** | Official REST API | 🟢 Available |
+| **Zendesk Guide** | Help Center API | 🟢 Available |
+| **Notion** | Official API | 🟢 Available |
+| **SharePoint Online** | Microsoft Graph API | 🟢 Available |
+| **GitBook** | Official REST API | 🟢 Available |
+| **Generic Web** | Public web pages | 🟢 Available |
+| **Generic Docs / Frameworks** | `llms.txt`, Sitemap, Docusaurus, MkDocs, Mintlify | 🟢 Available |
+| **Local files and folders** | Universal local document processor | 🟢 Available |
+| **BookStack** | Official REST API | 🟢 Available |
+| **GitHub Docs / Wiki** | Official GitHub API | 🟢 Available |
+| **GitLab Docs / Wiki** | Official GitLab API v4 | 🟢 Available |
+| **Freshdesk** | Solutions API and tickets | 🟢 Available |
+| **Intercom** | Help Center and Support API | 🟢 Available |
+| **Salesforce** | Knowledge and Service Cloud API | 🟢 Available |
+| **HubSpot** | Knowledge Base and Service Hub API | 🟢 Available |
+| **Help Scout** | Docs API | 🟢 Available |
+| **Document360** | REST API | 🟢 Available |
+| **Outline** | Knowledge Base API | 🟢 Available |
+| **Helpjuice** | Knowledge Base API | 🟢 Available |
+| **Guru** | Knowledge Cards API | 🟢 Available |
+| **Slite** | Channels and Notes API | 🟢 Available |
+| **MediaWiki** | Action API (`api.php`) | 🟢 Available |
+| **ReadMe** | Documentation API | 🟢 Available |
+| **WordPress** | REST API v2 | 🟢 Available |
+| **Ghost** | Content API | 🟢 Available |
+| **Strapi** | Headless CMS API | 🟢 Available |
+| **Contentful** | Content Delivery API | 🟢 Available |
+| **Sanity** | GROQ Query API | 🟢 Available |
 
-> Platform capabilities may differ. Some connectors support features such as hierarchical lazy loading or search more completely than others.
+> “Available” means the connector is registered, implemented, and runnable. API permissions, authentication, rate limits, pagination, search, and hierarchical discovery still vary by platform.
 
-Integration status vocabulary: Estável, Disponível, Experimental, Parcial,
-Em desenvolvimento and Planejado.
+### 📁 Local documents to Markdown
+
+The Local Files connector scans files and folders and sends each supported file to the appropriate processor. The current processor pipeline covers:
+
+- PDF, including text extraction, page headings, metadata, and tables when the PDF backend exposes them;
+- spreadsheets converted to Markdown tables (`.xlsx`, `.xlsm`, `.csv`, `.tsv`, and `.ods`);
+- Word, PowerPoint, EPUB, HTML, images, plain text, and Markdown files.
+
+Large files are bounded by the processor registry, and optional format dependencies fail explicitly when they are not available.
+
+### 🔄 Incremental synchronization
+
+The synchronization service can operate at selection, source, or project scope. It builds a plan from the remote inventory and the existing manifest, classifying items as **new, updated, unchanged, removed, failed, or preserved after an error**. Only changed documents are downloaded, remote removals are handled safely, attachments can be compared, and the operation writes a structured `sync_report.json` report. Consolidation can run automatically after a successful synchronization.
 
 ---
 
@@ -206,7 +243,7 @@ Download → install or extract → open ALQuimista Studio.
 
 | Platform | Package |
 |---|---|
-| 🪟 Windows | [Installer](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-installer-0.9.5.exe) · [Portable ZIP](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-portable-0.9.5.zip) |
+| 🪟 Windows | [Installer `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-installer-0.9.5.exe) · [Portable ZIP `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-portable-0.9.5.zip) |
 | 🐧 Linux | [Portable tar.gz](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-portable-0.9.5.tar.gz) |
 
 ➡️ [View all releases](https://github.com/luan146/Alquimista-Studio/releases)
@@ -289,16 +326,17 @@ ALQuimista is designed to avoid storing sensitive authentication data inside pro
 
 ```text
 alquimista/
-├── connectors/       # Platform integrations
-├── browser/          # Browser-assisted discovery and metadata cache
-├── ui/               # PySide6 desktop interface
-├── models.py         # Data contracts
-├── services.py       # Extraction and consolidation engine
-├── markdown.py       # HTML → Markdown transformation
-├── storage.py        # Atomic persistence
-├── auth.py           # Authentication workflows
-├── reports.py        # Execution reports
-└── manifest_index.py # Incremental manifest index
+├── connectors/          # Platform integrations and shared HTTP
+├── discovery/           # Universal web discovery
+├── document_processing/ # PDF, spreadsheet and local-file processors
+├── browser/             # Browser-assisted discovery and metadata cache
+├── markdown/            # Transformation, metadata and rendering
+├── services/            # Extraction, synchronization and consolidation
+├── ui/                  # PySide6 desktop interface
+├── models.py            # Data contracts
+├── storage.py           # Atomic persistence and manifests
+├── auth.py              # Authentication workflows
+└── runtime.py           # Cancellation, progress and runtime state
 
 tests/                # Automated test suite
 docs/                 # Architecture, connector docs and screenshots
@@ -362,6 +400,12 @@ Build the Windows executable:
 tools\build\gerar_executavel.bat
 ```
 
+Build the versioned Windows Portable package and installer:
+
+```powershell
+.\tools\build\gerar_distribuicoes.ps1 -Version 0.9.5
+```
+
 The generated executable is written to:
 
 ```text
@@ -381,7 +425,8 @@ The repository includes a GitHub Actions workflow that automatically runs:
 - mypy type checks
 - Python compilation checks
 - pytest
-- PyInstaller executable build
+- Windows Portable and installer builds
+- Linux Portable package build and archive validation
 
 This helps catch regressions before changes are merged.
 

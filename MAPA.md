@@ -21,7 +21,7 @@ Guia de referência rápida para agentes de IA e desenvolvedores. Fonte da verda
 | Funções de teste | ~233 |
 | Linhas de teste | ~6.500 |
 | Versão do schema | 4 (`SCHEMA_VERSION` em `models.py`) |
-| Versão do pacote | 0.9 (`__version__` em `__init__.py`) |
+| Versão do pacote | 0.9.5 (`__version__` em `__init__.py`) |
 | Python | 3.12 |
 | Framework UI | PySide6 ≥ 6.10 |
 | Dependências runtime | pydantic ≥ 2.9, requests ≥ 2.31, beautifulsoup4 ≥ 4.12, markdownify ≥ 1.2 |
@@ -80,6 +80,7 @@ alquimista/                  # Pacote principal (sem UI)
 ├── services/                # Motor de domínio
 │   ├── extraction.py        # ExtractionService (~48KB)
 │   ├── consolidation.py     # ConsolidationService (~16KB)
+│   ├── sync.py              # IncrementalSyncService (Fase 3 ~27KB)
 │   ├── reconciliation.py    # InventoryReconciliationService
 │   ├── runtime.py           # SourceRuntime, SelectedDocumentRef
 │   └── helpers.py           # sanitize_filename, demote_headings
@@ -294,6 +295,18 @@ alquimista/                  # Pacote principal (sem UI)
 | `_sort()` | Ordena (path/title/updated/id) |
 
 **Callers:** `ui/controllers/consolidation_controller.py`, `ui/controllers/execution_controller.py`.
+
+### services/sync.py — IncrementalSyncService (~27KB, Fase 3)
+
+| Método / Modelo | Responsabilidade |
+|---|---|
+| `IncrementalSyncService(project, project_dir)` | Orquestrador de sincronização incremental |
+| `plan_sync(runtimes, scope, target_source_id)` | Varredura de metadados, detecção de +, ~, -, = e checagens fail-safe |
+| `apply_sync(plan, runtimes, options)` | Execução atômica sobre ExtractionService e FileTransaction |
+| `SyncScope` | `SELECTION`, `SOURCE`, `PROJECT` |
+| `SyncPlan / SyncReport / SyncItemChange` | Modelos de plano, relatório e mudanças de documento/anexos |
+
+**Callers:** `ui/controllers/execution_controller.py`, `ui/dialogs/sync_dialog.py`.
 
 ### services/reconciliation.py — InventoryReconciliationService
 

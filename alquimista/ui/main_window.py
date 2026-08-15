@@ -48,6 +48,7 @@ from ..models import (
 from ..runtime import CancellationToken
 from ..selection import SelectionStore
 from ..services import SourceRuntime
+from ..session_store import session_directory  # noqa: F401
 from ..storage import MANIFEST_NAME
 from .components import (
     APP_TITLE,
@@ -79,6 +80,9 @@ from .controllers import (
     run_complete,
     run_extraction,
     save_project_file,
+    sync_project,
+    sync_selection,
+    sync_source,
     validated_project_snapshot,
 )
 from .i18n import (
@@ -169,6 +173,20 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             settings=self.ui_settings,
             status_bar=self.statusBar(),
         )
+        self.visual_profile_combo = QComboBox()
+        self.visual_profile_combo.addItem("Atelier", "atelier")
+        self.visual_profile_combo.addItem("Legado", "legacy")
+        saved_profile = str(
+            self.ui_settings.value("preferences/visual_profile", "atelier")
+            or "atelier"
+        )
+        profile_idx = self.visual_profile_combo.findData(saved_profile)
+        self.visual_profile_combo.setCurrentIndex(max(0, profile_idx))
+        self.visual_profile_combo.currentIndexChanged.connect(
+            self._visual_profile_changed
+        )
+        if QApplication.instance():
+            apply_theme(QApplication.instance(), "system")
         self._build()
         self._load_project_ui()
         self._update_load_context()
@@ -240,6 +258,33 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
 
     def _change_language(self, language: str) -> None:
         self.navigation_controller.change_language(language)
+
+    @property
+    def _tree_loading(self) -> bool:
+        return bool(
+            getattr(self, "tree_loader_controller", None)
+            and self.tree_loader_controller.loading
+        )
+
+    @_tree_loading.setter
+    def _tree_loading(self, value: bool) -> None:
+        if hasattr(self, "tree_loader_controller"):
+            self.tree_loader_controller.loading = value
+
+    @property
+    def visual_profile(self) -> str:
+        return str(
+            getattr(self, "visual_profile_combo", None)
+            and self.visual_profile_combo.currentData()
+            or "atelier"
+        )
+
+    def _visual_profile_changed(self, *_args: Any) -> None:
+        profile = self.visual_profile
+        self.ui_settings.setValue("preferences/visual_profile", profile)
+        self.ui_settings.sync()
+        if QApplication.instance():
+            apply_theme(QApplication.instance(), "system")
 
     @property
     def trees(self) -> dict[str, dict[str, Any]]:
@@ -388,10 +433,13 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             op_mode_help_label=getattr(self, "execution_mode_help", None),
         )
         self.tree_loader_controller = TreeLoaderController(
-            connector_registry=self.connector_registry,
-            secrets=self.secrets,
-            trees=self.trees,
-            worker_starter=self._start_worker,
+            connector_registry=lambda: self.connector_registry,
+            secrets=lambda: self.secrets,
+            trees=lambda: self.trees,
+            worker_starter=lambda fn, done: self._start_worker(fn, done),
+            lazy_discovery_page=lambda *args, **kwargs: self._lazy_discovery_page(
+                *args, **kwargs
+            ),
             status_bar=self.statusBar(),
             tree_load_buttons=[
                 btn
@@ -1181,6 +1229,8 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
             )
         )
         appearance_layout.addWidget(self.language_combo)
+        appearance_layout.addWidget(QLabel("Perfil visual"))
+        appearance_layout.addWidget(self.visual_profile_combo)
         layout.addWidget(appearance)
         network, network_layout = card()
         network_layout.addWidget(QLabel("⚙ Rede (avançado)"))
@@ -2065,6 +2115,16 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
     def run_complete(self) -> None:
         run_complete(self)
 
+    def sync_source(self, source_id: str) -> None:
+        sync_source(self, source_id)
+
+    def sync_project(self) -> None:
+        sync_project(self)
+
+    def sync_selection(self) -> None:
+        sync_selection(self)
+
+
     def _update_consolidation_action_availability(self) -> None:
         if hasattr(self, "consolidation_controller"):
             self.consolidation_controller.update_action_availability(
@@ -2095,6 +2155,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, QMainWindow):
                 self.trees,
                 self.last_consolidation_preview,
             )
+            self._update_depth_examples()
 
     def _consolidation_example_paths(self, limit: int = 6) -> list[list[str]]:
         if hasattr(self, "consolidation_controller"):

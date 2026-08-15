@@ -1,13 +1,44 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from ..models import ConnectorCapabilities, ConnectorStatus, SourceConfig
 from .base import KnowledgeSourceConnector
 
 ConnectorFactory = Callable[..., KnowledgeSourceConnector]
+
+CONNECTOR_ICON_INDEX = {
+    "zendesk_guide": 0,
+    "confluence_rest": 1,
+    "notion_api": 2,
+    "sharepoint_graph": 3,
+    "gitbook_api": 4,
+    "generic_web": 5,
+    "generic_docs": 6,
+    "local_files": 7,
+    "bookstack_api": 8,
+    "github_docs": 9,
+    "gitlab_docs": 10,
+    "freshdesk_solutions": 11,
+    "intercom_api": 12,
+    "salesforce_api": 13,
+    "hubspot_api": 14,
+    "helpscout_docs": 15,
+    "document360_api": 16,
+    "outline_api": 17,
+    "helpjuice_api": 18,
+    "guru_api": 19,
+    "slite_api": 20,
+    "mediawiki_api": 21,
+    "readme_api": 22,
+    "wordpress_api": 23,
+    "ghost_api": 24,
+    "strapi_api": 25,
+    "contentful_api": 26,
+    "sanity_api": 27,
+}
 
 
 @dataclass(frozen=True)
@@ -1172,5 +1203,15 @@ def default_registry() -> ConnectorRegistry:
             factory=SanityConnector,
         )
     )
+
+    for descriptor in registry.all():
+        icon_index = CONNECTOR_ICON_INDEX.get(descriptor.source_type)
+        if icon_index is not None:
+            registry.register(
+                replace(
+                    descriptor,
+                    card=replace(descriptor.card, icon=icon_index),
+                )
+            )
 
     return registry

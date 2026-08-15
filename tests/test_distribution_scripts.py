@@ -41,8 +41,8 @@ def test_distribution_defaults_use_current_product_version() -> None:
         encoding="utf-8"
     )
 
-    assert '__version__ = "0.9"' in package
-    assert '[string]$Version = "0.9"' in windows
-    assert 'VERSION="${1:-0.9}"' in linux
-    assert '#define AppVersion "0.9"' in installer
+    assert '__version__ = "0.9.5"' in package
+    assert '[string]$Version = "0.9.5"' in windows
+    assert 'VERSION="${1:-0.9.5}"' in linux
+    assert '#define AppVersion "0.9.5"' in installer
     assert 'rm -rf -- "$BUILD_ROOT" "$STAGING_ROOT"' in linux

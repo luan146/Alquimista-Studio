@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import concurrent.futures
 import hashlib
 import json
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -54,24 +56,66 @@ class TreeLoaderController:
         self,
         connector_registry: Any,
         secrets: Any,
-        trees: dict[str, Any],
+        trees: dict[str, Any] | Callable[[], dict[str, Any]],
         worker_starter: Callable[[Any, Any], None],
+        lazy_discovery_page: Callable[..., Any | None] | None = None,
         status_bar: QStatusBar | None = None,
         tree_load_buttons: list[QPushButton] | None = None,
         tree_cancel_buttons: list[QPushButton] | None = None,
         tree_load_status_label: Any | None = None,
         tree_load_progress: QProgressBar | None = None,
     ) -> None:
-        self.connector_registry = connector_registry
-        self.secrets = secrets
-        self.trees = trees
-        self.worker_starter = worker_starter
+        self._connector_registry = connector_registry
+        self._secrets = secrets
+        self._trees = trees
+        self._worker_starter = worker_starter
+        self._lazy_discovery_page = (
+            lazy_discovery_page or self.lazy_discovery_page
+        )
         self.status_bar = status_bar
         self.tree_load_buttons = tree_load_buttons or []
         self.tree_cancel_buttons = tree_cancel_buttons or []
         self.tree_load_status_label = tree_load_status_label
         self.tree_load_progress = tree_load_progress
         self.loading = False
+
+    @property
+    def connector_registry(self) -> Any:
+        if callable(self._connector_registry):
+            return self._connector_registry()
+        return self._connector_registry
+
+    @connector_registry.setter
+    def connector_registry(self, value: Any) -> None:
+        self._connector_registry = value
+
+    @property
+    def secrets(self) -> Any:
+        if callable(self._secrets):
+            return self._secrets()
+        return self._secrets
+
+    @secrets.setter
+    def secrets(self, value: Any) -> None:
+        self._secrets = value
+
+    @property
+    def trees(self) -> dict[str, Any]:
+        if callable(self._trees):
+            return self._trees()
+        return self._trees
+
+    @trees.setter
+    def trees(self, value: dict[str, Any]) -> None:
+        self._trees = value
+
+    @property
+    def worker_starter(self) -> Callable[[Any, Any], None]:
+        return self._worker_starter
+
+    @worker_starter.setter
+    def worker_starter(self, value: Callable[[Any, Any], None]) -> None:
+        self._worker_starter = value
 
     def set_loading(
         self,
@@ -265,21 +309,25 @@ class TreeLoaderController:
         def work(
             token: CancellationToken, progress: Any, log: Any
         ) -> list[dict[str, Any]]:
-            results: list[dict[str, Any]] = []
-            connector = self.connector_registry.create(
-                source,
-                options=project.extraction,
-                secret=self.secrets.get(source.id, ""),
-                token=token,
-                log=log,
-            )
-            try:
-                for index, container in enumerate(containers, 1):
+            total_containers = len(containers)
+            if total_containers == 0:
+                return []
+
+            if total_containers == 1:
+                container = containers[0]
+                connector = self.connector_registry.create(
+                    source,
+                    options=project.extraction,
+                    secret=self.secrets.get(source.id, ""),
+                    token=token,
+                    log=log,
+                )
+                try:
                     token.check()
                     container_id = str(container["id"])
                     progress(
-                        index - 1,
-                        len(containers),
+                        0,
+                        1,
                         f"Abrindo {container['name']}",
                     )
                     documents = connector.list_documents(container_id)
@@ -287,17 +335,59 @@ class TreeLoaderController:
                         self.container_page_dict(container, item)
                         for item in documents
                     ]
-                    results.append(
-                        {"container_id": container_id, "pages": pages}
-                    )
                     progress(
-                        index,
-                        len(containers),
+                        1,
+                        1,
                         f"{len(pages)} páginas em {container['name']}",
                     )
-            finally:
-                connector.close()
-            return results
+                    return [{"container_id": container_id, "pages": pages}]
+                finally:
+                    connector.close()
+
+            results_by_id: dict[str, list[dict[str, Any]]] = {}
+            max_workers = min(4, total_containers)
+            completed_count = 0
+            count_lock = threading.Lock()
+
+            def _fetch_container(c: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
+                nonlocal completed_count
+                token.check()
+                cid = str(c["id"])
+                c_conn = self.connector_registry.create(
+                    source,
+                    options=project.extraction,
+                    secret=self.secrets.get(source.id, ""),
+                    token=token,
+                    log=log,
+                )
+                try:
+                    token.check()
+                    docs = c_conn.list_documents(cid)
+                    pgs = [
+                        self.container_page_dict(c, item)
+                        for item in docs
+                    ]
+                    with count_lock:
+                        completed_count += 1
+                        progress(
+                            completed_count,
+                            total_containers,
+                            f"{len(pgs)} páginas em {c['name']}",
+                        )
+                    return (cid, pgs)
+                finally:
+                    c_conn.close()
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(_fetch_container, c) for c in containers]
+                for future in concurrent.futures.as_completed(futures):
+                    cid, pgs = future.result()
+                    results_by_id[cid] = pgs
+
+            return [
+                {"container_id": str(c["id"]), "pages": results_by_id.get(str(c["id"]), [])}
+                for c in containers
+            ]
 
         self.worker_starter(work, on_done)
 
@@ -334,7 +424,7 @@ class TreeLoaderController:
                     None
                     if load_all
                     or not descriptor.capabilities.supports_lazy_discovery
-                    else self.lazy_discovery_page(
+                    else self._lazy_discovery_page(
                         source,
                         connector,
                         container_id,
@@ -419,7 +509,7 @@ class TreeLoaderController:
                 log=log,
             )
             try:
-                page = self.lazy_discovery_page(
+                page = self._lazy_discovery_page(
                     source,
                     connector,
                     container_id,
@@ -500,6 +590,10 @@ class TreeLoaderController:
 
     @staticmethod
     def browser_cache_path() -> Path:
+        import sys
+        mw = sys.modules.get("alquimista.ui.main_window")
+        if mw is not None and hasattr(mw, "session_directory"):
+            return mw.session_directory().parent / "browser_metadata.sqlite3"
         return session_directory().parent / "browser_metadata.sqlite3"
 
     @classmethod

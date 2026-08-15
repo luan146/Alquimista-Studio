@@ -1,7 +1,7 @@
 ; Inno Setup configuration for the installed Windows distribution.
 #define AppName "ALQuimista Studio"
 #ifndef AppVersion
-  #define AppVersion "0.9"
+  #define AppVersion "0.9.5"
 #endif
 #ifndef AppExeSource
   #define AppExeSource "..\\.tmp\\pyinstaller-dist\\ALQuimista Studio.exe"

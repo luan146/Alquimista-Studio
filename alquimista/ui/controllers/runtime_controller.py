@@ -179,6 +179,8 @@ class RuntimeBuilder:
         project: ProjectConfig,
         token: CancellationToken,
         log: Any,
+        *,
+        allow_empty_selection: bool = False,
     ) -> list[SourceRuntime]:
         """Build runtimes from selected references without remote inventory scans."""
         runtimes: list[SourceRuntime] = []
@@ -187,7 +189,7 @@ class RuntimeBuilder:
             if not source.enabled:
                 continue
             requested_keys = project.selected_keys_for(source.id)
-            if not requested_keys:
+            if not requested_keys and not allow_empty_selection:
                 log(
                     f"[Runtime] Fonte {source.id} ({source.name}) ignorada: "
                     "nenhum documento selecionado."
@@ -230,7 +232,7 @@ class RuntimeBuilder:
                             requested_refs.append(
                                 (str(source.space_key or "__legacy__"), str(key))
                             )
-                if not requested_refs:
+                if not requested_refs and not allow_empty_selection:
                     continue
                 documents: dict[str, dict[str, KnowledgeDocumentMetadata]] = {}
                 selected_documents: list[SelectedDocumentRef] = []
@@ -299,7 +301,9 @@ class RuntimeBuilder:
             finally:
                 if connector is not None:
                     connector.close()
-        if not runtimes or not any(runtime.selected_page_ids for runtime in runtimes):
+        if not allow_empty_selection and (
+            not runtimes or not any(runtime.selected_page_ids for runtime in runtimes)
+        ):
             raise AlquimistaError(
                 "Nenhuma fonte ativa possui documentos selecionados. "
                 "Selecione ao menos uma página antes de executar."

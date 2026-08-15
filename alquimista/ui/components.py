@@ -174,32 +174,32 @@ NAV_ICON_INDEX = {
 }
 
 BUTTON_ICON_INDEX = {
-    "🔎": 0,
-    "←": 0,
+    "🔎": 14,
+    "←": 13,
     "🔐": 2,
     "🌐": 3,
-    "🗑": 9,
-    "🗑️": 9,
-    "🔌": 2,
+    "🗑": 12,
+    "🗑️": 12,
+    "🔌": 14,
     "🌳": 3,
-    "👁": 7,
+    "👁": 3,
     "✅": 7,
-    "⬜": 4,
+    "⬜": 15,
     "❓": 8,
-    "📦": 6,
+    "📦": 5,
     "🚀": 6,
-    "▶": 7,
-    "🔄": 7,
-    "⏹": 2,
-    "🔁": 7,
-    "📋": 12,
-    "📁": 13,
-    "🧾": 12,
-    "🛠": 9,
-    "💾": 15,
-    "➕": 15,
-    "＋": 15,
-    "📂": 13,
+    "▶": 6,
+    "🔄": 5,
+    "⏹": 15,
+    "🔁": 6,
+    "📋": 1,
+    "📁": 11,
+    "🧾": 1,
+    "🛠": 8,
+    "💾": 9,
+    "➕": 10,
+    "＋": 10,
+    "📂": 11,
     "↺": 9,
     "🔑": 2,
 }
@@ -269,28 +269,72 @@ def _button_presentation(text: str) -> tuple[str, int | None]:
 
 
 class AlchemistIconAtlas:
-    """Loads the generated RPG/alchemy icon atlas and exposes individual cells."""
+    """Loads separated generated atlases for system, connector, and auth icons."""
 
-    _pixmap: QPixmap | None = None
-    _path = Path(__file__).resolve().parents[2] / "assets" / "icons" / "alchemist_icon_atlas.png"
+    _system_pixmap: QPixmap | None = None
+    _connector_pixmap_cache: QPixmap | None = None
+    _auth_pixmap_cache: QPixmap | None = None
+    _system_path = (
+        Path(__file__).resolve().parents[2]
+        / "assets"
+        / "icons"
+        / "alchemist_system_atlas.png"
+    )
+    _connector_path = (
+        Path(__file__).resolve().parents[2]
+        / "assets"
+        / "icons"
+        / "alchemist_connector_atlas.png"
+    )
+    _auth_path = (
+        Path(__file__).resolve().parents[2]
+        / "assets"
+        / "icons"
+        / "alchemist_auth_atlas.png"
+    )
+    _fallback_path = (
+        Path(__file__).resolve().parents[2]
+        / "assets"
+        / "icons"
+        / "alchemist_icon_atlas.png"
+    )
 
     @classmethod
-    def _load(cls) -> QPixmap:
-        if cls._pixmap is None:
-            cls._pixmap = QPixmap(str(cls._path))
-        return cls._pixmap
+    def _load_system(cls) -> QPixmap:
+        if cls._system_pixmap is None:
+            cls._system_pixmap = QPixmap(str(cls._system_path))
+            if cls._system_pixmap.isNull():
+                cls._system_pixmap = QPixmap(str(cls._fallback_path))
+        return cls._system_pixmap
 
     @classmethod
-    def pixmap(cls, index: int, size: int = 64) -> QPixmap:
-        atlas = cls._load()
+    def _load_connectors(cls) -> QPixmap:
+        if cls._connector_pixmap_cache is None:
+            cls._connector_pixmap_cache = QPixmap(str(cls._connector_path))
+            if cls._connector_pixmap_cache.isNull():
+                cls._connector_pixmap_cache = QPixmap(str(cls._fallback_path))
+        return cls._connector_pixmap_cache
+
+    @classmethod
+    def _load_auth(cls) -> QPixmap:
+        if cls._auth_pixmap_cache is None:
+            cls._auth_pixmap_cache = QPixmap(str(cls._auth_path))
+            if cls._auth_pixmap_cache.isNull():
+                cls._auth_pixmap_cache = cls._load_system()
+        return cls._auth_pixmap_cache
+
+    @classmethod
+    def _cell(
+        cls, atlas: QPixmap, index: int, columns: int, rows: int, size: int
+    ) -> QPixmap:
         if atlas.isNull():
             return QPixmap()
-        safe_index = index % 16 if index >= 0 else 0
-        cell_width = atlas.width() // 4
-        cell_height = atlas.height() // 4
+        safe_index = index % (columns * rows) if index >= 0 else 0
+        cell_width = atlas.width() // columns
+        cell_height = atlas.height() // rows
         cell = atlas.copy(
-            (safe_index % 4) * cell_width,
-            (safe_index // 4) * cell_height,
+            (safe_index % columns) * cell_width,
+            (safe_index // columns) * cell_height,
             cell_width,
             cell_height,
         )
@@ -299,6 +343,28 @@ class AlchemistIconAtlas:
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
+
+    @classmethod
+    def pixmap(cls, index: int, size: int = 64) -> QPixmap:
+        return cls._cell(cls._load_system(), index, 4, 4, size)
+
+    @classmethod
+    def connector_pixmap(cls, index: int, size: int = 64) -> QPixmap:
+        return cls._cell(cls._load_connectors(), index, 8, 4, size)
+
+    @classmethod
+    def connector_icon(cls, index: int, size: int = 24) -> QIcon:
+        pixmap = cls.connector_pixmap(index, size)
+        return QIcon(pixmap) if not pixmap.isNull() else QIcon()
+
+    @classmethod
+    def auth_pixmap(cls, index: int, size: int = 24) -> QPixmap:
+        return cls._cell(cls._load_auth(), index, 4, 2, size)
+
+    @classmethod
+    def auth_icon(cls, index: int, size: int = 24) -> QIcon:
+        pixmap = cls.auth_pixmap(index, size)
+        return QIcon(pixmap) if not pixmap.isNull() else QIcon()
 
     @classmethod
     def icon(cls, index: int, size: int = 24) -> QIcon:
@@ -311,13 +377,13 @@ class AlchemistIconAtlas:
         return {
             "📚": 1,
             "🌳": 3,
-            "☑": 4,
-            "✍": 5,
-            "⚙": 9,
-            "📦": 6,
-            "📊": 8,
-            "🔧": 9,
-            "🚀": 7,
+            "☑": 3,
+            "✍": 4,
+            "⚙": 8,
+            "📦": 5,
+            "📊": 7,
+            "🔧": 8,
+            "🚀": 6,
             "🔒": 2,
         }.get(fallback)
 
@@ -609,7 +675,7 @@ class SourceCard(QFrame):
         icon_label.setObjectName("sourceCardIcon")
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if isinstance(icon, int):
-            icon_pixmap = AlchemistIconAtlas.pixmap(icon, 76)
+            icon_pixmap = AlchemistIconAtlas.connector_pixmap(icon, 76)
             if icon_pixmap.isNull():
                 icon_label.setText("✦")
             else:
@@ -1047,3 +1113,6 @@ def timestamp_sort_value(value: str) -> float:
         return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
     except (TypeError, ValueError):
         return 0.0
+
+
+_LegacySourceCard = SourceCard

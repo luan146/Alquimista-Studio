@@ -7,7 +7,7 @@ PYTHON_CMD="${PYTHON_CMD:-$ROOT_DIR/.venv/bin/python}"
 if [[ ! -x "$PYTHON_CMD" ]]; then
   PYTHON_CMD="python3"
 fi
-VERSION="${1:-0.9}"
+VERSION="${1:-0.9.5}"
 BUILD_ID="$(date +%Y%m%d-%H%M%S-%N)"
 BUILD_ROOT="$ROOT_DIR/.tmp/pyinstaller-linux-$BUILD_ID"
 BUILD_DIST="$BUILD_ROOT/dist"

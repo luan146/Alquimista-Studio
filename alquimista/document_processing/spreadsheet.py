@@ -129,22 +129,24 @@ class SpreadsheetProcessor(DocumentProcessor):
                     read_only=True,
                     keep_vba=False,
                 )
-                sheet_names = wb.sheetnames
-                for sheet_name in sheet_names:
-                    ws = wb[sheet_name]
-                    sheet_rows: list[list[str]] = []
-                    for row in ws.iter_rows(values_only=True):
-                        sheet_rows.append(
-                            [str(cell) if cell is not None else "" for cell in row]
-                        )
-                        if len(sheet_rows) >= max_rows + 10:
-                            break
+                try:
+                    sheet_names = wb.sheetnames
+                    for sheet_name in sheet_names:
+                        ws = wb[sheet_name]
+                        sheet_rows: list[list[str]] = []
+                        for row in ws.iter_rows(values_only=True):
+                            sheet_rows.append(
+                                [str(cell) if cell is not None else "" for cell in row]
+                            )
+                            if len(sheet_rows) >= max_rows + 10:
+                                break
 
-                    table_md = _render_markdown_table(
-                        sheet_rows, max_rows=max_rows, max_cols=max_cols
-                    )
-                    sections.append(f"## Planilha: {sheet_name}\n\n{table_md}")
-                wb.close()
+                        table_md = _render_markdown_table(
+                            sheet_rows, max_rows=max_rows, max_cols=max_cols
+                        )
+                        sections.append(f"## Planilha: {sheet_name}\n\n{table_md}")
+                finally:
+                    wb.close()
             except Exception as exc:
                 sections.append(f"*[Não foi possível processar planilha: {exc}]*")
 

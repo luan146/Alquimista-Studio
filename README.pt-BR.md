@@ -20,6 +20,8 @@ Cole a URL de uma fonte, conecte-se, escolha as páginas e exporte conteúdo est
 
 ➡️ [Baixar a última release](https://github.com/luan146/Alquimista-Studio/releases/latest) · [Ver todas as releases](https://github.com/luan146/Alquimista-Studio/releases)
 
+**Release atual: `0.9.5`** · O Instalador do Windows e o ZIP portátil usam a mesma versão.
+
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Painel do ALQuimista Studio" width="100%">
 </p>
@@ -62,7 +64,7 @@ O conteúdo exportado continua portátil, sem ficar preso a uma plataforma espec
 | 🧠 **Pronto para IA** | Prepare conteúdo para assistentes de IA, pipelines RAG, NotebookLM e outros fluxos baseados em contexto. |
 | 🗂️ **Adequado para conhecimento** | Use o Markdown exportado no Obsidian ou mantenha-o como arquivo offline. |
 | 🔎 **Saída rastreável** | Preserve URLs de origem, hierarquia, metadados, datas e hashes SHA-256. |
-| 🔄 **Fluxo incremental** | O rastreamento por hash ajuda a identificar alterações e evitar trabalho desnecessário. |
+| 🔄 **Sincronização incremental** | Compare fontes, detecte itens novos/alterados/removidos e baixe somente o que mudou. |
 | 🔐 **Segurança em mente** | Segredos de API não são gravados nos arquivos de projeto, e sessões de navegador são tratadas separadamente. |
 
 ---
@@ -125,18 +127,58 @@ Revise a fonte selecionada, o modo de acesso, a quantidade de páginas, o format
 
 ## 🔌 Plataformas suportadas
 
+O ALQuimista registra atualmente **28 conectores executáveis** por meio de um registry compartilhado. As capacidades e exigências de autenticação dependem da plataforma.
+
 | Plataforma | Integração | Status |
 |---|---|---|
-| **Confluence Server / Data Center** | API REST | 🟢 **Estável** |
-| **GitBook** | API REST v1 | 🟡 **Disponível** |
-| **Zendesk Guide** | Help Center API | 🟡 **Disponível** |
-| **Notion** | API oficial | 🚧 **Em desenvolvimento** |
-| **SharePoint Online** | Microsoft Graph | 🚧 **Em desenvolvimento** |
-| **Sites genéricos** | — | 🗺️ **Planejado** |
+| **Confluence** | API REST oficial | 🟢 Disponível |
+| **Zendesk Guide** | Help Center API | 🟢 Disponível |
+| **Notion** | API oficial | 🟢 Disponível |
+| **SharePoint Online** | Microsoft Graph API | 🟢 Disponível |
+| **GitBook** | API REST oficial | 🟢 Disponível |
+| **Generic Web** | Páginas web públicas | 🟢 Disponível |
+| **Generic Docs / Frameworks** | `llms.txt`, Sitemap, Docusaurus, MkDocs, Mintlify | 🟢 Disponível |
+| **Arquivos e pastas locais** | Processador universal de documentos locais | 🟢 Disponível |
+| **BookStack** | API REST oficial | 🟢 Disponível |
+| **GitHub Docs / Wiki** | API oficial do GitHub | 🟢 Disponível |
+| **GitLab Docs / Wiki** | API oficial do GitLab v4 | 🟢 Disponível |
+| **Freshdesk** | Solutions API e tickets | 🟢 Disponível |
+| **Intercom** | Help Center e Support API | 🟢 Disponível |
+| **Salesforce** | Knowledge e Service Cloud API | 🟢 Disponível |
+| **HubSpot** | Knowledge Base e Service Hub API | 🟢 Disponível |
+| **Help Scout** | Docs API | 🟢 Disponível |
+| **Document360** | REST API | 🟢 Disponível |
+| **Outline** | Knowledge Base API | 🟢 Disponível |
+| **Helpjuice** | Knowledge Base API | 🟢 Disponível |
+| **Guru** | Knowledge Cards API | 🟢 Disponível |
+| **Slite** | Channels e Notes API | 🟢 Disponível |
+| **MediaWiki** | Action API (`api.php`) | 🟢 Disponível |
+| **ReadMe** | Documentation API | 🟢 Disponível |
+| **WordPress** | REST API v2 | 🟢 Disponível |
+| **Ghost** | Content API | 🟢 Disponível |
+| **Strapi** | Headless CMS API | 🟢 Disponível |
+| **Contentful** | Content Delivery API | 🟢 Disponível |
+| **Sanity** | GROQ Query API | 🟢 Disponível |
 
-Os status da matriz significam: **Estável** é o caminho principal validado; **Disponível** está implementado para uso conforme suas limitações; **Experimental** pode mudar; **Parcial** cobre apenas parte do contrato; **Em desenvolvimento** ainda não deve ser tratado como funcional; e **Planejado** ainda não está implementado.
+> “Disponível” significa que o conector está registrado, implementado e executável. Permissões da API, autenticação, rate limits, paginação, busca e descoberta hierárquica ainda variam por plataforma.
+
+O vocabulário de status também contempla **Estável**, **Disponível**, **Experimental**, **Parcial**, **Em desenvolvimento** e **Planejado**; a matriz desta release apresenta os 28 conectores registrados como disponíveis.
 
 As capacidades podem variar entre plataformas. Alguns conectores oferecem recursos como carregamento hierárquico lazy ou busca de forma mais completa que outros.
+
+### 📁 Documentos locais para Markdown
+
+O conector de Arquivos Locais percorre arquivos e pastas e envia cada arquivo compatível ao processador apropriado. O pipeline atual cobre:
+
+- PDF, incluindo extração de texto, títulos por página, metadados e tabelas quando o backend do PDF as disponibiliza;
+- planilhas convertidas em tabelas Markdown (`.xlsx`, `.xlsm`, `.csv`, `.tsv` e `.ods`);
+- arquivos Word, PowerPoint, EPUB, HTML, imagens, texto simples e Markdown.
+
+Arquivos grandes respeitam o limite do registry de processadores, e dependências opcionais de formato falham de forma explícita quando não estão disponíveis.
+
+### 🔄 Sincronização incremental
+
+O serviço de sincronização pode operar no escopo de seleção, fonte ou projeto. Ele cria um plano usando o inventário remoto e o manifesto existente e classifica os itens como **novos, alterados, sem alterações, removidos, com falha ou preservados após erro**. Somente documentos alterados são baixados, remoções remotas são tratadas com segurança, anexos podem ser comparados e a operação grava o relatório estruturado `sync_report.json`. A consolidação pode ser executada automaticamente após uma sincronização bem-sucedida.
 
 ---
 
@@ -205,7 +247,7 @@ Baixe → instale ou extraia → abra o ALQuimista Studio.
 
 | Plataforma | Pacote |
 |---|---|
-| 🪟 Windows | [Instalador](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-installer-0.9.5.exe) · [ZIP portátil](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-portable-0.9.5.zip) |
+| 🪟 Windows | [Instalador `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-installer-0.9.5.exe) · [ZIP portátil `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-portable-0.9.5.zip) |
 | 🐧 Linux | [tar.gz portátil](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-portable-0.9.5.tar.gz) |
 
 ➡️ [Ver todas as releases](https://github.com/luan146/Alquimista-Studio/releases)
@@ -287,16 +329,17 @@ O ALQuimista foi projetado para evitar o armazenamento de dados sensíveis de au
 
 ```text
 alquimista/
-├── connectors/       # Integrações com plataformas
-├── browser/          # Discovery pelo navegador e cache de metadados
-├── ui/               # Interface desktop PySide6
-├── models.py         # Contratos de dados
-├── services.py       # Motor de extração e consolidação
-├── markdown.py       # Transformação HTML → Markdown
-├── storage.py        # Persistência atômica
-├── auth.py           # Fluxos de autenticação
-├── reports.py        # Relatórios de execução
-└── manifest_index.py # Índice incremental do manifesto
+├── connectors/          # Integrações e HTTP compartilhado
+├── discovery/           # Descoberta web universal
+├── document_processing/ # Processadores de PDF, planilhas e arquivos locais
+├── browser/             # Discovery pelo navegador e cache de metadados
+├── markdown/            # Transformação, metadados e renderização
+├── services/            # Extração, sincronização e consolidação
+├── ui/                  # Interface desktop PySide6
+├── models.py            # Contratos de dados
+├── storage.py           # Persistência atômica e manifestos
+├── auth.py              # Fluxos de autenticação
+└── runtime.py           # Cancelamento, progresso e estado de execução
 
 tests/                # Suíte de testes automatizados
 docs/                 # Arquitetura, documentação e screenshots
@@ -352,6 +395,12 @@ Gere o executável do Windows:
 tools\build\gerar_executavel.bat
 ```
 
+Gere o Portable e o instalador do Windows na versão `0.9.5`:
+
+```powershell
+.\tools\build\gerar_distribuicoes.ps1 -Version 0.9.5
+```
+
 O executável será criado em:
 
 ```text
@@ -361,10 +410,10 @@ dist/ALQuimista Studio.exe
 Para criar um ZIP portátil para Windows 10/11 (64 bits), use:
 
 ```bat
-gerar_pacote_portatil.bat
+tools\build\gerar_pacote_portatil.bat
 ```
 
-O pacote será criado em `dist/ALQuimista-Studio-portatil-win64.zip`. Ele não exige Python no computador de destino. A autenticação assistida pelo navegador pode exigir o Google Chrome instalado; o Chromium não é incluído neste primeiro pacote portátil.
+O pacote será criado em `dist/releases/ALQuimista-Studio-windows-portable-0.9.5.zip`. Ele não exige Python no computador de destino. A autenticação assistida pelo navegador pode exigir o Google Chrome instalado; o Chromium não é incluído neste pacote portátil.
 
 </details>
 
@@ -379,7 +428,8 @@ O repositório possui um workflow do GitHub Actions que executa automaticamente:
 - verificação de tipos com mypy;
 - compilação dos arquivos Python;
 - suíte de testes com pytest;
-- geração do executável com PyInstaller.
+- geração do Portable e do instalador do Windows;
+- geração e validação do pacote Portable Linux.
 
 Isso ajuda a detectar regressões antes que as alterações sejam incorporadas.
 

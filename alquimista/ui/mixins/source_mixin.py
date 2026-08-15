@@ -8,6 +8,7 @@ from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
+    QMenu,
     QMessageBox,
     QPushButton,
     QTableWidgetItem,
@@ -190,13 +191,29 @@ class SourceMixin:
             self.source_table.setItem(table_row, 4, QTableWidgetItem(added_at))
 
             menu = QPushButton("⋮")
-            menu.setToolTip(translate_text("Alterar nome, URL ou configurações da fonte"))
+            menu.setToolTip(translate_text("Opções da fonte (sincronizar, editar, remover)"))
             menu.setAccessibleName(
-                translate_text("Alterar fonte {name}").format(name=source.name)
+                translate_text("Opções da fonte {name}").format(name=source.name)
             )
-            menu.clicked.connect(
-                lambda _checked=False, row=table_row: self._edit_source_row(row)
-            )
+
+            def make_menu_handler(src_id: str, row_idx: int, btn: QPushButton) -> Any:
+                def show_menu() -> None:
+                    pop = QMenu(self)
+                    act_sync = pop.addAction("🔄 " + translate_text("Sincronizar fonte"))
+                    act_edit = pop.addAction("✏️ " + translate_text("Editar configurações"))
+                    pop.addSeparator()
+                    act_rem = pop.addAction("🗑 " + translate_text("Remover fonte"))
+                    selected = pop.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+                    if selected == act_sync:
+                        self.sync_source(src_id)
+                    elif selected == act_edit:
+                        self._edit_source_row(row_idx)
+                    elif selected == act_rem:
+                        self.source_table.selectRow(row_idx)
+                        self.remove_selected_sources()
+                return show_menu
+
+            menu.clicked.connect(make_menu_handler(source.id, table_row, menu))
             self.source_table.setCellWidget(table_row, 5, menu)
             self.source_table.setRowHeight(table_row, 44)
 
@@ -204,6 +221,14 @@ class SourceMixin:
             translate_text("{count} itens").format(count=len(visible_rows))
         )
         self.sources_empty_label.setVisible(not visible_rows)
+
+    def sync_source(self, source_id: str) -> None:
+        from ..controllers.execution_controller import sync_source as ctrl_sync_source
+        ctrl_sync_source(self, source_id)
+
+    def sync_project(self) -> None:
+        from ..controllers.execution_controller import sync_project as ctrl_sync_project
+        ctrl_sync_project(self)
 
 
     def _source_table_row_changed(self, row: int) -> None:

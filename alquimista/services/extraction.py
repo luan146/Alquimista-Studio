@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -77,6 +78,7 @@ class ExtractionService:
             project,
             log=self.log,
         )
+        self._paths_lock = threading.Lock()
         self._assigned_relative_paths: dict[str, str] = {}
 
     @staticmethod
@@ -124,12 +126,13 @@ class ExtractionService:
         else:
             relative = base / source_part / space_part / filename
         key = relative.as_posix().casefold()
-        previous_page = self._assigned_relative_paths.get(key)
-        if previous_page and previous_page != str(metadata["page_id"]):
-            relative = relative.with_name(
-                f"{title_part}_{sanitize_filename(str(metadata['page_id']), 32)}.md"
-            )
-        self._assigned_relative_paths[relative.as_posix().casefold()] = str(metadata["page_id"])
+        with self._paths_lock:
+            previous_page = self._assigned_relative_paths.get(key)
+            if previous_page and previous_page != str(metadata["page_id"]):
+                relative = relative.with_name(
+                    f"{title_part}_{sanitize_filename(str(metadata['page_id']), 32)}.md"
+                )
+            self._assigned_relative_paths[relative.as_posix().casefold()] = str(metadata["page_id"])
         return relative
 
     @staticmethod
@@ -622,16 +625,23 @@ class ExtractionService:
                 )
             return entry
         content_hash = prepared.content_hash
+        old_file_exists = bool(
+            old
+            and old.markdown_path
+            and confined_path(self.output_dir, old.markdown_path).exists()
+        )
         if old is None:
             status = EntryStatus.NEW
-        elif not absolute.exists():
-            status = EntryStatus.REPAIRED
         elif old.content_hash != content_hash:
             status = EntryStatus.UPDATED
+        elif not absolute.exists() and not old_file_exists:
+            status = EntryStatus.REPAIRED
         elif old.transform_config_hash != transform_hash:
             status = EntryStatus.FORMAT_UPDATED
         elif old.metadata_hash != metadata_hash:
             status = EntryStatus.METADATA_UPDATED
+        elif not absolute.exists():
+            status = EntryStatus.REPAIRED
         else:
             status = EntryStatus.UNCHANGED
         output = renderer.render_prepared(prepared, collected_at, status.value)
@@ -1011,16 +1021,23 @@ class ExtractionService:
                             transformer.hash_input(metadata, technical)
                         )
                         metadata_hash = self._metadata_hash(metadata)
+                        old_file_exists = bool(
+                            old
+                            and old.markdown_path
+                            and confined_path(self.output_dir, old.markdown_path).exists()
+                        )
                         if old is None:
                             status = EntryStatus.NEW
-                        elif not absolute.exists():
-                            status = EntryStatus.REPAIRED
                         elif old.content_hash != content_hash:
                             status = EntryStatus.UPDATED
+                        elif not absolute.exists() and not old_file_exists:
+                            status = EntryStatus.REPAIRED
                         elif old.transform_config_hash != transform_hash:
                             status = EntryStatus.FORMAT_UPDATED
                         elif old.metadata_hash != metadata_hash:
                             status = EntryStatus.METADATA_UPDATED
+                        elif not absolute.exists():
+                            status = EntryStatus.REPAIRED
                         else:
                             status = EntryStatus.UNCHANGED
                         document = transformer.full_document(

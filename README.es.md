@@ -20,6 +20,8 @@ Pega una URL, conecta la fuente, selecciona las páginas y exporta contenido est
 
 ➡️ [Descargar la última release](https://github.com/luan146/Alquimista-Studio/releases/latest) · [Ver todas las releases](https://github.com/luan146/Alquimista-Studio/releases)
 
+**Release actual: `0.9.5`** · El instalador de Windows y el ZIP portable usan la misma versión.
+
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panel de ALQuimista Studio" width="100%">
 </p>
@@ -62,7 +64,7 @@ El contenido exportado sigue siendo portátil y no queda bloqueado en una plataf
 | 🧠 **Listo para IA** | Prepara contenido para asistentes de IA, pipelines RAG, NotebookLM y flujos basados en contexto. |
 | 🗂️ **Orientado al conocimiento** | Usa el Markdown exportado en Obsidian o consérvalo como archivo sin conexión. |
 | 🔎 **Salida trazable** | Conserva URLs originales, jerarquía, metadatos, fechas y hashes SHA-256. |
-| 🔄 **Flujo incremental** | El seguimiento mediante hashes ayuda a detectar cambios y evitar trabajo innecesario. |
+| 🔄 **Sincronización incremental** | Compara fuentes, detecta elementos nuevos/actualizados/eliminados y descarga solo lo que cambió. |
 | 🔐 **Con seguridad en mente** | Los secretos de API no se guardan en los archivos del proyecto y las sesiones del navegador se gestionan por separado. |
 
 ---
@@ -125,16 +127,56 @@ Revisa la fuente seleccionada, el modo de acceso, la cantidad de páginas, el fo
 
 ## 🔌 Plataformas compatibles
 
+ALQuimista registra actualmente **28 conectores ejecutables** mediante un registry compartido. Las capacidades y los requisitos de autenticación dependen de cada plataforma.
+
 | Plataforma | Integración | Estado |
 |---|---|---|
-| **Confluence Server / Data Center** | API REST | 🟢 **Estable** |
-| **GitBook** | API REST v1 | 🟡 **Disponible** |
-| **Zendesk Guide** | Help Center API | 🟡 **Disponible** |
-| **Notion** | API oficial | 🧪 **Experimental** |
-| **SharePoint Online** | Microsoft Graph | 🚧 **En desarrollo** |
-| **Sitios web genéricos** | HTTPS estático | 🧪 **Experimental** |
+| **Confluence** | API REST oficial | 🟢 Disponible |
+| **Zendesk Guide** | Help Center API | 🟢 Disponible |
+| **Notion** | API oficial | 🟢 Disponible |
+| **SharePoint Online** | Microsoft Graph API | 🟢 Disponible |
+| **GitBook** | API REST oficial | 🟢 Disponible |
+| **Generic Web** | Páginas web públicas | 🟢 Disponible |
+| **Generic Docs / Frameworks** | `llms.txt`, Sitemap, Docusaurus, MkDocs, Mintlify | 🟢 Disponible |
+| **Archivos y carpetas locales** | Procesador universal de documentos locales | 🟢 Disponible |
+| **BookStack** | API REST oficial | 🟢 Disponible |
+| **GitHub Docs / Wiki** | API oficial de GitHub | 🟢 Disponible |
+| **GitLab Docs / Wiki** | API oficial de GitLab v4 | 🟢 Disponible |
+| **Freshdesk** | Solutions API y tickets | 🟢 Disponible |
+| **Intercom** | Help Center y Support API | 🟢 Disponible |
+| **Salesforce** | Knowledge y Service Cloud API | 🟢 Disponible |
+| **HubSpot** | Knowledge Base y Service Hub API | 🟢 Disponible |
+| **Help Scout** | Docs API | 🟢 Disponible |
+| **Document360** | REST API | 🟢 Disponible |
+| **Outline** | Knowledge Base API | 🟢 Disponible |
+| **Helpjuice** | Knowledge Base API | 🟢 Disponible |
+| **Guru** | Knowledge Cards API | 🟢 Disponible |
+| **Slite** | Channels y Notes API | 🟢 Disponible |
+| **MediaWiki** | Action API (`api.php`) | 🟢 Disponible |
+| **ReadMe** | Documentation API | 🟢 Disponible |
+| **WordPress** | REST API v2 | 🟢 Disponible |
+| **Ghost** | Content API | 🟢 Disponible |
+| **Strapi** | Headless CMS API | 🟢 Disponible |
+| **Contentful** | Content Delivery API | 🟢 Disponible |
+| **Sanity** | GROQ Query API | 🟢 Disponible |
+
+> “Disponible” significa que el conector está registrado, implementado y es ejecutable. Los permisos de API, la autenticación, los límites de tasa, la paginación, la búsqueda y el descubrimiento jerárquico varían según la plataforma.
 
 Las capacidades pueden variar según la plataforma. Algunos conectores ofrecen funciones como carga jerárquica lazy o búsqueda de forma más completa que otros.
+
+### 📁 Documentos locales a Markdown
+
+El conector de Archivos Locales recorre archivos y carpetas y envía cada archivo compatible al procesador correspondiente. El pipeline actual cubre:
+
+- PDF, incluida la extracción de texto, títulos por página, metadatos y tablas cuando el backend del PDF los expone;
+- hojas de cálculo convertidas en tablas Markdown (`.xlsx`, `.xlsm`, `.csv`, `.tsv` y `.ods`);
+- archivos Word, PowerPoint, EPUB, HTML, imágenes, texto plano y Markdown.
+
+Los archivos grandes respetan el límite del registry de procesadores y las dependencias opcionales de formato fallan de forma explícita cuando no están disponibles.
+
+### 🔄 Sincronización incremental
+
+El servicio de sincronización puede operar en el ámbito de selección, fuente o proyecto. Crea un plan usando el inventario remoto y el manifiesto existente y clasifica los elementos como **nuevos, actualizados, sin cambios, eliminados, fallidos o conservados después de un error**. Solo se descargan los documentos modificados, las eliminaciones remotas se manejan de forma segura, los adjuntos pueden compararse y la operación escribe el informe estructurado `sync_report.json`. La consolidación puede ejecutarse automáticamente después de una sincronización correcta.
 
 ---
 
@@ -203,7 +245,7 @@ Descarga → instala o extrae → abre ALQuimista Studio.
 
 | Plataforma | Paquete |
 |---|---|
-| 🪟 Windows | [Instalador](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-installer-0.9.5.exe) · [ZIP portátil](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-portable-0.9.5.zip) |
+| 🪟 Windows | [Instalador `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-installer-0.9.5.exe) · [ZIP portable `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-portable-0.9.5.zip) |
 | 🐧 Linux | [tar.gz portátil](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-portable-0.9.5.tar.gz) |
 
 ➡️ [Ver todas las releases](https://github.com/luan146/Alquimista-Studio/releases)
@@ -279,16 +321,17 @@ Revisa siempre las políticas de acceso y los permisos de la API de la plataform
 
 ~~~text
 alquimista/
-├── connectors/       # Integraciones con plataformas
-├── browser/          # Discovery y caché de metadatos
-├── ui/               # Interfaz de escritorio PySide6
-├── models.py         # Contratos de datos
-├── services.py       # Motor de extracción y consolidación
-├── markdown.py       # Transformación HTML → Markdown
-├── storage.py        # Persistencia atómica
-├── auth.py           # Flujos de autenticación
-├── reports.py        # Informes de ejecución
-└── manifest_index.py # Índice incremental del manifiesto
+├── connectors/          # Integraciones y HTTP compartido
+├── discovery/           # Descubrimiento web universal
+├── document_processing/ # Procesadores de PDF, hojas y archivos locales
+├── browser/             # Discovery y caché de metadatos
+├── markdown/            # Transformación, metadatos y renderizado
+├── services/            # Extracción, sincronización y consolidación
+├── ui/                  # Interfaz de escritorio PySide6
+├── models.py            # Contratos de datos
+├── storage.py           # Persistencia atómica y manifiestos
+├── auth.py              # Flujos de autenticación
+└── runtime.py           # Cancelación, progreso y estado de ejecución
 
 tests/                # Suite de pruebas automatizadas
 docs/                 # Arquitectura, conectores y capturas
@@ -337,6 +380,12 @@ Genera el ejecutable de Windows:
 tools\build\gerar_executavel.bat
 ~~~
 
+Genera el Portable y el instalador de Windows con la versión `0.9.5`:
+
+~~~powershell
+.\tools\build\gerar_distribuicoes.ps1 -Version 0.9.5
+~~~
+
 El ejecutable se crea en:
 
 ~~~text
@@ -354,7 +403,8 @@ El repositorio incluye un workflow de GitHub Actions que ejecuta automáticament
 - comprobación de tipos con mypy;
 - compilación de los archivos Python;
 - suite de pruebas con pytest;
-- generación del ejecutable con PyInstaller.
+- generación del Portable y del instalador de Windows;
+- generación y validación del paquete Portable de Linux.
 
 Esto ayuda a detectar regresiones antes de incorporar cambios.
 

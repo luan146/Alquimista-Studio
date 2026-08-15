@@ -36,9 +36,11 @@ class RateLimiter:
         self.interval = 1.0 / max(0.1, requests_per_second)
         self.last_request = 0.0
         self.token = token
+        self._lock = threading.Lock()
 
     def wait(self) -> None:
-        remaining = self.interval - (time.monotonic() - self.last_request)
-        if remaining > 0:
-            self.token.wait(remaining)
-        self.last_request = time.monotonic()
+        with self._lock:
+            remaining = self.interval - (time.monotonic() - self.last_request)
+            if remaining > 0:
+                self.token.wait(remaining)
+            self.last_request = time.monotonic()

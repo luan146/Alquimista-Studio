@@ -38,6 +38,9 @@ class WebCrawler:
         self.rate_limiter = RateLimiter(self.options.max_requests_per_second, self.token)
         self.session = requests.Session()
         self.session.trust_env = False
+        adapter = requests.adapters.HTTPAdapter(pool_connections=16, pool_maxsize=16, max_retries=0)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.headers.update(
             {
                 "User-Agent": DEFAULT_USER_AGENT,

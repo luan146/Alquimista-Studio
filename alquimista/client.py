@@ -77,7 +77,7 @@ class ConfluenceClient:
         self.session.headers.update(
             {
                 "Accept": "application/json, text/html;q=0.8",
-                "User-Agent": "ALQuimista-Studio/0.9 (+desktop-confluence-exporter)",
+                "User-Agent": "ALQuimista-Studio/0.9.5 (+desktop-confluence-exporter)",
             }
         )
         if self.options.proxy_mode == "direct":

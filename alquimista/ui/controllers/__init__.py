@@ -9,6 +9,9 @@ from .execution_controller import (
     run_complete,
     run_consolidation,
     run_extraction,
+    sync_project,
+    sync_selection,
+    sync_source,
     validated_project_snapshot,
 )
 from .navigation_controller import NavigationController
@@ -71,6 +74,9 @@ __all__ = [
     "source_by_combo",
     "source_by_identifier",
     "source_by_index",
+    "sync_project",
+    "sync_selection",
+    "sync_source",
     "validate_project_snapshot",
     "validated_project_snapshot",
 ]

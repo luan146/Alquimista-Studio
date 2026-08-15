@@ -286,14 +286,20 @@ class BrowserCache:
             if page is None or not self._page_available(float(page["expires_at"]), allow_stale=allow_stale):
                 return None
             ids = json.loads(str(page["container_ids"]))
-            rows = []
-            for container_id in ids:
-                row = connection.execute(
-                    "SELECT payload FROM containers WHERE source_id = ? AND scope = ? AND container_id = ?",
-                    (source_id, scope, str(container_id)),
-                ).fetchone()
-                if row is not None:
-                    rows.append(SpaceMetadata.from_dict(json.loads(str(row["payload"]))))
+            if not ids:
+                rows = []
+            else:
+                placeholders = ",".join("?" for _ in ids)
+                cursor_res = connection.execute(
+                    f"SELECT container_id, payload FROM containers WHERE source_id = ? AND scope = ? AND container_id IN ({placeholders})",
+                    (source_id, scope, *[str(cid) for cid in ids]),
+                )
+                payload_by_id = {str(row["container_id"]): str(row["payload"]) for row in cursor_res.fetchall()}
+                rows = [
+                    SpaceMetadata.from_dict(json.loads(payload_by_id[str(cid)]))
+                    for cid in ids
+                    if str(cid) in payload_by_id
+                ]
             return DiscoveryPage(
                 items=tuple(rows),
                 cursor=cursor,
@@ -387,17 +393,20 @@ class BrowserCache:
             if page is None or not self._page_available(float(page["expires_at"]), allow_stale=allow_stale):
                 return None
             ids = json.loads(str(page["document_ids"]))
-            rows = []
-            for document_id in ids:
-                row = connection.execute(
-                    """
-                    SELECT payload FROM documents
-                    WHERE source_id = ? AND scope = ? AND container_id = ? AND document_id = ?
-                    """,
-                    (source_id, scope, container_id, str(document_id)),
-                ).fetchone()
-                if row is not None:
-                    rows.append(DocumentMetadata.from_dict(json.loads(str(row["payload"]))))
+            if not ids:
+                rows = []
+            else:
+                placeholders = ",".join("?" for _ in ids)
+                cursor_res = connection.execute(
+                    f"SELECT document_id, payload FROM documents WHERE source_id = ? AND scope = ? AND container_id = ? AND document_id IN ({placeholders})",
+                    (source_id, scope, container_id, *[str(did) for did in ids]),
+                )
+                payload_by_id = {str(row["document_id"]): str(row["payload"]) for row in cursor_res.fetchall()}
+                rows = [
+                    DocumentMetadata.from_dict(json.loads(payload_by_id[str(did)]))
+                    for did in ids
+                    if str(did) in payload_by_id
+                ]
             return DiscoveryPage(
                 items=tuple(rows),
                 cursor=cursor,

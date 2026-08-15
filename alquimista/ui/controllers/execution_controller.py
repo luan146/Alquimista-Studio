@@ -14,13 +14,19 @@ from .runtime_controller import RuntimeBuilder
 
 
 def prepare_runtimes(
-    window: Any, project: ProjectConfig, token: CancellationToken, log: Any
+    window: Any,
+    project: ProjectConfig,
+    token: CancellationToken,
+    log: Any,
+    *,
+    allow_empty_selection: bool = False,
 ) -> list[SourceRuntime]:
     return RuntimeBuilder(
         window.trees,
         window.secrets,
         window.connector_registry,
-    ).build_connectors(project, token, log)
+    ).build_connectors(project, token, log, allow_empty_selection=allow_empty_selection)
+
 
 
 def run_extraction(
@@ -188,6 +194,88 @@ def run_complete(window: Any) -> None:
     window._start_worker(work, window._operation_done)
 
 
+def sync_source(window: Any, source_id: str) -> None:
+    snapshot = window._validated_project_snapshot()
+    if snapshot is None:
+        return
+    source = next((s for s in snapshot.sources if s.id == source_id), None)
+    if not source:
+        QMessageBox.warning(
+            window,
+            translate_text("Fonte não encontrada"),
+            translate_text("A fonte selecionada não está configurada neste projeto."),
+        )
+        return
+    from ...services.sync import IncrementalSyncService, SyncScope
+    from ..dialogs.sync_dialog import SyncPreviewDialog
+
+    token = CancellationToken()
+    log = window.technical_logger.info
+    runtimes = prepare_runtimes(window, snapshot, token, log, allow_empty_selection=True)
+    service = IncrementalSyncService(snapshot, window._project_dir())
+    dialog = SyncPreviewDialog(
+        window,
+        service,
+        runtimes,
+        scope=SyncScope.SOURCE,
+        target_source_id=source_id,
+        source_name=source.name,
+    )
+    dialog.exec()
+
+
+def sync_project(window: Any) -> None:
+    snapshot = window._validated_project_snapshot()
+    if snapshot is None:
+        return
+    if not any(s.enabled for s in snapshot.sources):
+        QMessageBox.warning(
+            window,
+            translate_text("Nenhuma fonte ativa"),
+            translate_text("Ative ao menos uma fonte para sincronizar."),
+        )
+        return
+    from ...services.sync import IncrementalSyncService, SyncScope
+    from ..dialogs.sync_dialog import SyncPreviewDialog
+
+    token = CancellationToken()
+    log = window.technical_logger.info
+    runtimes = prepare_runtimes(window, snapshot, token, log, allow_empty_selection=True)
+    service = IncrementalSyncService(snapshot, window._project_dir())
+    dialog = SyncPreviewDialog(
+        window,
+        service,
+        runtimes,
+        scope=SyncScope.PROJECT,
+        source_name=snapshot.project_name or "Todas as Fontes",
+    )
+    dialog.exec()
+
+
+def sync_selection(window: Any) -> None:
+    snapshot = window._validated_project_snapshot()
+    if snapshot is None:
+        return
+    from ...services.sync import IncrementalSyncService, SyncScope
+    from ..dialogs.sync_dialog import SyncPreviewDialog
+
+    token = CancellationToken()
+    log = window.technical_logger.info
+    runtimes = prepare_runtimes(window, snapshot, token, log, allow_empty_selection=False)
+    service = IncrementalSyncService(snapshot, window._project_dir())
+    dialog = SyncPreviewDialog(
+        window,
+        service,
+        runtimes,
+        scope=SyncScope.SELECTION,
+        source_name="Seleção Atual",
+    )
+    dialog.exec()
+
+
+
+
+
 def validated_project_snapshot(window: Any) -> ProjectConfig | None:
     try:
         return validate_project_snapshot(window.project)
@@ -201,11 +289,15 @@ def validated_project_snapshot(window: Any) -> ProjectConfig | None:
 
 
 __all__ = [
+
     "execute_selected_operation",
     "prepare_runtimes",
     "retry_failures",
     "run_complete",
     "run_consolidation",
     "run_extraction",
+    "sync_project",
+    "sync_selection",
+    "sync_source",
     "validated_project_snapshot",
 ]

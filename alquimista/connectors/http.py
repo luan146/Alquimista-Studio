@@ -48,6 +48,14 @@ class ApiHttpClient:
         self.log = log or (lambda _message: None)
         self._owns_session = session is None
         self.session = session or requests.Session()
+        if self._owns_session:
+            adapter = requests.adapters.HTTPAdapter(
+                pool_connections=16,
+                pool_maxsize=16,
+                max_retries=0,
+            )
+            self.session.mount("https://", adapter)
+            self.session.mount("http://", adapter)
         self._sleep = sleep
         self._random = random_value
         self.last_response_headers: dict[str, str] = {}
@@ -55,7 +63,7 @@ class ApiHttpClient:
         self.session.headers.update(
             {
                 "Accept": "application/json",
-                "User-Agent": "ALQuimista-Studio/0.9 (+official-knowledge-connector)",
+                "User-Agent": "ALQuimista-Studio/0.9.5 (+official-knowledge-connector)",
                 **(headers or {}),
             }
         )

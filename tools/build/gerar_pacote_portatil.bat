@@ -10,13 +10,13 @@ if not exist "%PYTHON_CMD%" (
     goto :erro
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT_DIR%\tools\build\gerar_distribuicoes.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT_DIR%\tools\build\gerar_distribuicoes.ps1" -Version 0.9.5
 if errorlevel 1 goto :erro
 
 echo.
 echo =========================================================
 echo [SUCESSO] Arquivos criados:
-echo %ROOT_DIR%\dist\releases\ALQuimista-Studio-windows-portable-0.9.zip
+echo %ROOT_DIR%\dist\releases\ALQuimista-Studio-windows-portable-0.9.5.zip
 echo =========================================================
 exit /b 0
 

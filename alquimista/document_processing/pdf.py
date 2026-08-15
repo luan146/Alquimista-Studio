@@ -61,66 +61,68 @@ class PdfProcessor(DocumentProcessor):
             import fitz  # PyMuPDF
 
             doc = fitz.open(stream=content_bytes, filetype="pdf")
-            page_count = len(doc)
-            pdf_meta = {
-                "title": doc.metadata.get("title") or "",
-                "author": doc.metadata.get("author") or "",
-                "subject": doc.metadata.get("subject") or "",
-                "keywords": doc.metadata.get("keywords") or "",
-                "creator": doc.metadata.get("creator") or "",
-                "producer": doc.metadata.get("producer") or "",
-                "page_count": page_count,
-            }
-            if pdf_meta["title"] and not doc_metadata.get("title"):
-                title = str(pdf_meta["title"]).strip()
+            try:
+                page_count = len(doc)
+                pdf_meta = {
+                    "title": doc.metadata.get("title") or "",
+                    "author": doc.metadata.get("author") or "",
+                    "subject": doc.metadata.get("subject") or "",
+                    "keywords": doc.metadata.get("keywords") or "",
+                    "creator": doc.metadata.get("creator") or "",
+                    "producer": doc.metadata.get("producer") or "",
+                    "page_count": page_count,
+                }
+                if pdf_meta["title"] and not doc_metadata.get("title"):
+                    title = str(pdf_meta["title"]).strip()
 
-            for page_num in range(page_count):
-                page = doc[page_num]
-                page_text_blocks = page.get_text("blocks")
-                page_lines: list[str] = []
+                for page_num in range(page_count):
+                    page = doc[page_num]
+                    page_text_blocks = page.get_text("blocks")
+                    page_lines: list[str] = []
 
-                # Look for tables if available
-                tables: list[Any] = []
-                try:
-                    tabs = page.find_tables()
-                    tables = tabs.tables if tabs else []
-                except Exception:
-                    tables = []
+                    # Look for tables if available
+                    tables: list[Any] = []
+                    try:
+                        tabs = page.find_tables()
+                        tables = tabs.tables if tabs else []
+                    except Exception:
+                        tables = []
 
-                if tables:
-                    for tab in tables:
-                        df = tab.extract()
-                        if df and len(df) > 0:
-                            header = [str(col or "").strip() for col in df[0]]
-                            rows = [[str(cell or "").strip() for cell in row] for row in df[1:]]
-                            col_count = len(header)
-                            if col_count > 0:
-                                table_md = [
-                                    "| " + " | ".join(header) + " |",
-                                    "| " + " | ".join(["---"] * col_count) + " |",
-                                ]
-                                for row in rows:
-                                    padded = row + [""] * (col_count - len(row))
-                                    table_md.append("| " + " | ".join(padded[:col_count]) + " |")
-                                page_lines.append("\n".join(table_md))
-                else:
-                    for block in page_text_blocks:
-                        text = block[4].strip()
-                        if text:
-                            # Clean up linebreaks inside sentences while preserving paragraph breaks
-                            cleaned = "\n".join(
-                                line.strip() for line in text.splitlines() if line.strip()
-                            )
-                            if cleaned:
-                                page_lines.append(cleaned)
-
-                page_content = "\n\n".join(page_lines).strip()
-                if page_content:
-                    if page_count > 1 and doc_options.get("include_page_headings", True):
-                        text_sections.append(f"## Página {page_num + 1}\n\n{page_content}")
+                    if tables:
+                        for tab in tables:
+                            df = tab.extract()
+                            if df and len(df) > 0:
+                                header = [str(col or "").strip() for col in df[0]]
+                                rows = [[str(cell or "").strip() for cell in row] for row in df[1:]]
+                                col_count = len(header)
+                                if col_count > 0:
+                                    table_md = [
+                                        "| " + " | ".join(header) + " |",
+                                        "| " + " | ".join(["---"] * col_count) + " |",
+                                    ]
+                                    for row in rows:
+                                        padded = row + [""] * (col_count - len(row))
+                                        table_md.append("| " + " | ".join(padded[:col_count]) + " |")
+                                    page_lines.append("\n".join(table_md))
                     else:
-                        text_sections.append(page_content)
-            doc.close()
+                        for block in page_text_blocks:
+                            text = block[4].strip()
+                            if text:
+                                # Clean up linebreaks inside sentences while preserving paragraph breaks
+                                cleaned = "\n".join(
+                                    line.strip() for line in text.splitlines() if line.strip()
+                                )
+                                if cleaned:
+                                    page_lines.append(cleaned)
+
+                    page_content = "\n\n".join(page_lines).strip()
+                    if page_content:
+                        if page_count > 1 and doc_options.get("include_page_headings", True):
+                            text_sections.append(f"## Página {page_num + 1}\n\n{page_content}")
+                        else:
+                            text_sections.append(page_content)
+            finally:
+                doc.close()
         except ImportError:
             # Fallback to pypdf
             try:

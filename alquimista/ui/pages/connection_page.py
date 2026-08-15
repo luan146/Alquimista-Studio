@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...models import AuthMode
-from ..components import VisibleArrowComboBox, animated_button
+from ..components import AlchemistIconAtlas, VisibleArrowComboBox, animated_button
 
 
 def build_connection_page(window: Any) -> QWidget:
@@ -74,13 +74,15 @@ def build_connection_page(window: Any) -> QWidget:
     window.auth_mode = VisibleArrowComboBox()
     window.auth_mode.setObjectName("connectionCombo")
     window.auth_mode.setMinimumHeight(50)
-    for label, mode in [
-        ("🔓 Acesso público", AuthMode.PUBLIC),
-        ("🌐 Login pelo navegador (recomendado)", AuthMode.BROWSER),
-        ("👤 Usuário + token", AuthMode.BASIC),
-        ("🔑 Token de acesso pessoal", AuthMode.BEARER),
+    for label, mode, icon_index in [
+        ("Acesso público", AuthMode.PUBLIC, 0),
+        ("Login pelo navegador (recomendado)", AuthMode.BROWSER, 1),
+        ("Usuário + token", AuthMode.BASIC, 2),
+        ("Token de acesso pessoal", AuthMode.BEARER, 4),
     ]:
-        window.auth_mode.addItem(label, mode.value)
+        window.auth_mode.addItem(
+            AlchemistIconAtlas.auth_icon(icon_index, 24), label, mode.value
+        )
     window.auth_mode.currentIndexChanged.connect(
         lambda: window._auth_mode_changed(str(window.auth_mode.currentData()))
     )
@@ -96,9 +98,20 @@ def build_connection_page(window: Any) -> QWidget:
     window.auth_secret.setEchoMode(QLineEdit.EchoMode.Password)
     window.session_status = QLabel("○ Nenhuma sessão salva")
     window.session_status.setObjectName("subtitle")
-    form.addRow("Usuário ou e-mail", window.auth_user)
-    form.addRow("Senha, token ou PAT", window.auth_secret)
-    form.addRow("Sessão do navegador", window.session_status)
+    def auth_field_label(icon_index: int, text: str) -> QWidget:
+        label = QWidget()
+        label_layout = QHBoxLayout(label)
+        label_layout.setContentsMargins(0, 0, 8, 0)
+        label_layout.setSpacing(6)
+        icon = QLabel()
+        icon.setPixmap(AlchemistIconAtlas.auth_pixmap(icon_index, 20))
+        label_layout.addWidget(icon)
+        label_layout.addWidget(QLabel(text))
+        return label
+
+    form.addRow(auth_field_label(2, "Usuário ou e-mail"), window.auth_user)
+    form.addRow(auth_field_label(4, "Senha, token ou PAT"), window.auth_secret)
+    form.addRow(auth_field_label(6, "Sessão do navegador"), window.session_status)
     panel_layout.addLayout(form)
 
     window.connection_state = QLabel("● Modo de acesso não selecionado")

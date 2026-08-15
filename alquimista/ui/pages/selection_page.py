@@ -155,6 +155,13 @@ def build_selection_page(window: Any) -> QWidget:
             lambda: window.selection_tree.collapseAll(),
         )
     )
+    selection_actions.addWidget(
+        selection_button(
+            "🔄 Sincronizar seleção",
+            lambda _checked=False: window.sync_selection(),
+            "Verifica e sincroniza incrementalmente apenas as páginas selecionadas.",
+        )
+    )
     controls.addLayout(selection_actions)
     detail_layout.addLayout(controls)
 

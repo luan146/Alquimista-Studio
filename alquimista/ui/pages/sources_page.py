@@ -128,6 +128,12 @@ def build_sources_page(window: Any) -> QWidget:
         window.source_count_label = QLabel("0 itens")
         window.source_count_label.setObjectName("subtitle")
         listing_header.addWidget(window.source_count_label)
+        window.sync_all_sources_button = button(
+            "🔄 Sincronizar Fontes", window.sync_project
+        )
+        window.sync_all_sources_button.setMaximumHeight(32)
+        window.sync_all_sources_button.setToolTip("Verificar e sincronizar alterações em todas as fontes ativas")
+        listing_header.addWidget(window.sync_all_sources_button)
         listing_layout.addLayout(listing_header)
         window.source_table = QTableWidget(0, 6)
         window.source_table.setHorizontalHeaderLabels(
