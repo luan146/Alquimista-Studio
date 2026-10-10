@@ -416,7 +416,8 @@ class _SharePointClient:
                 "value": [
                     {
                         "id": "item-1",
-                        "name": "Contrato SharePoint",
+                        "name": "Contrato SharePoint.md",
+                        "file": {"mimeType": "text/markdown"},
                         "webUrl": "https://sp.test/item-1",
                         "lastModifiedDateTime": "2026-01-02T03:04:05Z",
                     }
@@ -425,7 +426,7 @@ class _SharePointClient:
         if path == "/sites/site-1/drive/items/item-1":
             return {
                 "id": "item-1",
-                "name": "Contrato SharePoint",
+                "name": "Contrato SharePoint.md",
                 "file": {"mimeType": "text/markdown"},
                 "webUrl": "https://sp.test/item-1",
                 "lastModifiedDateTime": "2026-01-02T03:04:05Z",
