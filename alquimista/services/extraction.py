@@ -37,6 +37,11 @@ from ..storage import (
 from .helpers import sanitize_filename
 from .runtime import SelectedDocumentRef, SourceRuntime
 
+# Finished documents are published (files + manifest) every N written files, so a
+# crash loses at most this many. ponytail: each checkpoint rewrites the whole
+# manifest JSON; append-only journal if manifests grow far beyond ~10k entries.
+CHECKPOINT_FILES = 50
+
 
 class ExtractionService:
     def __init__(
@@ -628,107 +633,185 @@ class ExtractionService:
         )
         completed = 0
         renderer = KnowledgeDocumentRenderer(self.project.markdown)
+        if self.store.path.exists():
+            transaction.stage_text(
+                self.store.path.with_suffix(self.store.path.suffix + ".bak"),
+                self.store.path.read_text(encoding="utf-8"),
+            )
 
-        for runtime in self.runtimes:
-            self.token.check()
-            if not runtime.source.enabled or runtime.connector is None:
-                continue
-            connector = runtime.connector
-            try:
-                refs = list(runtime.selected_documents)
-                if not refs:
-                    refs = [
-                        SelectedDocumentRef(
-                            source_id=runtime.source.id,
-                            container_id=parts[1],
-                            document_id=parts[2],
-                            metadata=(runtime.documents_by_container or {})
-                            .get(parts[1], {})
-                            .get(parts[2]),
-                        )
-                        for key in self._effective_keys(runtime)
-                        if len(parts := key.split(":", 2)) == 3
-                    ]
-                if self.partial_update_keys is not None:
-                    refs = [
-                        item
-                        for item in refs
-                        if self._key_matches(
-                            item.document_key,
-                            self.partial_update_keys,
-                            source_id=item.source_id,
-                            container_id=item.container_id,
-                            document_id=item.document_id,
-                        )
-                    ]
-                for ref in refs:
-                    self.token.check()
-                    if ref.source_id != runtime.source.id:
-                        continue
-                    key = ref.document_key
-                    container_id = ref.container_id
-                    document_id = ref.document_id
-                    summary = ref.metadata or (runtime.documents_by_container or {}).get(
-                        container_id, {}
-                    ).get(document_id)
-                    if summary is None:
-                        summary = KnowledgeDocumentMetadata(
-                            id=document_id,
-                            container_id=container_id,
-                            title=document_id,
-                            metadata={"synthetic": True},
-                        )
-                    discovered_keys.add(key)
-                    selected_keys.add(key)
-                    completed += 1
-                    summary_title = str(
-                        self._summary_value(summary, "title", document_id) or document_id
-                    )
-                    self.progress(completed, total, summary_title)
-                    self.log(f"{runtime.source.name} [{completed}/{total}] {summary_title}")
-                    # Prefer the disambiguated 3-part legacy alias when the
-                    # container is known, then fall back to the 2-part alias
-                    # for manifests written before container_id existed.
-                    old = (
-                        previous.get(key)
-                        or legacy_aliases.get(f"{runtime.source.id}:{container_id}:{document_id}")
-                        or legacy_aliases.get(f"{runtime.source.id}:{document_id}")
-                    )
-                    try:
-                        current[key] = self._extract_generic_document(
-                            runtime=runtime,
-                            connector=connector,
-                            summary=summary,
-                            key=key,
-                            container_id=container_id,
-                            document_id=document_id,
-                            old=old,
-                            renderer=renderer,
-                            transform_hash=transform_hash,
-                            collected_at=collected_at,
-                            transaction=transaction,
-                            counters=counters,
-                        )
-                    except ExtractionCancelledError:
-                        raise
-                    except Exception as exc:
-                        self._record_failure(
-                            runtime=runtime,
-                            summary=summary,
-                            key=key,
-                            container_id=container_id,
-                            document_id=document_id,
-                            old=old,
-                            exc=exc,
-                            collected_at=collected_at,
-                            current=current,
-                            failures=failures,
-                            counters=counters,
-                        )
+        def checkpoint() -> None:
+            """Publish finished documents so a crash or cancel does not lose them."""
+            nonlocal transaction
+            self._stage_manifest(
+                transaction,
+                previous=previous,
+                current=dict(current),
+                discovered_keys=discovered_keys,
+                selected_keys=selected_keys,
+                counters=Counter(),
+                collected_at=collected_at,
+            )
+            transaction.commit()
+            transaction = FileTransaction(self.output_dir)
 
-            finally:
-                connector.close()
+        try:
+            for runtime in self.runtimes:
+                self.token.check()
+                if not runtime.source.enabled or runtime.connector is None:
+                    continue
+                connector = runtime.connector
+                try:
+                    refs = list(runtime.selected_documents)
+                    if not refs:
+                        refs = [
+                            SelectedDocumentRef(
+                                source_id=runtime.source.id,
+                                container_id=parts[1],
+                                document_id=parts[2],
+                                metadata=(runtime.documents_by_container or {})
+                                .get(parts[1], {})
+                                .get(parts[2]),
+                            )
+                            for key in self._effective_keys(runtime)
+                            if len(parts := key.split(":", 2)) == 3
+                        ]
+                    if self.partial_update_keys is not None:
+                        refs = [
+                            item
+                            for item in refs
+                            if self._key_matches(
+                                item.document_key,
+                                self.partial_update_keys,
+                                source_id=item.source_id,
+                                container_id=item.container_id,
+                                document_id=item.document_id,
+                            )
+                        ]
+                    for ref in refs:
+                        self.token.check()
+                        if ref.source_id != runtime.source.id:
+                            continue
+                        key = ref.document_key
+                        container_id = ref.container_id
+                        document_id = ref.document_id
+                        summary = ref.metadata or (runtime.documents_by_container or {}).get(
+                            container_id, {}
+                        ).get(document_id)
+                        if summary is None:
+                            summary = KnowledgeDocumentMetadata(
+                                id=document_id,
+                                container_id=container_id,
+                                title=document_id,
+                                metadata={"synthetic": True},
+                            )
+                        discovered_keys.add(key)
+                        selected_keys.add(key)
+                        completed += 1
+                        summary_title = str(
+                            self._summary_value(summary, "title", document_id) or document_id
+                        )
+                        self.progress(completed, total, summary_title)
+                        self.log(f"{runtime.source.name} [{completed}/{total}] {summary_title}")
+                        # Prefer the disambiguated 3-part legacy alias when the
+                        # container is known, then fall back to the 2-part alias
+                        # for manifests written before container_id existed.
+                        old = (
+                            previous.get(key)
+                            or legacy_aliases.get(f"{runtime.source.id}:{container_id}:{document_id}")
+                            or legacy_aliases.get(f"{runtime.source.id}:{document_id}")
+                        )
+                        try:
+                            current[key] = self._extract_generic_document(
+                                runtime=runtime,
+                                connector=connector,
+                                summary=summary,
+                                key=key,
+                                container_id=container_id,
+                                document_id=document_id,
+                                old=old,
+                                renderer=renderer,
+                                transform_hash=transform_hash,
+                                collected_at=collected_at,
+                                transaction=transaction,
+                                counters=counters,
+                            )
+                        except ExtractionCancelledError:
+                            raise
+                        except Exception as exc:
+                            self._record_failure(
+                                runtime=runtime,
+                                summary=summary,
+                                key=key,
+                                container_id=container_id,
+                                document_id=document_id,
+                                old=old,
+                                exc=exc,
+                                collected_at=collected_at,
+                                current=current,
+                                failures=failures,
+                                counters=counters,
+                            )
+                        if len(transaction.staged) >= CHECKPOINT_FILES:
+                            checkpoint()
 
+                finally:
+                    connector.close()
+        except ExtractionCancelledError:
+            self.log("Extração cancelada; salvando os documentos já concluídos.")
+            self._stage_manifest(
+                transaction,
+                previous=previous,
+                current=current,
+                discovered_keys=discovered_keys,
+                selected_keys=selected_keys,
+                counters=counters,
+                collected_at=collected_at,
+            )
+            transaction.stage_json(self.output_dir / FAILURES_NAME, failures)
+            transaction.commit()
+            raise
+        else:
+            manifest = self._stage_manifest(
+                transaction,
+                previous=previous,
+                current=current,
+                discovered_keys=discovered_keys,
+                selected_keys=selected_keys,
+                counters=counters,
+                collected_at=collected_at,
+            )
+            transaction.stage_json(self.output_dir / FAILURES_NAME, failures)
+            report = self._structured_report(
+                started=started,
+                collected_at=collected_at,
+                current=current,
+                discovered_keys=discovered_keys,
+                selected_keys=selected_keys,
+                counters=counters,
+                failures=failures,
+            )
+            transaction.stage_json(self.output_dir / REPORT_NAME, report)
+            transaction.commit()
+        finally:
+            transaction.close()
+        try:
+            self.store.index.rebuild(manifest)
+        except Exception as exc:
+            self.log(f"Índice SQLite não atualizado; o manifesto JSON permanece válido: {exc}")
+        self.log("Extração concluída.")
+        return report
+
+    def _stage_manifest(
+        self,
+        transaction: FileTransaction,
+        *,
+        previous: dict[str, ManifestEntry],
+        current: dict[str, ManifestEntry],
+        discovered_keys: set[str],
+        selected_keys: set[str],
+        counters: Counter[str],
+        collected_at: str,
+    ) -> ManifestDocument:
         self._reconcile_manifest(
             previous=previous,
             current=current,
@@ -739,7 +822,6 @@ class ExtractionService:
             transaction=transaction,
             collected_at=collected_at,
         )
-
         manifest = ManifestDocument(
             project_id=self.project.project_id,
             project_name=self.project.project_name,
@@ -753,30 +835,9 @@ class ExtractionService:
                 ),
             ),
         )
-        if self.store.path.exists():
-            transaction.stage_text(
-                self.store.path.with_suffix(self.store.path.suffix + ".bak"),
-                self.store.path.read_text(encoding="utf-8"),
-            )
         transaction.stage_json(self.store.path, manifest.model_dump(mode="json"))
-        transaction.stage_json(self.output_dir / FAILURES_NAME, failures)
-        report = self._structured_report(
-            started=started,
-            collected_at=collected_at,
-            current=current,
-            discovered_keys=discovered_keys,
-            selected_keys=selected_keys,
-            counters=counters,
-            failures=failures,
-        )
-        transaction.stage_json(self.output_dir / REPORT_NAME, report)
-        transaction.commit()
-        try:
-            self.store.index.rebuild(manifest)
-        except Exception as exc:
-            self.log(f"Índice SQLite não atualizado; o manifesto JSON permanece válido: {exc}")
-        self.log("Extração concluída.")
-        return report
+        return manifest
+
     def run(self) -> dict[str, Any]:
         self.log(
             f"[Extração] Iniciando: saída={self.output_dir}; "
