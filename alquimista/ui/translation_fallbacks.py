@@ -609,6 +609,7 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
     "URL da Instância Outline (Cloud ou Self-Hosted)": {"en": "Outline Instance URL (Cloud or Self-Hosted)", "es": "URL de la instancia de Outline (Cloud o Self-Hosted)"},
     "URL da Base Docs do Help Scout": {"en": "Help Scout Docs Base URL", "es": "URL de la base Docs de Help Scout"},
     "URL da API Document360": {"en": "Document360 API URL", "es": "URL de la API de Document360"},
+    "Downloads simultâneos": {"en": "Parallel downloads", "es": "Descargas simultáneas"},
     # Incremental synchronization dialog
     "Sincronização Incremental": {"en": "Incremental Synchronization", "es": "Sincronización incremental"},
     "Prévia de Mudanças": {"en": "Changes Preview", "es": "Vista previa de cambios"},

@@ -88,9 +88,12 @@ def build_settings_page(window: Any) -> QWidget:
     window.retries_spin.setRange(1, 10)
     window.delay_spin = QSpinBox()
     window.delay_spin.setRange(0, 60000)
+    window.parallel_spin = QSpinBox()
+    window.parallel_spin.setRange(1, 16)
     form.addRow("Timeout de leitura (s)", window.timeout_spin)
     form.addRow("Tentativas", window.retries_spin)
     form.addRow("Intervalo entre páginas (ms)", window.delay_spin)
+    form.addRow("Downloads simultâneos", window.parallel_spin)
     network_layout.addLayout(form)
     network_layout.addWidget(
         button(

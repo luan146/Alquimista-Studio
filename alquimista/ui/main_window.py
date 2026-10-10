@@ -107,6 +107,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
     timeout_spin: QSpinBox
     retries_spin: QSpinBox
     delay_spin: QSpinBox
+    parallel_spin: QSpinBox
 
     def __init__(
         self,
@@ -699,6 +700,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         self.timeout_spin.setValue(self.project.extraction.timeout_seconds)
         self.retries_spin.setValue(self.project.extraction.retry_count)
         self.delay_spin.setValue(self.project.extraction.request_delay_ms)
+        self.parallel_spin.setValue(self.project.extraction.parallel_downloads)
         if hasattr(self, "sources_list"):
             self._refresh_source_widgets()
         if hasattr(self, "md_controls"):
@@ -733,6 +735,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         self.project.extraction.timeout_seconds = self.timeout_spin.value()
         self.project.extraction.retry_count = self.retries_spin.value()
         self.project.extraction.request_delay_ms = self.delay_spin.value()
+        self.project.extraction.parallel_downloads = self.parallel_spin.value()
         if hasattr(self, "md_controls"):
             self._sync_markdown_controls()
         self._sync_consolidation_controls()
@@ -993,6 +996,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         self.timeout_spin.setValue(defaults.timeout_seconds)
         self.retries_spin.setValue(defaults.retry_count)
         self.delay_spin.setValue(defaults.request_delay_ms)
+        self.parallel_spin.setValue(defaults.parallel_downloads)
         self.mark_dirty()
         self.statusBar().showMessage(
             translate_text("Valores recomendados restaurados. Salve o projeto."),

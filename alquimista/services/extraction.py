@@ -3,6 +3,9 @@ from __future__ import annotations
 import threading
 import time
 from collections import Counter, defaultdict
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -454,11 +457,41 @@ class ExtractionService:
         current[key] = entry
         counters[entry.status.value] += 1
 
+    def _unchanged_by_summary(
+        self, summary: Any, old: ManifestEntry | None, transform_hash: str, path: Path | None = None
+    ) -> bool:
+        """True when the listing proves the local copy (``path``, default the old one) is current."""
+        summary_updated = self._summary_value(summary, "updated_at")
+        summary_updated_text = (
+            summary_updated.isoformat()
+            if hasattr(summary_updated, "isoformat")
+            else summary_updated
+        )
+        summary_etag = self._summary_value(summary, "etag")
+        return bool(
+            old
+            and summary_updated_text
+            and (not summary_etag or old.etag == summary_etag)
+            and old.updated_at == summary_updated_text
+            and old.transform_config_hash == transform_hash
+            and old.markdown_path
+            and (path or confined_path(self.output_dir, old.markdown_path)).exists()
+        )
+
+    @staticmethod
+    def _fetch_document(connector: Any, document_id: str, container_id: str) -> Any:
+        try:
+            return connector.get_document(document_id, container_id=container_id)
+        except TypeError as exc:
+            if "container_id" not in str(exc):
+                raise
+            return connector.get_document(document_id)
+
     def _extract_generic_document(
         self,
         *,
         runtime: SourceRuntime,
-        connector: Any,
+        fetch: Callable[[], Any],
         summary: Any,
         key: str,
         container_id: str,
@@ -470,23 +503,8 @@ class ExtractionService:
         transaction: FileTransaction,
         counters: Counter[str],
     ) -> ManifestEntry:
-        summary_updated = self._summary_value(summary, "updated_at")
-        summary_updated_text = (
-            summary_updated.isoformat()
-            if hasattr(summary_updated, "isoformat")
-            else summary_updated
-        )
-        summary_etag = self._summary_value(summary, "etag")
-        summary_relative = old.markdown_path if old else ""
-        if (
-            old
-            and summary_updated_text
-            and (not summary_etag or old.etag == summary_etag)
-            and old.updated_at == summary_updated_text
-            and old.transform_config_hash == transform_hash
-            and summary_relative
-            and confined_path(self.output_dir, summary_relative).exists()
-        ):
+        if self._unchanged_by_summary(summary, old, transform_hash):
+            assert old is not None
             entry = old.model_copy(deep=True)
             entry.status = EntryStatus.UNCHANGED
             entry.checked_at = collected_at
@@ -495,13 +513,7 @@ class ExtractionService:
             entry.error_message = ""
             counters[EntryStatus.UNCHANGED.value] += 1
             return entry
-        document = None
-        try:
-            document = connector.get_document(document_id, container_id=container_id)
-        except TypeError as exc:
-            if "container_id" not in str(exc):
-                raise
-            document = connector.get_document(document_id)
+        document = fetch()
         prepared = renderer.prepare(
             document,
             runtime.source,
@@ -511,15 +523,8 @@ class ExtractionService:
         relative = self._relative_page_path(runtime.source, normalized)
         absolute = confined_path(self.output_dir, relative)
         metadata_hash = self._metadata_hash(normalized)
-        if (
-            old
-            and summary_updated_text
-            and (not summary_etag or old.etag == summary_etag)
-            and old.updated_at == summary_updated_text
-            and old.transform_config_hash == transform_hash
-            and old.markdown_path
-            and absolute.exists()
-        ):
+        if self._unchanged_by_summary(summary, old, transform_hash, absolute):
+            assert old is not None
             entry = old.model_copy(deep=True)
             entry.status = EntryStatus.UNCHANGED
             entry.checked_at = collected_at
@@ -660,6 +665,8 @@ class ExtractionService:
                 if not runtime.source.enabled or runtime.connector is None:
                     continue
                 connector = runtime.connector
+                workers = self.project.extraction.parallel_downloads
+                pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="alquimista-fetch")
                 try:
                     refs = list(runtime.selected_documents)
                     if not refs:
@@ -687,16 +694,37 @@ class ExtractionService:
                                 document_id=item.document_id,
                             )
                         ]
-                    for ref in refs:
+                    downloads: dict[int, Future[Any]] = {}
+                    refs = [ref for ref in refs if ref.source_id == runtime.source.id]
+                    olds = [
+                        previous.get(ref.document_key)
+                        or legacy_aliases.get(f"{runtime.source.id}:{ref.container_id}:{ref.document_id}")
+                        or legacy_aliases.get(f"{runtime.source.id}:{ref.document_id}")
+                        for ref in refs
+                    ]
+                    summaries = [
+                        ref.metadata
+                        or (runtime.documents_by_container or {}).get(ref.container_id, {}).get(ref.document_id)
+                        for ref in refs
+                    ]
+                    ahead = 0
+                    for position, ref in enumerate(refs):
                         self.token.check()
-                        if ref.source_id != runtime.source.id:
-                            continue
+                        # Download up to 2x workers documents ahead; rendering, naming and
+                        # staging stay on this thread, in order, so paths stay deterministic.
+                        while ahead < min(position + 2 * workers, len(refs)):
+                            if summaries[ahead] is None or not self._unchanged_by_summary(
+                                summaries[ahead], olds[ahead], transform_hash
+                            ):
+                                downloads[ahead] = pool.submit(
+                                    self._fetch_document, connector, refs[ahead].document_id, refs[ahead].container_id
+                                )
+                            ahead += 1
+                        download = downloads.pop(position, None)
                         key = ref.document_key
                         container_id = ref.container_id
                         document_id = ref.document_id
-                        summary = ref.metadata or (runtime.documents_by_container or {}).get(
-                            container_id, {}
-                        ).get(document_id)
+                        summary = summaries[position]
                         if summary is None:
                             summary = KnowledgeDocumentMetadata(
                                 id=document_id,
@@ -715,15 +743,13 @@ class ExtractionService:
                         # Prefer the disambiguated 3-part legacy alias when the
                         # container is known, then fall back to the 2-part alias
                         # for manifests written before container_id existed.
-                        old = (
-                            previous.get(key)
-                            or legacy_aliases.get(f"{runtime.source.id}:{container_id}:{document_id}")
-                            or legacy_aliases.get(f"{runtime.source.id}:{document_id}")
-                        )
+                        old = olds[position]
                         try:
                             current[key] = self._extract_generic_document(
                                 runtime=runtime,
-                                connector=connector,
+                                fetch=download.result
+                                if download
+                                else partial(self._fetch_document, connector, document_id, container_id),
                                 summary=summary,
                                 key=key,
                                 container_id=container_id,
@@ -755,6 +781,7 @@ class ExtractionService:
                             checkpoint()
 
                 finally:
+                    pool.shutdown(wait=True, cancel_futures=True)
                     connector.close()
         except ExtractionCancelledError:
             self.log("Extração cancelada; salvando os documentos já concluídos.")

@@ -346,6 +346,8 @@ class ExtractionOptions(Model):
     timeout_seconds: int = Field(60, ge=5, le=600)
     request_delay_ms: int = Field(150, ge=0, le=60_000)
     max_requests_per_second: float = Field(4.0, ge=0.1, le=100)
+    # Documents downloaded at the same time; the rate limit above still applies.
+    parallel_downloads: int = Field(4, ge=1, le=16)
     proxy_mode: Literal["system", "direct", "custom"] = "system"
     proxy_url: str = ""
     # Optional overrides for lazy discovery budgets. When None (the default) the
