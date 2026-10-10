@@ -10,7 +10,7 @@ if not exist "%PYTHON_CMD%" (
     goto :erro
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT_DIR%\tools\build\gerar_distribuicoes.ps1" -Version 0.9.5
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT_DIR%\tools\build\gerar_distribuicoes.ps1"
 if errorlevel 1 goto :erro
 
 echo.

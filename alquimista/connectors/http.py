@@ -9,6 +9,7 @@ from urllib.parse import urlparse, urlsplit
 
 import requests
 
+from .. import __version__
 from ..errors import (
     ApiConnectionError,
     ApiRateLimitError,
@@ -70,7 +71,7 @@ class ApiHttpClient:
         self.session.headers.update(
             {
                 "Accept": "application/json",
-                "User-Agent": "ALQuimista-Studio/0.9.5 (+official-knowledge-connector)",
+                "User-Agent": f"ALQuimista-Studio/{__version__} (+official-knowledge-connector)",
                 **(headers or {}),
             }
         )

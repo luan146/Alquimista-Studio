@@ -1,7 +1,7 @@
 ; Inno Setup configuration for the installed Windows distribution.
 #define AppName "ALQuimista Studio"
 #ifndef AppVersion
-  #define AppVersion "0.9.5"
+  #error Gere pelo tools/build/gerar_distribuicoes.ps1, que passa /DAppVersion a partir de alquimista/__init__.py.
 #endif
 #ifndef AppExeSource
   #define AppExeSource "..\\.tmp\\pyinstaller-dist\\ALQuimista Studio.exe"

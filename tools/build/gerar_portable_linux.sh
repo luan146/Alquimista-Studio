@@ -7,7 +7,9 @@ PYTHON_CMD="${PYTHON_CMD:-$ROOT_DIR/.venv/bin/python}"
 if [[ ! -x "$PYTHON_CMD" ]]; then
   PYTHON_CMD="python3"
 fi
-VERSION="${1:-0.9.5}"
+# Default: __version__ from alquimista/__init__.py (single source of the version).
+VERSION="${1:-$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' alquimista/__init__.py)}
+[[ -n "$VERSION" ]] || { echo "__version__ não encontrado em alquimista/__init__.py" >&2; exit 1; }
 BUILD_ID="$(date +%Y%m%d-%H%M%S-%N)"
 BUILD_ROOT="$ROOT_DIR/.tmp/pyinstaller-linux-$BUILD_ID"
 BUILD_DIST="$BUILD_ROOT/dist"

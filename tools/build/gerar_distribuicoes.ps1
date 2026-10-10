@@ -1,11 +1,16 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "0.9.5"
+    # Empty: read __version__ from alquimista/__init__.py (single source of the version).
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $root
+if (-not $Version) {
+    $Version = [regex]::Match((Get-Content -Raw (Join-Path $root "alquimista\__init__.py")), '__version__ = "([^"]+)"').Groups[1].Value
+    if (-not $Version) { throw "__version__ não encontrado em alquimista/__init__.py." }
+}
 $python = Join-Path $root ".venv\Scripts\python.exe"
 if (-not (Test-Path -LiteralPath $python)) { $python = "python" }
 $spec = Join-Path $root "packaging\ALQuimista Studio.spec"

@@ -9,6 +9,7 @@ from urllib.parse import urljoin, urlparse, urlsplit
 
 import requests
 
+from . import __version__
 from .errors import (
     ApiConnectionError,
     ApiRateLimitError,
@@ -84,7 +85,7 @@ class ConfluenceClient:
         self.session.headers.update(
             {
                 "Accept": "application/json, text/html;q=0.8",
-                "User-Agent": "ALQuimista-Studio/0.9.5 (+desktop-confluence-exporter)",
+                "User-Agent": f"ALQuimista-Studio/{__version__} (+desktop-confluence-exporter)",
             }
         )
         if self.options.proxy_mode == "direct":

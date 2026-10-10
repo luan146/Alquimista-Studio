@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,8 +42,9 @@ def test_distribution_defaults_use_current_product_version() -> None:
         encoding="utf-8"
     )
 
-    assert '__version__ = "0.9.5"' in package
-    assert '[string]$Version = "0.9.5"' in windows
-    assert 'VERSION="${1:-0.9.5}"' in linux
-    assert '#define AppVersion "0.9.5"' in installer
+    # The version lives only in __init__.py; scripts and installer derive it.
+    assert re.search(r'^__version__ = "\d+\.\d+\.\d+"$', package, re.MULTILINE)
+    assert "alquimista\\__init__.py" in windows and '[string]$Version = ""' in windows
+    assert "alquimista/__init__.py" in linux and 'VERSION="${1:-$(sed' in linux
+    assert "#error" in installer and not re.search(r'AppVersion "\d', installer)
     assert 'rm -rf -- "$BUILD_ROOT" "$STAGING_ROOT"' in linux
