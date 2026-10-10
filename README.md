@@ -71,6 +71,8 @@ Your exported content remains portable instead of being locked to a specific AI 
 
 ## 🧭 How it works
 
+In the interface these stages appear as **Home + 5 steps** in the sidebar (Sources, Selection, Output, Run, Results), each marked ✓ when done, with a **Next** button at the bottom. **Home** shows the project status, the next step and recent projects; the last project reopens on startup. Shortcuts: Ctrl+N/O/S (new, open, save), Ctrl+1…5 (steps), F5 (run).
+
 ### 1. 📚 Add a knowledge source
 
 Paste a URL and let ALQuimista identify the platform and prepare the source configuration.

@@ -71,6 +71,8 @@ El contenido exportado sigue siendo portátil y no queda bloqueado en una plataf
 
 ## 🧭 Cómo funciona
 
+En la interfaz, estas etapas aparecen como **Inicio + 5 pasos** en la barra lateral (Fuentes, Selección, Salida, Ejecutar, Resultados), cada uno con ✓ cuando está completo y un botón **Siguiente** al pie. **Inicio** muestra el estado del proyecto, el próximo paso y los proyectos recientes; el último proyecto se reabre al iniciar. Atajos: Ctrl+N/O/S (nuevo, abrir, guardar), Ctrl+1…5 (pasos), F5 (ejecutar).
+
 ### 1. 📚 Añade una fuente de conocimiento
 
 Pega una URL y deja que ALQuimista identifique la plataforma y prepare la configuración de la fuente.
