@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from ..document_processing import get_global_processor_registry
 from ..errors import AuthenticationError, InvalidResponseError
 from ..models import (
     ConnectorCapabilities,
@@ -60,7 +61,7 @@ class SharePointConnector(KnowledgeSourceConnector):
             source_type=self.SOURCE_TYPE,
             name=self.source.name,
             base_url=self.source.base_url or self.API_BASE_URL,
-            space_key=self.source.space_key,
+            metadata={"space_key": self.source.space_key},
         )
 
     def get_capabilities(self) -> ConnectorCapabilities:
@@ -149,52 +150,54 @@ class SharePointConnector(KnowledgeSourceConnector):
             documents.append(doc)
         return documents
 
+    def _drive(self, container_id: str | None) -> str:
+        site_id = container_id or self.source.space_key
+        return f"/sites/{site_id}/drive" if site_id else "/drive"
+
     def get_document(self, document_id: str, container_id: str | None = None) -> KnowledgeDocument:
-        title = "Documento SharePoint"
-        item_data = self.client.get_json(f"/drive/items/{document_id}")
+        drive = self._drive(container_id)
+        item_data = self.client.get_json(f"{drive}/items/{document_id}")
         if not isinstance(item_data, dict):
             raise InvalidResponseError("A API do SharePoint retornou os metadados em formato inválido.")
-        title = str(item_data.get("name") or title)
-        content_bytes = b""
-        try:
-            content_bytes = self.client.download(f"/drive/items/{document_id}/content")
-        except Exception:
-            pass
-        content = content_bytes.decode("utf-8", errors="replace") if content_bytes else f"# {title}\n\nDocumento do SharePoint."
+        title = str(item_data.get("name") or "Documento SharePoint")
+        content_bytes = self.client.download(f"{drive}/items/{document_id}/content")
+        converted = get_global_processor_registry().process_bytes(
+            content_bytes,
+            filename=title,
+            mime_type=str((item_data.get("file") or {}).get("mimeType") or ""),
+        )
 
         container = self._containers.get(container_id or self.source.space_key or "")
         return KnowledgeDocument(
             id=document_id,
             container_id=container_id or self.source.space_key,
-            title=title,
-            content=content,
-            document_type="page",
+            title=converted.title or title,
+            content=converted.content,
             original_url=str(item_data.get("webUrl") or ""),
             source_type=self.SOURCE_TYPE,
             container_name=container.name if container else "SharePoint",
-            metadata={"webUrl": item_data.get("webUrl"), "lastModifiedDateTime": item_data.get("lastModifiedDateTime")},
+            metadata={
+                **converted.metadata,
+                "webUrl": item_data.get("webUrl"),
+                "lastModifiedDateTime": item_data.get("lastModifiedDateTime"),
+            },
         )
 
     def get_document_children(self, document_id: str) -> list[KnowledgeDocumentMetadata]:
-        try:
-            payload = self.client.get_json(f"/drive/items/{document_id}/children")
-            if not isinstance(payload, dict) or not isinstance(payload.get("value"), list):
-                return []
-            result: list[KnowledgeDocumentMetadata] = []
-            for item in payload["value"]:
-                if isinstance(item, dict) and item.get("id"):
-                    result.append(
-                        KnowledgeDocumentMetadata(
-                            id=str(item["id"]),
-                            title=str(item.get("name") or "Item"),
-                            document_type="page" if not item.get("folder") else "folder",
-                            container_id=self.source.space_key or "sharepoint_site",
-                            original_url=str(item.get("webUrl") or ""),
-                        )
-                    )
-            return result
-        except Exception:
-            return []
+        payload = self.client.get_json(f"{self._drive(None)}/items/{document_id}/children")
+        if not isinstance(payload, dict) or not isinstance(payload.get("value"), list):
+            raise InvalidResponseError("A API do SharePoint retornou uma lista de itens inválida.")
+        return [
+            KnowledgeDocumentMetadata(
+                id=str(item["id"]),
+                title=str(item.get("name") or "Item"),
+                document_type="page" if not item.get("folder") else "folder",
+                container_id=self.source.space_key or "sharepoint_site",
+                original_url=str(item.get("webUrl") or ""),
+            )
+            for item in payload["value"]
+            if isinstance(item, dict) and item.get("id")
+        ]
 
     def normalize_document(self, raw_document: object) -> KnowledgeDocument:
         if isinstance(raw_document, KnowledgeDocument):

@@ -189,6 +189,7 @@ class LocalFilesConnector(KnowledgeSourceConnector):
                         )
         except Exception as exc:
             self.log(f"Erro ao listar pasta {target_dir}: {exc}")
+            raise
 
         return documents
 

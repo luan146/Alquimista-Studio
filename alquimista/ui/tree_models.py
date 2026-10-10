@@ -163,6 +163,7 @@ def tree_containers(source: SourceConfig, data: dict[str, Any]) -> list[dict[str
                     "name": name,
                     "description": metadata.get("description", ""),
                     "image_url": metadata.get("icon_url", ""),
+                    "page_count": int(metadata.get("page_count") or 0),
                     "metadata": metadata,
                 })
         return _deduplicate_containers(result)

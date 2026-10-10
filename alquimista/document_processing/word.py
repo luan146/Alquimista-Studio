@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ..errors import DocumentProcessingError
 from ..markdown import normalize_markdown
 from ..models import KnowledgeDocument
 from .base import DocumentProcessor
@@ -23,11 +24,9 @@ class WordProcessor(DocumentProcessor):
     """Processor for Word documents (DOCX, DOC, ODT, RTF) to clean Markdown."""
 
     name = "word"
-    supported_extensions = (".docx", ".doc", ".odt", ".rtf")
+    supported_extensions = (".docx", ".rtf")
     supported_mimetypes = (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/msword",
-        "application/vnd.oasis.opendocument.text",
         "application/rtf",
         "text/rtf",
     )
@@ -73,6 +72,8 @@ class WordProcessor(DocumentProcessor):
         if ext == ".docx":
             try:
                 import docx
+                from docx.table import Table
+                from docx.text.paragraph import Paragraph
 
                 doc = docx.Document(io.BytesIO(content_bytes))
                 core = doc.core_properties
@@ -89,7 +90,7 @@ class WordProcessor(DocumentProcessor):
                     tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
                     if tag == "p":
                         # Match paragraph
-                        p = docx.text.paragraph.Paragraph(child, doc)
+                        p = Paragraph(child, doc)
                         text = p.text.strip()
                         if not text:
                             continue
@@ -110,7 +111,7 @@ class WordProcessor(DocumentProcessor):
                             sections.append(text)
                     elif tag == "tbl":
                         # Match table
-                        t = docx.table.Table(child, doc)
+                        t = Table(child, doc)
                         table_rows: list[list[str]] = []
                         for row in t.rows:
                             table_rows.append([cell.text.strip().replace("\n", " ").replace("|", "\\|") for cell in row.cells])
@@ -125,22 +126,13 @@ class WordProcessor(DocumentProcessor):
                                 table_md.append("| " + " | ".join(padded[:col_count]) + " |")
                             sections.append("\n".join(table_md))
             except Exception as exc:
-                sections.append(f"*[Não foi possível processar documento DOCX: {exc}]*")
+                raise DocumentProcessingError(f"Não foi possível processar o documento {filename}: {exc}") from exc
 
-        elif ext in {".rtf"}:
-            try:
-                rtf_text = content_bytes.decode("utf-8", errors="replace")
-                sections.append(_extract_rtf_text(rtf_text))
-            except Exception as exc:
-                sections.append(f"*[Erro ao ler RTF: {exc}]*")
+        elif ext == ".rtf":
+            sections.append(_extract_rtf_text(content_bytes.decode("utf-8", errors="replace")))
 
         else:
-            # Fallback for plain/binary text
-            try:
-                text = content_bytes.decode("utf-8", errors="replace")
-                sections.append(text)
-            except Exception as exc:
-                sections.append(f"*[Erro ao ler arquivo: {exc}]*")
+            raise DocumentProcessingError(f"Formato de arquivo não suportado: {filename}")
 
         full_content = normalize_markdown("\n\n".join(sections))
         doc_metadata.update(doc_props)

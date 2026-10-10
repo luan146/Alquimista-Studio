@@ -18,7 +18,21 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QColor, QIcon, QPainter, QPalette, QPixmap, QPolygon
+from PySide6.QtGui import (
+    QColor,
+    QContextMenuEvent,
+    QEnterEvent,
+    QIcon,
+    QKeyEvent,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPalette,
+    QPixmap,
+    QPolygon,
+    QResizeEvent,
+    QWheelEvent,
+)
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -56,7 +70,7 @@ APP_TITLE = "ALQuimista Studio — Extração e consolidação"
 class VisibleArrowComboBox(QComboBox):
     """Combo box with a consistently visible dropdown indicator."""
 
-    def paintEvent(self, event: object) -> None:
+    def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -471,12 +485,12 @@ class GlowButton(QPushButton):
         self._click_animation.finished.connect(self._resume_hover_animation)
         self.pressed.connect(self._pulse_on_click)
 
-    def enterEvent(self, event: object) -> None:
+    def enterEvent(self, event: QEnterEvent) -> None:
         if self._hover_animation.state() != QAbstractAnimation.State.Running:
             self._hover_animation.start()
         super().enterEvent(event)
 
-    def leaveEvent(self, event: object) -> None:
+    def leaveEvent(self, event: QEvent) -> None:
         self._hover_animation.stop()
         self._click_animation.stop()
         self._click_animation.setStartValue(self._shadow.blurRadius())
@@ -571,7 +585,7 @@ class HorizontalScrollArea(QScrollArea):
         bar.setValue(bar.value() - delta)
 
 
-    def viewportEvent(self, event: object) -> bool:
+    def viewportEvent(self, event: QEvent) -> bool:
         event_type = getattr(event, "type", lambda: None)()
         if event_type == QEvent.Type.Wheel:
             delta = getattr(event, "angleDelta", lambda: None)()
@@ -790,12 +804,12 @@ class SourceCard(QFrame):
 
     glow_radius = Property(float, _get_glow_radius, _set_glow_radius)
 
-    def enterEvent(self, event: object) -> None:
+    def enterEvent(self, event: QEnterEvent) -> None:
         if self._hover_animation.state() != QAbstractAnimation.State.Running:
             self._hover_animation.start()
         super().enterEvent(event)
 
-    def leaveEvent(self, event: object) -> None:
+    def leaveEvent(self, event: QEvent) -> None:
         self._hover_animation.stop()
         self._click_animation.stop()
         self._click_animation.setStartValue(self._shadow.blurRadius())
@@ -803,7 +817,7 @@ class SourceCard(QFrame):
         self._click_animation.start()
         super().leaveEvent(event)
 
-    def wheelEvent(self, event: object) -> None:
+    def wheelEvent(self, event: QWheelEvent) -> None:
         ancestor = self.parentWidget()
         while ancestor is not None:
             if isinstance(ancestor, HorizontalScrollArea):
@@ -817,7 +831,7 @@ class SourceCard(QFrame):
             ancestor = ancestor.parentWidget()
         super().wheelEvent(event)
 
-    def mousePressEvent(self, event: object) -> None:
+    def mousePressEvent(self, event: QMouseEvent) -> None:
         btn = getattr(event, "button", lambda: None)()
         if btn == Qt.MouseButton.LeftButton:
             self._click_animation.stop()
@@ -835,17 +849,17 @@ class SourceCard(QFrame):
             return
         super().mousePressEvent(event)
 
-    def contextMenuEvent(self, event: object) -> None:
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         getattr(event, "accept", lambda: None)()
 
-    def mouseDoubleClickEvent(self, event: object) -> None:
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
         if getattr(event, "button", lambda: None)() == Qt.MouseButton.LeftButton:
             self.double_clicked.emit(self.source_type)
             getattr(event, "accept", lambda: None)()
             return
         super().mouseDoubleClickEvent(event)
 
-    def keyPressEvent(self, event: object) -> None:
+    def keyPressEvent(self, event: QKeyEvent) -> None:
         if getattr(event, "key", lambda: None)() in {
             Qt.Key.Key_Return,
             Qt.Key.Key_Enter,
@@ -1085,7 +1099,7 @@ class ResponsiveOutputControls(QWidget):
         self._layout.setVerticalSpacing(8)
         self._apply_layout(True)
 
-    def resizeEvent(self, event: object) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         compact = self.width() < 560
         if compact != self._compact:
             self._apply_layout(compact)

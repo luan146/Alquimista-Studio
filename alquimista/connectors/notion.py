@@ -268,12 +268,11 @@ class NotionConnector(KnowledgeSourceConnector):
             id=document_id,
             title=title,
             content=content,
-            document_type="page",
             container_id=container_id or self.source.space_key,
             original_url=str(page_data.get("url") or ""),
             source_type=self.SOURCE_TYPE,
             container_name=self._containers.get(container_id or self.source.space_key, KnowledgeContainer(id=container_id or self.source.space_key or "notion_workspace", key=container_id or self.source.space_key or "notion_workspace", name="Notion Workspace", container_type="workspace", source_type=self.SOURCE_TYPE)).name,
-            metadata={"last_edited_time": page_data.get("last_edited_time")},
+            metadata={"last_edited_time": page_data.get("last_edited_time"), "document_type": "page"},
         )
 
     def normalize_document(self, raw_document: object) -> KnowledgeDocument:
@@ -298,7 +297,6 @@ class NotionConnector(KnowledgeSourceConnector):
             id=document_id,
             title=title,
             content=content,
-            document_type="page",
             container_id=container_id,
             original_url=str(raw_document.get("url") or raw_document.get("original_url") or ""),
             source_type=self.SOURCE_TYPE,
@@ -312,18 +310,15 @@ class NotionConnector(KnowledgeSourceConnector):
                     source_type=self.SOURCE_TYPE,
                 ),
             ).name,
-            metadata={"last_edited_time": raw_document.get("last_edited_time")},
+            metadata={"last_edited_time": raw_document.get("last_edited_time"), "document_type": "page"},
         )
 
     def get_document_children(self, document_id: str) -> list[KnowledgeDocumentMetadata]:
-        try:
-            payload = self._page(f"/blocks/{document_id}/children")
-            return self._metadata_items(
-                payload.get("results", []),
-                self.source.space_key or "notion_workspace",
-            )
-        except Exception:
-            return []
+        payload = self._page(f"/blocks/{document_id}/children")
+        return self._metadata_items(
+            payload.get("results", []),
+            self.source.space_key or "notion_workspace",
+        )
 
     def close(self) -> None:
         session = getattr(self.client, "session", None)

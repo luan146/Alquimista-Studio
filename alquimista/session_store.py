@@ -88,12 +88,13 @@ def save_session(source_id: str, state: dict[str, Any]) -> Path:
     protection = "dpapi-current-user" if sys.platform == "win32" else "file-permissions"
     try:
         protected = _crypt_protect(raw)
-    except OSError:
-        # Some test and managed Windows environments expose win32 without a
-        # usable crypt32 provider. Keep the atomic session contract and rely
-        # on the restrictive file mode in that fallback case.
-        protected = raw
-        protection = "file-permissions"
+    except OSError as exc:
+        # On Windows chmod cannot restrict readers, so storing cookies without
+        # DPAPI would leave them in plain text. Refuse instead of downgrading.
+        raise AuthenticationError(
+            "Não foi possível proteger a sessão do navegador com a criptografia do Windows; "
+            "a sessão não foi salva."
+        ) from exc
     document = {
         "format": _FORMAT,
         "version": 1,

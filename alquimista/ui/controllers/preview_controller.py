@@ -11,8 +11,8 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QLineEdit,
-    QPlainTextEdit,
     QSpinBox,
+    QTextEdit,
     QWidget,
 )
 
@@ -29,7 +29,7 @@ class PreviewController:
         self,
         md_controls: dict[str, QWidget],
         preview_mode_combo: QComboBox | None = None,
-        preview_editor: QPlainTextEdit | None = None,
+        preview_editor: QTextEdit | None = None,
         preview_timer: QTimer | None = None,
         extraction_summary_label: Any | None = None,
         output_path_status_label: Any | None = None,

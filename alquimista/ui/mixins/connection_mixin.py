@@ -12,9 +12,10 @@ from ...client import session_path
 from ...models import AuthMode, SourceConfig
 from ...runtime import CancellationToken
 from ..i18n import translate_text
+from . import WindowBase
 
 
-class ConnectionMixin:
+class ConnectionMixin(WindowBase):
     """Connection and authentication behavior."""
 
     # Attributes provided by MainWindow.__init__/build_connection_page. See

@@ -164,6 +164,7 @@ class WordPressConnector(KnowledgeSourceConnector):
                     )
         except Exception as exc:
             self.log(f"Erro ao listar {container_id} no WordPress: {exc}")
+            raise
 
         return documents
 

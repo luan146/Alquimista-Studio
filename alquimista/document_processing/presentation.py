@@ -5,6 +5,7 @@ import io
 from pathlib import Path
 from typing import Any
 
+from ..errors import DocumentProcessingError
 from ..markdown import normalize_markdown
 from ..models import KnowledgeDocument
 from .base import DocumentProcessor
@@ -14,11 +15,9 @@ class PresentationProcessor(DocumentProcessor):
     """Processor for presentations (PPTX, ODP) converting slides and presenter notes into Markdown."""
 
     name = "presentation"
-    supported_extensions = (".pptx", ".ppt", ".odp")
+    supported_extensions = (".pptx",)
     supported_mimetypes = (
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.oasis.opendocument.presentation",
     )
 
     def process_file(
@@ -124,7 +123,7 @@ class PresentationProcessor(DocumentProcessor):
                 sections.append(slide_section)
 
         except Exception as exc:
-            sections.append(f"*[Não foi possível processar apresentação: {exc}]*")
+            raise DocumentProcessingError(f"Não foi possível processar a apresentação {filename}: {exc}") from exc
 
         full_content = normalize_markdown("\n\n".join(sections))
         doc_metadata.setdefault("raw_type", "presentation")

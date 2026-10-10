@@ -2,15 +2,48 @@ from __future__ import annotations
 
 import hashlib
 import io
+import posixpath
+import zipfile
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
 from markdownify import markdownify
 
+from ..errors import DocumentProcessingError
 from ..markdown import normalize_markdown
 from ..models import KnowledgeDocument
 from .base import DocumentProcessor
+
+_MAX_EPUB_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
+_DC = "{http://purl.org/dc/elements/1.1/}"
+
+
+def _read_epub(content_bytes: bytes) -> tuple[str, str, str, list[str]]:
+    """Return title, author, language and spine-ordered XHTML chapters of an EPUB."""
+    with zipfile.ZipFile(io.BytesIO(content_bytes)) as archive:
+        if sum(info.file_size for info in archive.infolist()) > _MAX_EPUB_UNCOMPRESSED_BYTES:
+            raise ValueError("conteúdo descompactado excede o limite permitido")
+        container = ElementTree.fromstring(archive.read("META-INF/container.xml"))
+        rootfile = next(el for el in container.iter() if el.tag.endswith("rootfile"))
+        opf_path = rootfile.attrib["full-path"]
+        opf = ElementTree.fromstring(archive.read(opf_path))
+        opf_dir = posixpath.dirname(opf_path)
+
+        def dc(name: str) -> str:
+            element = next(opf.iter(_DC + name), None)
+            return (element.text or "").strip() if element is not None else ""
+
+        manifest = {el.attrib.get("id"): el.attrib for el in opf.iter() if el.tag.endswith("}item")}
+        chapters: list[str] = []
+        for itemref in (el for el in opf.iter() if el.tag.endswith("}itemref")):
+            item = manifest.get(itemref.attrib.get("idref"))
+            if not item or "html" not in item.get("media-type", ""):
+                continue
+            href = posixpath.normpath(posixpath.join(opf_dir, item["href"]))
+            chapters.append(archive.read(href).decode("utf-8", errors="replace"))
+        return dc("title"), dc("creator"), dc("language"), chapters
 
 
 class EbookProcessor(DocumentProcessor):
@@ -55,43 +88,22 @@ class EbookProcessor(DocumentProcessor):
         title = doc_metadata.get("title") or Path(filename).stem or "E-book"
 
         sections: list[str] = []
-        ebook_meta: dict[str, Any] = {}
 
         try:
-            import ebooklib
-            from ebooklib import epub
-
-            # Create a temporary BytesIO or write to temp file since read_epub accepts path or BytesIO in newer versions
-            # ebooklib epub.read_epub accepts file path or bytes/file-like
-            book = epub.read_epub(io.BytesIO(content_bytes))
-
-            meta_title = book.get_metadata("DC", "title")
-            if meta_title and not doc_metadata.get("title"):
-                title = str(meta_title[0][0]) if meta_title[0] else title
-
-            creator = book.get_metadata("DC", "creator")
-            author = str(creator[0][0]) if creator and creator[0] else ""
-            language = book.get_metadata("DC", "language")
-            lang = str(language[0][0]) if language and language[0] else ""
-
-            ebook_meta = {
-                "title": title,
-                "author": author,
-                "language": lang,
-            }
-
-            for item in book.get_items():
-                if item.get_type() == ebooklib.ITEM_DOCUMENT:
-                    html_content = item.get_content().decode("utf-8", errors="replace")
-                    soup = BeautifulSoup(html_content, "html.parser")
-                    for tag in soup(["script", "style", "noscript", "nav"]):
-                        tag.decompose()
-                    chapter_text = markdownify(str(soup), heading_style="ATX", bullets="-").strip()
-                    if chapter_text:
-                        sections.append(chapter_text)
-
+            book_title, author, lang, chapters = _read_epub(content_bytes)
         except Exception as exc:
-            sections.append(f"*[Não foi possível processar e-book: {exc}]*")
+            raise DocumentProcessingError(f"Não foi possível processar o e-book {filename}: {exc}") from exc
+        if book_title and not doc_metadata.get("title"):
+            title = book_title
+        ebook_meta = {"title": title, "author": author, "language": lang}
+
+        for html_content in chapters:
+            soup = BeautifulSoup(html_content, "html.parser")
+            for tag in soup(["script", "style", "noscript", "nav"]):
+                tag.decompose()
+            chapter_text = markdownify(str(soup), heading_style="ATX", bullets="-").strip()
+            if chapter_text:
+                sections.append(chapter_text)
 
         full_content = normalize_markdown("\n\n---\n\n".join(sections))
         doc_metadata.update(ebook_meta)

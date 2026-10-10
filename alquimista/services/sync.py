@@ -194,8 +194,8 @@ class IncrementalSyncService:
         """Enforces that discovery does not indiscriminately enumerate outside SourceConfig."""
         if source.space_key and str(source.space_key) != str(container_id):
             return False
-        if source.root_mode == "id" and source.root_id and not source.include_root:
-            if str(document_id) == str(source.root_id):
+        if source.root_mode == "id" and source.root_value and not source.include_root:
+            if str(document_id) == str(source.root_value):
                 return False
         return True
 

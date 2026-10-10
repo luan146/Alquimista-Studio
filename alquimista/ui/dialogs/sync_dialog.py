@@ -123,6 +123,7 @@ class SyncPreviewDialog(QDialog):
         self.report: SyncReport | None = None
         self._thread: QThread | None = None
         self._worker: QObject | None = None
+        self._closing = False
 
         title_suffix = f" — {source_name}" if source_name else ""
         self.setWindowTitle(f"Sincronização Incremental{title_suffix}")
@@ -336,9 +337,15 @@ class SyncPreviewDialog(QDialog):
         self.report = report
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
-        self.status_label.setText(
-            f"Sincronização concluída com sucesso em {report.duration_seconds}s!"
-        )
+        if report.failures:
+            self.status_label.setText(
+                f"Sincronização concluída com {len(report.failures)} falha(s) em "
+                f"{report.duration_seconds}s. Veja o relatório de sincronização."
+            )
+        else:
+            self.status_label.setText(
+                f"Sincronização concluída com sucesso em {report.duration_seconds}s!"
+            )
         self.cancel_button.setText("Concluir")
         self.sync_button.setText("Concluído")
         self.sync_button.setEnabled(False)
@@ -351,12 +358,20 @@ class SyncPreviewDialog(QDialog):
         self.sync_button.setEnabled(True)
 
     def _on_cancel(self) -> None:
-        if self._thread and self._thread.isRunning():
-            self.token.cancel()
-            self.status_label.setText("Cancelando operação...")
-            self._thread.quit()
-            self._thread.wait(2000)
         self.reject()
+
+    def reject(self) -> None:
+        # Covers Cancel, Esc and the window close button. Destroying a running
+        # QThread aborts the process, so cancel cooperatively and close only
+        # once the worker has reported back (see _cleanup_thread).
+        if self._thread and self._thread.isRunning():
+            self._closing = True
+            self.token.cancel()
+            self.cancel_button.setEnabled(False)
+            self.sync_button.setEnabled(False)
+            self.status_label.setText("Cancelando operação...")
+            return
+        super().reject()
 
     def _cleanup_thread(self) -> None:
         if self._thread:
@@ -364,10 +379,8 @@ class SyncPreviewDialog(QDialog):
             self._thread.wait()
             self._thread = None
             self._worker = None
-
-    def closeEvent(self, event: Any) -> None:
-        self._on_cancel()
-        super().closeEvent(event)
+        if self._closing:
+            self.reject()
 
 
 __all__ = ["SyncPreviewDialog"]

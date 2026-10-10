@@ -17,6 +17,7 @@ SELECTED_HOVER_GRADIENT_END = "#163347"
 ACCENT_COLOR = "#7FE4B5"
 TEXT_PRIMARY = "#F2F6FA"
 TEXT_SECONDARY = "#A7B5C4"
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
 
@@ -493,7 +494,9 @@ def stylesheet(colors: dict[str, str]) -> str:
     """
 
 
-def apply_theme(app: QApplication, mode: str) -> None:
+def apply_theme(app: QCoreApplication | None, mode: str) -> None:
+    if not isinstance(app, QApplication):
+        return
     if mode == "system":
         is_dark = app.palette().color(QPalette.ColorRole.Window).lightness() < 128
         colors = DARK if is_dark else LIGHT

@@ -147,6 +147,7 @@ class GhostConnector(KnowledgeSourceConnector):
                 )
         except Exception as exc:
             self.log(f"Erro ao listar {container_id} no Ghost: {exc}")
+            raise
 
         return documents
 

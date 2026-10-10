@@ -6,16 +6,12 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from ..client import ConfluenceClient
-from ..connectors.confluence import ConfluenceRestConnector
 from ..errors import (
     AlquimistaError,
     ExtractionCancelledError,
 )
 from ..markdown import (
     KnowledgeDocumentRenderer,
-    MarkdownTransformer,
-    page_metadata,
     sha256_text,
 )
 from ..models import (
@@ -40,13 +36,6 @@ from ..storage import (
 )
 from .helpers import sanitize_filename
 from .runtime import SelectedDocumentRef, SourceRuntime
-
-
-def _get_now_iso() -> str:
-    import alquimista.services as s_mod
-
-    fn = getattr(s_mod, "now_iso", now_iso)
-    return fn()
 
 
 class ExtractionService:
@@ -237,58 +226,6 @@ class ExtractionService:
                 )
             )
         return report.as_dict()
-
-    def _adapt_legacy_runtimes(self) -> None:
-        """Convert pre-connector runtimes to the common connector contract.
-
-        Older callers supplied a cached Confluence tree directly. Keeping this
-        adapter at the boundary preserves that API while ensuring the actual
-        extraction algorithm is platform-neutral.
-        """
-        import alquimista.services as s_mod
-        confluence_client_cls = getattr(s_mod, "ConfluenceClient", ConfluenceClient)
-
-        for runtime in self.runtimes:
-            if runtime.connector is not None:
-                continue
-            if runtime.source.source_type != "confluence_rest":
-                raise AlquimistaError(
-                    "Um runtime sem conector só é compatível com Confluence legado."
-                )
-            client = confluence_client_cls(
-                runtime.source,
-                self.project.extraction,
-                secret=runtime.secret,
-                token=self.token,
-                log=self.log,
-            )
-            connector = ConfluenceRestConnector(
-                runtime.source,
-                self.project.extraction,
-                secret=runtime.secret,
-                token=self.token,
-                log=self.log,
-                client=client,
-            )
-            container_id = runtime.source.space_key or "__legacy__"
-            metadata: dict[str, KnowledgeDocumentMetadata] = {}
-            for raw in runtime.pages_by_id.values():
-                item = connector._metadata(raw, container_id)
-                metadata[item.id] = item
-            runtime.connector = connector
-            runtime.containers = {container_id: connector.get_source()}
-            runtime.documents_by_container = {container_id: metadata}
-            root_id = str(runtime.root.get("id", ""))
-            runtime.selected_page_ids = [
-                f"{runtime.source.id}:{container_id}:{document_id}"
-                for document_id in runtime.selected_page_ids
-                if document_id in metadata
-                and (
-                    runtime.source.root_mode == "space"
-                    or runtime.source.include_root
-                    or str(document_id) != root_id
-                )
-            ]
 
     @staticmethod
     def _summary_value(summary: Any, name: str, default: Any = None) -> Any:
@@ -681,7 +618,7 @@ class ExtractionService:
         failures: dict[str, dict[str, str]] = {}
         counters: Counter[str] = Counter()
         transform_hash = self.project.markdown.signature()
-        collected_at = _get_now_iso()
+        collected_at = now_iso()
         discovered_keys: set[str] = set()
         selected_keys: set[str] = set()
         total = sum(
@@ -840,16 +777,6 @@ class ExtractionService:
             self.log(f"Índice SQLite não atualizado; o manifesto JSON permanece válido: {exc}")
         self.log("Extração concluída.")
         return report
-
-    @staticmethod
-    def _summary_metadata_hash(metadata: dict[str, Any], old: ManifestEntry) -> str:
-        completed = dict(metadata)
-        if not completed.get("author"):
-            completed["author"] = old.author
-        if not completed.get("labels"):
-            completed["labels"] = old.labels
-        return ExtractionService._metadata_hash(completed)
-
     def run(self) -> dict[str, Any]:
         self.log(
             f"[Extração] Iniciando: saída={self.output_dir}; "
@@ -861,306 +788,8 @@ class ExtractionService:
 
     def _run(self, transaction: FileTransaction) -> dict[str, Any]:
         if any(runtime.connector is None for runtime in self.runtimes):
-            if any(runtime.connector is not None for runtime in self.runtimes):
-                raise AlquimistaError(
-                    "Não é possível misturar runtimes legados e conectores na mesma execução."
-                )
-            return self._run_legacy(transaction)
+            raise AlquimistaError("Todo runtime de extração precisa de um conector.")
         return self._run_generic(transaction)
-
-    def _run_legacy(self, transaction: FileTransaction) -> dict[str, Any]:
-        """Compatibility-only Confluence path for callers from schema v2/v3."""
-        started = time.monotonic()
-        self._assigned_relative_paths = {}
-        previous_document = self.store.load()
-        previous = {entry.document_key: entry for entry in previous_document.entries}
-        legacy_aliases = self._unique_legacy_aliases(previous_document.entries)
-        current: dict[str, ManifestEntry] = {}
-        failures: dict[str, dict[str, str]] = {}
-        counters: Counter[str] = Counter()
-        transform_hash = self.project.markdown.signature()
-        collected_at = _get_now_iso()
-        discovered_keys: set[str] = set()
-        selected_keys: set[str] = set()
-        complete_containers: set[tuple[str, str]] = set()
-        total = sum(
-            len(runtime.selected_page_ids)
-            for runtime in self.runtimes
-            if runtime.source.enabled
-        )
-        import alquimista.services as s_mod
-        confluence_client_cls = getattr(s_mod, "ConfluenceClient", ConfluenceClient)
-        completed = 0
-
-        for runtime in self.runtimes:
-            self.token.check()
-            source = runtime.source
-            if not source.enabled:
-                continue
-            with confluence_client_cls(
-                source,
-                self.project.extraction,
-                secret=runtime.secret,
-                token=self.token,
-                log=self.log,
-            ) as client:
-                transformer = MarkdownTransformer(
-                    client, source, runtime.root, self.project.markdown
-                )
-                root_id = str(runtime.root["id"])
-                legacy_container = str(source.space_key or "__legacy__")
-                discovered_keys.update(
-                    f"{source.id}:{legacy_container}:{page_id}"
-                    for page_id in runtime.pages_by_id
-                )
-                complete_containers.add((source.id, legacy_container))
-                selected_ids = [
-                    page_id
-                    for page_id in runtime.selected_page_ids
-                    if page_id in runtime.pages_by_id
-                    and (
-                        source.root_mode == "space"
-                        or source.include_root
-                        or page_id != root_id
-                    )
-                    and (
-                        self.partial_update_keys is None
-                        or self._key_matches(
-                            f"{source.id}:{legacy_container}:{page_id}",
-                            self.partial_update_keys,
-                            source_id=source.id,
-                            container_id=legacy_container,
-                            document_id=page_id,
-                        )
-                    )
-                ]
-                selected_keys.update(
-                    f"{source.id}:{legacy_container}:{page_id}"
-                    for page_id in selected_ids
-                )
-
-                for page_id in selected_ids:
-                    self.token.check()
-                    completed += 1
-                    summary = runtime.pages_by_id[page_id]
-                    summary_meta = page_metadata(summary, source, runtime.root)
-                    key = summary_meta["document_key"]
-                    legacy_container = str(
-                        summary_meta.get("space_key") or source.space_key or "__legacy__"
-                    )
-                    old = (
-                        previous.get(key)
-                        or (
-                            legacy_aliases.get(f"{source.id}:{legacy_container}:{page_id}")
-                            if legacy_container
-                            else None
-                        )
-                        or legacy_aliases.get(f"{source.id}:{page_id}")
-                    )
-                    relative = self._relative_page_path(source, summary_meta)
-                    absolute = confined_path(self.output_dir, relative)
-                    self.progress(completed, total, summary_meta["title"])
-                    self.log(
-                        f"{source.name} [{completed}/{total}] {summary_meta['title']}"
-                    )
-
-                    shortcut_hash = (
-                        self._summary_metadata_hash(summary_meta, old)
-                        if old
-                        else self._metadata_hash(summary_meta)
-                    )
-                    if (
-                        old
-                        and self.project.extraction.use_version_shortcut
-                        and not self.project.extraction.force_reprocess
-                        and old.confluence_version == summary_meta["confluence_version"]
-                        and old.metadata_hash == shortcut_hash
-                        and old.transform_config_hash == transform_hash
-                        and absolute.exists()
-                    ):
-                        entry = old.model_copy(deep=True)
-                        entry.status = EntryStatus.UNCHANGED
-                        entry.checked_at = collected_at
-                        entry.active = True
-                        entry.selected = True
-                        entry.error_message = ""
-                        current[key] = entry
-                        counters[EntryStatus.UNCHANGED.value] += 1
-                        continue
-
-                    try:
-                        page = client.fetch_page(
-                            page_id,
-                            include_body=True,
-                            include_labels=self.project.markdown.include_labels,
-                        )
-                        metadata = page_metadata(page, source, runtime.root)
-                        technical = transformer.technical_markdown(page)
-                        if not technical and not self.project.markdown.include_empty_pages:
-                            counters["empty_skipped"] += 1
-                            self.log(f"Página vazia ignorada: {metadata['title']}")
-                            if old:
-                                entry = old.model_copy(deep=True)
-                                entry.status = EntryStatus.EMPTY_SKIPPED
-                                entry.checked_at = collected_at
-                                entry.error_message = ""
-                                entry.active = False
-                                entry.selected = True
-                                entry.packages = []
-                            else:
-                                entry = ManifestEntry(
-                                    **metadata,
-                                    checked_at=collected_at,
-                                    status=EntryStatus.EMPTY_SKIPPED,
-                                    active=False,
-                                    selected=True,
-                                )
-                            current[key] = entry
-                            continue
-                        content_hash = sha256_text(
-                            transformer.hash_input(metadata, technical)
-                        )
-                        metadata_hash = self._metadata_hash(metadata)
-                        old_file_exists = bool(
-                            old
-                            and old.markdown_path
-                            and confined_path(self.output_dir, old.markdown_path).exists()
-                        )
-                        if old is None:
-                            status = EntryStatus.NEW
-                        elif old.content_hash != content_hash:
-                            status = EntryStatus.UPDATED
-                        elif not absolute.exists() and not old_file_exists:
-                            status = EntryStatus.REPAIRED
-                        elif old.transform_config_hash != transform_hash:
-                            status = EntryStatus.FORMAT_UPDATED
-                        elif old.metadata_hash != metadata_hash:
-                            status = EntryStatus.METADATA_UPDATED
-                        elif not absolute.exists():
-                            status = EntryStatus.REPAIRED
-                        else:
-                            status = EntryStatus.UNCHANGED
-                        document = transformer.full_document(
-                            metadata,
-                            technical,
-                            content_hash,
-                            collected_at,
-                            status.value,
-                        )
-                        if status != EntryStatus.UNCHANGED or not absolute.exists():
-                            transaction.stage_text(absolute, document)
-                        if (
-                            old
-                            and old.markdown_path
-                            and old.markdown_path != relative.as_posix()
-                        ):
-                            old_path = confined_path(self.output_dir, old.markdown_path)
-                            if old_path != absolute:
-                                transaction.stage_delete(old_path)
-                        entry = ManifestEntry(
-                            **metadata,
-                            collected_at=collected_at,
-                            checked_at=collected_at,
-                            first_collected_at=old.first_collected_at
-                            if old
-                            else collected_at,
-                            last_successful_at=collected_at,
-                            content_hash=content_hash,
-                            metadata_hash=metadata_hash,
-                            transform_config_hash=transform_hash,
-                            document_hash=sha256_text(document),
-                            markdown_path=relative.as_posix(),
-                            packages=old.packages if old else [],
-                            status=status,
-                            error_message="",
-                            active=True,
-                            selected=True,
-                        )
-                        current[key] = entry
-                        counters[status.value] += 1
-                    except ExtractionCancelledError:
-                        raise
-                    except Exception as exc:
-                        self.log(
-                            f"Falha ao extrair pagina {page_id} "
-                            f"({summary_meta['title']}) da fonte {source.name}: {exc}"
-                        )
-                        failures[key] = {
-                            "source": source.name,
-                            "page_id": page_id,
-                            "title": summary_meta["title"],
-                            "error": str(exc),
-                        }
-
-                        if old and self.project.extraction.preserve_previous_on_error:
-                            entry = old.model_copy(deep=True)
-                            entry.status = EntryStatus.PRESERVED_AFTER_ERROR
-                            entry.error_message = str(exc)
-                            entry.checked_at = collected_at
-                            current[key] = entry
-                            counters[EntryStatus.PRESERVED_AFTER_ERROR.value] += 1
-                        else:
-                            current[key] = ManifestEntry(
-                                **summary_meta,
-                                checked_at=collected_at,
-                                status=EntryStatus.FAILED,
-                                error_message=str(exc),
-                                active=True,
-                                selected=True,
-                            )
-                            counters[EntryStatus.FAILED.value] += 1
-                        self.log(f"Falha em {summary_meta['title']}: {exc}")
-                    self.token.wait(self.project.extraction.request_delay_ms / 1000)
-
-        self._reconcile_manifest(
-            previous=previous,
-            current=current,
-            discovered_keys=discovered_keys,
-            selected_keys=selected_keys,
-            complete_containers=complete_containers,
-            counters=counters,
-            transaction=transaction,
-            collected_at=collected_at,
-        )
-
-        manifest = ManifestDocument(
-            project_id=self.project.project_id,
-            project_name=self.project.project_name,
-            generated_at=collected_at,
-            entries=sorted(
-                current.values(),
-                key=lambda item: (
-                    item.source_name.casefold(),
-                    [part.casefold() for part in item.path],
-                    item.title.casefold(),
-                ),
-            ),
-        )
-        manifest.generated_at = _get_now_iso()
-        if self.store.path.exists():
-            transaction.stage_text(
-                self.store.path.with_suffix(self.store.path.suffix + ".bak"),
-                self.store.path.read_text(encoding="utf-8"),
-            )
-        transaction.stage_json(self.store.path, manifest.model_dump(mode="json"))
-        transaction.stage_json(self.output_dir / FAILURES_NAME, failures)
-        report = self._structured_report(
-            started=started,
-            collected_at=collected_at,
-            current=current,
-            discovered_keys=discovered_keys,
-            selected_keys=selected_keys,
-            counters=counters,
-            failures=failures,
-        )
-        transaction.stage_json(self.output_dir / REPORT_NAME, report)
-        transaction.commit()
-        try:
-            self.store.index.rebuild(manifest)
-        except Exception as exc:
-            self.log(f"Índice SQLite não atualizado; o manifesto JSON permanece válido: {exc}")
-        self.log("Extração concluída.")
-        return report
 
 
 __all__ = ["ExtractionService"]

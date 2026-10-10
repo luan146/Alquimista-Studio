@@ -15,7 +15,7 @@ Guia de referência rápida para agentes de IA e desenvolvedores. Fonte da verda
 | Conectores implementados | 28 |
 | Processadores de documentos | 8 (PDF, Word, Spreadsheet, Presentation, Ebook, HTML, Image, Text) |
 | Controllers em `ui/controllers/` | 11 arquivos (10 controllers + `__init__.py`) |
-| Mixins em `ui/mixins/` | 3 (connection, selection, source) |
+| Mixins em `ui/mixins/` | 5 (connection, selection, source, pages_browser, tree_loading) |
 | Páginas em `ui/pages/` | 9 |
 | Arquivos de teste | 31 (+ 2 em `contracts/`) |
 | Funções de teste | ~233 |
@@ -41,7 +41,7 @@ Guia de referência rápida para agentes de IA e desenvolvedores. Fonte da verda
 |---|---|---|
 | Adicionar/editar uma fonte | `ui/mixins/source_mixin.py` + `source_detection.py` | `models.py:SourceConfig`, `storage.py` |
 | Autenticação de uma fonte | `ui/mixins/connection_mixin.py` + `auth.py` | `connectors/<plataforma>.py`, `controllers/runtime_controller.py:RuntimeSecrets` |
-| Árvore de seleção | `ui/mixins/selection_mixin.py` | `tree_models.py`, `controllers/tree_loader_controller.py` |
+| Árvore de seleção | `ui/mixins/selection_mixin.py` + `ui/mixins/tree_loading_mixin.py` | `tree_models.py`, `controllers/tree_loader_controller.py` |
 | Conversão HTML→Markdown | `markdown/transformer.py` | `markdown/renderer.py`, `models.py:MarkdownOptions` |
 | Extração de páginas | `services/extraction.py` | conector `get_document`, `services/runtime.py:SourceRuntime` |
 | Consolidação de saída | `services/consolidation.py` | `storage.py`, `services/helpers.py:demote_headings` |
@@ -181,12 +181,15 @@ alquimista/                  # Pacote principal (sem UI)
     ├── mixins/               # Comportamentos da MainWindow
     │   ├── source_mixin.py      # CRUD de fontes (~37KB, 28 métodos)
     │   ├── selection_mixin.py   # Árvore de seleção (~28KB, 21 métodos)
-    │   └── connection_mixin.py  # Autenticação (~17KB, 8 métodos)
+    │   ├── connection_mixin.py  # Autenticação (~17KB, 8 métodos)
+    │   ├── pages_browser_mixin.py # Tela Páginas: cards de espaços, tabelas, paginação
+    │   └── tree_loading_mixin.py  # Carregamento de contêineres, árvores e filhos lazy
     ├── pages/                # Construtores de tela
     │   ├── dashboard_page.py
     │   ├── sources_page.py
     │   ├── connection_page.py
     │   ├── selection_page.py
+    │   ├── settings_page.py
     │   ├── review_page.py
     │   ├── extraction_page.py
     │   ├── markdown_page.py
@@ -610,6 +613,8 @@ Orquestrador principal. Herda 3 mixins. Constrói páginas, conecta sinais, gere
 | `SourceMixin` | `source_mixin.py` | 37KB, 28 métodos | CRUD de fontes, detecção de plataforma, import/export de perfil |
 | `SelectionMixin` | `selection_mixin.py` | 28KB, 21 métodos | Árvore de seleção, lazy loading, marcar/desmarcar, filtrar |
 | `ConnectionMixin` | `connection_mixin.py` | 17KB, 8 métodos | Autenticação, test_connection, browser_login, runtime secrets |
+| `PagesBrowserMixin` | `pages_browser_mixin.py` | 24 métodos | Tela Páginas: cards de espaços, tabelas, colunas, paginação |
+| `TreeLoadingMixin` | `tree_loading_mixin.py` | 24 métodos | Carregar contêineres, árvores de páginas e filhos lazy (delegando o trabalho ao `TreeLoaderController`) |
 
 ### controllers/ — Camada de aplicação (10 controllers)
 

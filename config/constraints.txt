@@ -42,3 +42,10 @@ pefile==2024.8.26
 pyinstaller-hooks-contrib==2026.6
 pywin32-ctypes==0.2.3
 setuptools==83.0.0
+pypdf==6.19.0
+openpyxl==3.1.5
+et_xmlfile==2.0.0
+python-docx==1.2.0
+python-pptx==1.0.2
+lxml==6.1.3
+XlsxWriter==3.2.9

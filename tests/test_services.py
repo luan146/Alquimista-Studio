@@ -7,10 +7,11 @@ from typing import Any
 
 import pytest
 
-import alquimista.services as services
+from alquimista.connectors.confluence import ConfluenceRestConnector
 from alquimista.errors import ExtractionCancelledError, ManifestError
 from alquimista.models import (
     EntryStatus,
+    ExtractionOptions,
     ManifestDocument,
     ManifestEntry,
     ProjectConfig,
@@ -76,9 +77,32 @@ class FakeClient:
         return f"{base_url}/pages/viewpage.action?pageId={page['id']}"
 
 
+def confluence_runtime(
+    source: SourceConfig, summaries: dict[str, dict[str, Any]], selected: list[str]
+) -> SourceRuntime:
+    """Runtime built the way the app does: a connector plus pre-listed metadata."""
+    connector = ConfluenceRestConnector(source, ExtractionOptions(), client=FakeClient(source, None))
+    container_id = source.space_key or "DOC"
+    metadata = {key: connector._metadata(raw, container_id) for key, raw in summaries.items()}
+    return SourceRuntime(
+        source=source,
+        root={},
+        pages_by_id={},
+        selected_page_ids=[f"{source.id}:{container_id}:{key}" for key in selected],
+        connector=connector,
+        documents_by_container={container_id: metadata},
+    )
+
+
+def update_summary(runtime: SourceRuntime, summary: dict[str, Any]) -> None:
+    container_id = next(iter(runtime.documents_by_container))
+    runtime.documents_by_container[container_id][summary["id"]] = runtime.connector._metadata(
+        summary, container_id
+    )
+
+
 @pytest.fixture
-def configured(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(services, "ConfluenceClient", FakeClient)
+def configured(tmp_path: Path):
     source = SourceConfig(
         id="fonte1",
         name="Produto",
@@ -88,17 +112,12 @@ def configured(tmp_path: Path, monkeypatch):
         root_value="100",
     )
     project = ProjectConfig(project_name="Teste", output_dir="base", sources=[source])
-    root = {
-        "id": "100",
-        "title": "Manual",
-        "space": {"key": "DOC", "name": "Documentação"},
-    }
     current = page("10", "Venda", "<p>Conteúdo</p>")
     FakeClient.pages = {(source.id, "10"): current}
     FakeClient.body_fetches = 0
     summary = dict(current)
     summary.pop("body")
-    runtime = SourceRuntime(source, root, {"10": summary}, ["10"])
+    runtime = confluence_runtime(source, {"10": summary}, ["10"])
     return project, runtime, current, tmp_path
 
 
@@ -114,7 +133,7 @@ def test_incremental_statuses_and_no_unnecessary_body_fetch(configured):
     FakeClient.pages[("fonte1", "10")] = changed
     summary = dict(changed)
     summary.pop("body")
-    runtime.pages_by_id["10"] = summary
+    update_summary(runtime, summary)
     third = ExtractionService(project, [runtime], base).run()
     assert third["counters"]["updated"] == 1
 
@@ -140,7 +159,7 @@ def test_default_markdown_is_compact_and_shared_by_loose_files(configured):
     text = markdown_path.read_text(encoding="utf-8")
     assert text.startswith("# Venda\n\n")
     assert "**Fonte original:**" not in text
-    assert "**URL original:** [Abrir no Confluence]" in text
+    assert "**URL original:** [Abrir na origem]" in text
     assert "**Módulo:**" in text
     assert "**Caminho:**" in text
     assert "**Última atualização:**" in text
@@ -149,8 +168,7 @@ def test_default_markdown_is_compact_and_shared_by_loose_files(configured):
     assert "## Conteúdo técnico" in text
 
 
-def test_same_page_id_in_two_sources_does_not_collide(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(services, "ConfluenceClient", FakeClient)
+def test_same_page_id_in_two_sources_does_not_collide(tmp_path: Path):
     sources = [
         SourceConfig(id="s1", name="A", base_url="https://a.test", space_key="A"),
         SourceConfig(id="s2", name="B", base_url="https://b.test", space_key="B"),
@@ -158,17 +176,16 @@ def test_same_page_id_in_two_sources_does_not_collide(tmp_path: Path, monkeypatc
     project = ProjectConfig(output_dir="base", sources=sources)
     runtimes = []
     for source in sources:
-        root = {"id": "100", "title": "Manual", "space": {"key": source.space_key}}
         full = page("10", source.name, f"<p>{source.name}</p>", source_space=source.space_key)
         FakeClient.pages[(source.id, "10")] = full
         summary = dict(full)
         summary.pop("body")
-        runtimes.append(SourceRuntime(source, root, {"10": summary}, ["10"]))
+        runtimes.append(confluence_runtime(source, {"10": summary}, ["10"]))
     ExtractionService(project, runtimes, tmp_path).run()
     manifest = json.loads(
         (tmp_path / "base" / "manifesto_alquimista.json").read_text(encoding="utf-8")
     )
-    assert {entry["document_key"] for entry in manifest["entries"]} == {"s1:10", "s2:10"}
+    assert {entry["document_key"] for entry in manifest["entries"]} == {"s1:A:10", "s2:B:10"}
     assert len({entry["markdown_path"] for entry in manifest["entries"]}) == 2
 
 
@@ -182,7 +199,7 @@ def test_consolidation_splits_without_splitting_a_page(configured):
     assert result["packages"] == 1
     package = next((base / "base" / project.consolidation.output_subdir).glob("*.md"))
     package_text = package.read_text(encoding="utf-8")
-    assert "Abrir no Confluence" in package_text
+    assert "Abrir na origem" in package_text
     assert "## Índice" in package_text
     assert "[Venda]" in package_text
     assert "# Venda" in package_text
@@ -224,8 +241,8 @@ def test_consolidation_cancels_before_next_package(configured):
     FakeClient.pages[(runtime.source.id, "11")] = second
     second_summary = dict(second)
     second_summary.pop("body")
-    runtime.pages_by_id["11"] = second_summary
-    runtime.selected_page_ids.append("11")
+    update_summary(runtime, second_summary)
+    runtime.selected_page_ids.append(f"{runtime.source.id}:DOC:11")
     ExtractionService(project, [runtime], base).run()
     project.consolidation.max_pages = 1
     token = CancellationToken()
@@ -326,10 +343,7 @@ def test_module_consolidation_depth_generates_expected_packages_and_index(tmp_pa
     assert "[Detalhes]" in package_text
 
 
-def test_partial_update_preserves_entries_outside_retry_scope(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(services, "ConfluenceClient", FakeClient)
+def test_partial_update_preserves_entries_outside_retry_scope(tmp_path: Path) -> None:
     source = SourceConfig(
         id="s1",
         name="Produto",
@@ -338,7 +352,6 @@ def test_partial_update_preserves_entries_outside_retry_scope(
         root_value="100",
     )
     project = ProjectConfig(output_dir="base", sources=[source])
-    root = {"id": "100", "title": "Manual", "space": {"key": "DOC"}}
     full_pages = {
         "10": page("10", "Dez", "<p>10</p>"),
         "11": page("11", "Onze", "<p>11</p>"),
@@ -349,15 +362,15 @@ def test_partial_update_preserves_entries_outside_retry_scope(
         summary.pop("body")
     ExtractionService(
         project,
-        [SourceRuntime(source, root, summaries, ["10", "11"])],
+        [confluence_runtime(source, summaries, ["10", "11"])],
         tmp_path,
     ).run()
 
     ExtractionService(
         project,
-        [SourceRuntime(source, root, summaries, ["10"])],
+        [confluence_runtime(source, summaries, ["10"])],
         tmp_path,
-        partial_update_keys={"s1:10"},
+        partial_update_keys={"s1:DOC:10"},
     ).run()
 
     manifest = ManifestStore(tmp_path / "base" / "manifesto_alquimista.json", project).load()
@@ -433,7 +446,7 @@ def test_empty_page_has_explicit_status_instead_of_removed(configured) -> None:
     FakeClient.pages[("fonte1", "10")] = empty
     summary = dict(empty)
     summary.pop("body")
-    runtime.pages_by_id["10"] = summary
+    update_summary(runtime, summary)
 
     ExtractionService(project, [runtime], base).run()
 

@@ -169,32 +169,21 @@ class Document360Connector(KnowledgeSourceConnector):
                     name=cat_name,
                     container_type="category",
                     source_type=self.SOURCE_TYPE,
-                    is_accessible=True,
-                    is_public=not bool(cat.get("is_hidden")),
-                    page_count=cat.get("article_count") or 0,
                     description=cat_desc,
-                    metadata={"order": cat.get("order"), "version_id": cat.get("project_version_id")},
+                    metadata={
+                        "order": cat.get("order"),
+                        "version_id": cat.get("project_version_id"),
+                        "public": not bool(cat.get("is_hidden")),
+                        "page_count": cat.get("article_count") or 0,
+                    },
                 )
                 self._containers[cat_id] = container
                 containers.append(container)
 
         except Exception as exc:
             self.log(f"Erro ao listar categorias Document360: {exc}")
+            raise
 
-        if not containers:
-            container = KnowledgeContainer(
-                id="cat-1",
-                key="cat-1",
-                name="Categoria D360",
-                container_type="category",
-                source_type=self.SOURCE_TYPE,
-                is_accessible=True,
-                is_public=True,
-                page_count=0,
-                description="Base Principal",
-            )
-            self._containers["cat-1"] = container
-            containers.append(container)
         return containers
 
     def list_documents(self, container_id: str) -> list[KnowledgeDocumentMetadata]:
@@ -234,6 +223,7 @@ class Document360Connector(KnowledgeSourceConnector):
 
         except Exception as exc:
             self.log(f"Erro ao listar artigos Document360: {exc}")
+            raise
 
         return documents
 

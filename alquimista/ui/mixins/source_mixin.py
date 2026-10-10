@@ -20,13 +20,14 @@ from ...confluence_url import parse_confluence_url
 from ...models import AuthMode, SourceConfig, now_iso
 from ...runtime import CancellationToken
 from ...source_detection import DetectedSource, detect_source_url
+from ..controllers.source_controller import source_by_combo as resolve_source_by_combo
+from ..controllers.source_controller import source_by_index as resolve_source_by_index
 from ..i18n import translate_text
-from ..source_controller import source_by_combo as resolve_source_by_combo
-from ..source_controller import source_by_index as resolve_source_by_index
 from ..workers import Worker
+from . import WindowBase
 
 
-class SourceMixin:
+class SourceMixin(WindowBase):
     """Source list, source form, and source profile behavior."""
 
     # Attributes provided by MainWindow.__init__/build_*_page. Declared as
@@ -35,6 +36,7 @@ class SourceMixin:
     # (Any) for widgets/helpers created externally, matching the pattern in
     # TreeMixin.
     project: Any
+    sync_source: Any
     view_state: Any
     connector_registry: Any
     secrets: Any
@@ -221,15 +223,6 @@ class SourceMixin:
             translate_text("{count} itens").format(count=len(visible_rows))
         )
         self.sources_empty_label.setVisible(not visible_rows)
-
-    def sync_source(self, source_id: str) -> None:
-        from ..controllers.execution_controller import sync_source as ctrl_sync_source
-        ctrl_sync_source(self, source_id)
-
-    def sync_project(self) -> None:
-        from ..controllers.execution_controller import sync_project as ctrl_sync_project
-        ctrl_sync_project(self)
-
 
     def _source_table_row_changed(self, row: int) -> None:
         if row < 0 or row >= len(getattr(self, "_visible_source_rows", [])):
@@ -888,8 +881,8 @@ class SourceMixin:
             "",
             translate_text(
                 "Todos os Documentos Suportados (*.pdf *.docx *.xlsx *.pptx *.epub *.html *.txt *.md);;"
-                "PDF (*.pdf);;Word (*.docx *.rtf *.odt);;Excel / Planilhas (*.xlsx *.xls *.csv *.tsv);;"
-                "PowerPoint (*.pptx *.odp);;E-books (*.epub);;HTML (*.html *.htm);;Texto / Markdown (*.txt *.md *.mdx);;"
+                "PDF (*.pdf);;Word (*.docx *.rtf);;Excel / Planilhas (*.xlsx *.xlsm *.csv *.tsv);;"
+                "PowerPoint (*.pptx);;E-books (*.epub);;HTML (*.html *.htm);;Texto / Markdown (*.txt *.md *.mdx);;"
                 "Imagens (*.png *.jpg *.jpeg *.webp);;Todos os Arquivos (*.*)"
             ),
         )

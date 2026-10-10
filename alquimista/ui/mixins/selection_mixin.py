@@ -12,9 +12,10 @@ from ...selection import SelectionStore
 from ..components import SortableTreeItem, SourceCard, VisibilityBadgeDelegate, timestamp_sort_value
 from ..i18n import translate_text
 from ..tree_models import ordered_pages, page_parent_id, parent_ids_in_list
+from . import WindowBase
 
 
-class SelectionMixin:
+class SelectionMixin(WindowBase):
     """Selection navigation, filtering, and persistence behavior."""
 
     # Attributes provided by MainWindow.__init__/build_selection_page. See
@@ -68,22 +69,6 @@ class SelectionMixin:
 
     def _selection_source(self) -> SourceConfig | None:
         return self.source_by_combo(self.selection_source)
-
-    def _load_more_selection_rows(self) -> None:
-        source = self._selection_source()
-        if not source or not self._active_selection_container:
-            return
-        key = self._page_render_key(source, self._active_selection_container)
-        self._selection_render_limits[key] = (
-            self._selection_render_limits.get(key, 800) + 800
-        )
-        data = self.trees.get(source.id)
-        if data:
-            self._populate_selection_tree(
-                source, data, container_id=self._active_selection_container
-            )
-
-
 
     def _refresh_selection_home(self) -> None:
         if not hasattr(self, "selection_home_layout"):
@@ -312,9 +297,9 @@ class SelectionMixin:
             if item.childCount() == 0:
                 return
             states = [
-                item.child(index).checkState(0)
+                child.checkState(0)
                 for index in range(item.childCount())
-                if item.child(index) is not None
+                if (child := item.child(index)) is not None
             ]
             if states and all(state == Qt.CheckState.Checked for state in states):
                 state = Qt.CheckState.Checked
@@ -613,7 +598,9 @@ class SelectionMixin:
         mode = str(self.selection_filter.currentData() or "all")
 
         def walk(item: QTreeWidgetItem) -> bool:
-            child_visible = any(walk(item.child(i)) for i in range(item.childCount()))
+            child_visible = any(
+                walk(child) for i in range(item.childCount()) if (child := item.child(i)) is not None
+            )
             is_document = bool(item.data(0, VisibilityBadgeDelegate.DOCUMENT_ROLE))
             text_match = not query or query in " ".join(
                 item.text(i) for i in range(item.columnCount())

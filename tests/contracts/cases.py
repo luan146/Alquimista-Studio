@@ -422,14 +422,15 @@ class _SharePointClient:
                     }
                 ]
             }
-        if path == "/drive/items/item-1":
+        if path == "/sites/site-1/drive/items/item-1":
             return {
                 "id": "item-1",
                 "name": "Contrato SharePoint",
+                "file": {"mimeType": "text/markdown"},
                 "webUrl": "https://sp.test/item-1",
                 "lastModifiedDateTime": "2026-01-02T03:04:05Z",
             }
-        if path == "/drive/items/item-1/children":
+        if path == "/sites/site-1/drive/items/item-1/children":
             return {"value": []}
         raise AssertionError(f"endpoint SharePoint GET inesperado: {path}")
 
@@ -441,7 +442,7 @@ class _SharePointClient:
         headers: dict[str, str] | None = None,
     ) -> bytes:
         del params, headers
-        if "/drive/items/item-1/content" in path:
+        if path == "/sites/site-1/drive/items/item-1/content":
             return b"# Contrato SharePoint\n\nConteudo estavel."
         raise AssertionError(f"endpoint SharePoint download inesperado: {path}")
 

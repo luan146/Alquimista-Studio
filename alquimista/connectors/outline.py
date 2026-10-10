@@ -167,11 +167,13 @@ class OutlineConnector(KnowledgeSourceConnector):
                         name=coll_name,
                         container_type="collection",
                         source_type=self.SOURCE_TYPE,
-                        is_accessible=True,
-                        is_public=not bool(coll.get("private")),
-                        page_count=0,
                         description=coll_desc,
-                        metadata={"color": coll.get("color"), "sharing": coll.get("sharing")},
+                        metadata={
+                            "color": coll.get("color"),
+                            "sharing": coll.get("sharing"),
+                            "public": not bool(coll.get("private")),
+                            "page_count": 0,
+                        },
                     )
                     self._containers[coll_id] = container
                     containers.append(container)
@@ -181,21 +183,8 @@ class OutlineConnector(KnowledgeSourceConnector):
 
         except Exception as exc:
             self.log(f"Erro ao listar coleções Outline: {exc}")
+            raise
 
-        if not containers:
-            container = KnowledgeContainer(
-                id="col-1",
-                key="col-1",
-                name="Coleção Outline",
-                container_type="collection",
-                source_type=self.SOURCE_TYPE,
-                is_accessible=True,
-                is_public=True,
-                page_count=0,
-                description="Coleção Geral",
-            )
-            self._containers["col-1"] = container
-            containers.append(container)
         return containers
 
     def list_documents(self, container_id: str) -> list[KnowledgeDocumentMetadata]:
@@ -208,9 +197,15 @@ class OutlineConnector(KnowledgeSourceConnector):
             if container_id and container_id != "default":
                 payload["collectionId"] = container_id
 
-            res = self.client.post("/documents.list", json=payload)
-            data = res.json() if hasattr(res, "json") else {}
-            items = data.get("data", []) if isinstance(data, dict) else []
+            items: list[dict[str, Any]] = []
+            while True:
+                res = self.client.post("/documents.list", json=payload)
+                data = res.json() if hasattr(res, "json") else {}
+                page = data.get("data", []) if isinstance(data, dict) else []
+                items.extend(page)
+                if len(page) < limit:
+                    break
+                payload["offset"] = payload["offset"] + limit
 
             origin = self.config.base_url.replace("/api", "")
             for doc in items:
@@ -244,6 +239,7 @@ class OutlineConnector(KnowledgeSourceConnector):
 
         except Exception as exc:
             self.log(f"Erro ao listar documentos Outline: {exc}")
+            raise
 
         return documents
 

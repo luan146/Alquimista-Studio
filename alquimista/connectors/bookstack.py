@@ -163,9 +163,8 @@ class BookStackConnector(KnowledgeSourceConnector):
                     description=str(item.get("description") or "") or None,
                     container_type="book",
                     source_type=self.SOURCE_TYPE,
-                    created_at=_datetime(item.get("created_at")),
                     updated_at=_datetime(item.get("updated_at")),
-                    metadata={"slug": item.get("slug")},
+                    metadata={"slug": item.get("slug"), "created_at": item.get("created_at")},
                 )
                 self._containers[book_id] = container
                 containers.append(container)

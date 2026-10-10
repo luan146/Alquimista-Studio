@@ -154,6 +154,7 @@ class GitLabDocsConnector(KnowledgeSourceConnector):
                         )
             except Exception as exc:
                 self.log(f"Erro ao listar wikis do GitLab: {exc}")
+                raise
             return documents
 
         # Repository Markdown files
@@ -179,6 +180,7 @@ class GitLabDocsConnector(KnowledgeSourceConnector):
                         )
         except Exception as exc:
             self.log(f"Erro ao listar repositório do GitLab: {exc}")
+            raise
 
         return documents
 

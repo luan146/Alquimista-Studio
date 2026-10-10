@@ -89,8 +89,9 @@ def build_dashboard_page(window: Any) -> QWidget:
         # Clear current grid
         while source_grid.count():
             item = source_grid.takeAt(0)
-            if item and item.widget():
-                item.widget().setParent(None)
+            widget = item.widget() if item else None
+            if widget:
+                widget.setParent(None)
 
         filtered = [
             d

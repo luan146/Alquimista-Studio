@@ -149,6 +149,7 @@ class SliteConnector(KnowledgeSourceConnector):
                 )
         except Exception as exc:
             self.log(f"Erro ao listar notas no canal {container_id} do Slite: {exc}")
+            raise
         return documents
 
     def get_document(self, document_id: str, container_id: str | None = None) -> KnowledgeDocument:

@@ -138,6 +138,7 @@ class StrapiConnector(KnowledgeSourceConnector):
                 )
         except Exception as exc:
             self.log(f"Erro ao listar documentos no Strapi: {exc}")
+            raise
 
         return documents
 

@@ -341,3 +341,12 @@ def test_sync_report_generation(sync_env):
     assert data["scope"] == "source"
     assert data["summary"]["new"] == 2
     assert "duration_seconds" in data
+
+
+def test_sync_scope_handles_sources_rooted_by_id(tmp_path: Path) -> None:
+    source = SourceConfig(id="s1", space_key="DOC", root_mode="id", root_value="100", include_root=False)
+    service = IncrementalSyncService(ProjectConfig(sources=[source]), tmp_path)
+
+    assert service._matches_source_scope(source, "DOC", "200")
+    assert not service._matches_source_scope(source, "DOC", "100")
+    assert not service._matches_source_scope(source, "OTHER", "200")

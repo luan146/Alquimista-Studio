@@ -70,7 +70,7 @@ def test_confluence_extraction_manifest_and_hashes_are_stable(
             }
         },
     )
-    monkeypatch.setattr("alquimista.services.now_iso", lambda: "2026-08-12T12:00:00-03:00")
+    monkeypatch.setattr("alquimista.services.extraction.now_iso", lambda: "2026-08-12T12:00:00-03:00")
     logs: list[str] = []
     first = ExtractionService(project, [runtime], tmp_path, log=logs.append).run()
     second = ExtractionService(project, [runtime], tmp_path, log=logs.append).run()

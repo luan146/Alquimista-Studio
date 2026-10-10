@@ -20,7 +20,7 @@ O pipeline universal de extração atende 28 conectores integrados cobrindo:
 3. **Developer Docs**: GitHub Docs, GitLab Wikis & Repositories, ReadMe Hubs.
 4. **Headless CMS & Portais**: WordPress, Ghost, Strapi, Contentful, Sanity.
 5. **Web & Frameworks de Documentação**: Generic Web, Generic Docs (com detecção de Docusaurus, MkDocs, VitePress, Sphinx, Mintlify, Nextra, Hugo, Jekyll, llms.txt, sitemaps e crawler bounded seguro).
-6. **Arquivos & Pastas Locais**: PDF, Excel/Planilhas (XLSX, XLS, XLSM sem macros, CSV, TSV, ODS), Apresentações (PPTX, ODP com notas do apresentador), Word/Texto (DOCX, ODT, RTF, TXT, MD, MDX, RST), E-books (EPUB), HTML e Imagens com OCR opcional.
+6. **Arquivos & Pastas Locais**: PDF, Excel/Planilhas (XLSX, XLSM sem macros, CSV, TSV), Apresentações (PPTX com notas do apresentador), Word/Texto (DOCX, RTF, TXT, MD, MDX, RST), E-books (EPUB), HTML e Imagens com OCR opcional. Formatos legados (DOC, XLS, PPT) e OpenDocument (ODT, ODS, ODP) não são suportados: converta-os antes. Arquivos que não puderem ser convertidos entram no relatório de falhas em vez de gerar Markdown vazio ou corrompido.
 
 ## Subsistema de Processamento de Documentos (`alquimista.document_processing`)
 

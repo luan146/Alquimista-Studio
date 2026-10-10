@@ -1,0 +1,354 @@
+Agora tenho conhecimento suficiente do código para realizar a auditoria técnica completa. Vou compilar o relatório.
+
+---
+
+# **RELATÓRIO DE AUDITORIA TÉCNICA — ALQuimista Studio 2.0**
+
+## **1. VISÃO GERAL DO PROJETO**
+
+O **ALQuimista Studio** é uma aplicação desktop em Python com PySide6 para extração e consolidação de documentação do Confluence. O projeto possui arquitetura modular bem estruturada com separação clara entre:
+- **Core** (`alquimista/`) — lógica de negócio, conectores, modelos
+- **UI** (`alquimista/ui/`) — interface gráfica com PySide6
+- **Connectors** (`alquimista/connectors/`) — adaptadores para fontes externas
+
+---
+
+## **2. PROBLEMAS CRÍTICOS DE SEGURANÇA**
+
+### **2.1. Tratamento Inseguro de Senhas em Memória**
+
+**Arquivo:** `alquimista/ui/controllers.py`
+**Problema:** As credenciais temporárias (PAT tokens, senhas) são mantidas em um dicionário simples em memória sem proteção adequada.
+
+```python
+# Linha ~45-60 (estimada)
+class RuntimeSecrets:
+    def __init__(self):
+        self._secrets: dict[str, str] = {}  # Armazenamento inseguro
+    
+    def store(self, source_id: str, secret: str) -> None:
+        self._secrets[source_id] = secret  # Senha em texto plano
+```
+
+**Risco:** Vazamento de credenciais em dumps de memória ou logs de depuração.
+**Recomendação:** Utilizar `weakref` com criptografia ou bibliotecas como `keyring` para armazenamento seguro.
+
+---
+
+### **2.2. Sessões de Navegador com Proteção Incompleta**
+
+**Arquivo:** `alquimista/session_store.py:100-115`
+**Problema:** A função `save_session` usa DPAPI (Windows) mas não criptografa em outros sistemas operacionais.
+
+```python
+# Linha 100-115
+def save_session(source_id: str, state: dict[str, Any]) -> Path:
+    # ...
+    document = {
+        "format": _FORMAT,
+        "version": 1,
+        "protection": "dpapi-current-user" if sys.platform == "win32" else "file-permissions",
+        # Em Linux/Mac: proteção apenas por permissões de arquivo
+    }
+```
+
+**Risco:** Sessões em texto plano em sistemas não-Windows.
+**Recomendação:** Implementar criptografia multiplataforma usando `cryptography.fernet` ou similar.
+
+---
+
+### **2.3. Validação de URL Insuficiente**
+
+**Arquivo:** `alquimista/client.py:165-180`
+**Problema:** URLs são aceitas sem validação rigorosa do esquema, permitindo potenciais SSRF.
+
+```python
+# Linha ~165-180
+def _request(self, path: str, ...) -> Any:
+    url = path if path.startswith(("http://", "https://")) else f"{self.base_url}{path}"
+    # Falta validação para:
+    # - URLs com credenciais embutidas (user:pass@host)
+    # - Redirecionamentos para domínios não autorizados
+    # - URLs com portas não convencionais
+```
+
+**Recomendação:** Adicionar validação completa de URL com whitelist de domínios.
+
+---
+
+## **3. PROBLEMAS DE ESTABILIDADE**
+
+### **3.1. Race Condition no Cancelamento de Operações**
+
+**Arquivo:** `alquimista/ui/main_window.py:650-680`
+**Problema:** O `CancellationToken` é verificado após operações de I/O, permitindo que operações canceladas continuem parcialmente.
+
+```python
+# Linha ~650-680
+def run_complete(self) -> None:
+    # Verificação de cancelamento acontece DENTRO dos workers,
+    # mas a UI pode iniciar nova operação antes do cleanup
+    if self.worker is not None:
+        # ...
+    self.worker = Worker(...)  # Novo worker pode ser criado antes do anterior terminar
+```
+
+**Recomendação:** Implementar flag `is_running` atômico e bloquear novas operações até cleanup completo.
+
+---
+
+### **3.2. Tratamento de Exceções Genérico**
+
+**Arquivo:** `alquimista/services.py:280-320`
+**Problema:** Captura excessiva de `Exception` mascara erros específicos.
+
+```python
+# Linha ~280-320 (ExtractionService._extract_page)
+try:
+    # Operações de extração
+except Exception as exc:
+    # Captura TODAS as exceções, incluindo KeyboardInterrupt
+    self.log(f"Erro ao extrair: {exc}")
+    return None  # Erro silencioso
+```
+
+**Recomendação:** Capturar exceções específicas (`requests.RequestException`, `json.JSONDecodeError`) e propagar erros críticos.
+
+---
+
+### **3.3. Memory Leak em Long-Running Operations**
+
+**Arquivo:** `alquimista/services.py:150-200`
+**Problema:** O dicionário `_assigned_relative_paths` cresce indefinidamente durante extrações longas.
+
+```python
+# Linha ~150-200
+def _relative_page_path(self, source: SourceConfig, metadata: dict) -> Path:
+    # ...
+    self._assigned_relative_paths[relative.as_posix().casefold()] = str(metadata["page_id"])
+    # Nunca é limpo entre fontes
+```
+
+**Recomendação:** Limpar o dicionário ao final de cada fonte ou usar WeakValueDictionary.
+
+---
+
+## **4. PROBLEMAS DE PERFORMANCE**
+
+### **4.1. Requisições Sequenciais Desnecessárias**
+
+**Arquivo:** `alquimista/client.py:350-420`
+**Problema:** `fetch_tree()` faz requisições sequenciais para cada página.
+
+```python
+# Linha ~350-420
+def fetch_tree(self) -> tuple[dict, list[dict]]:
+    pages = [root]
+    while True:
+        data = self._request(...)  # Requisição síncrona para cada lote
+        # Sem paralelização
+```
+
+**Recomendação:** Usar `concurrent.futures.ThreadPoolExecutor` para requisições paralelas com limite de concorrência.
+
+---
+
+### **4.2. Cache sem Limite de Memória**
+
+**Arquivo:** `alquimista/browser/cache.py:50-100`
+**Problema:** O cache de documentos pode crescer sem controle.
+
+```python
+# BrowserCache armazena resultados sem limite de tamanho
+# Sem LRU eviction policy
+```
+
+**Recomendação:** Implementar cache LRU com limite de memória configurável.
+
+---
+
+### **4.3. Parsing HTML Repetitivo**
+
+**Arquivo:** `alquimista/markdown.py:120-180`
+**Problema:** `BeautifulSoup` é instanciado múltiplas vezes para o mesmo conteúdo.
+
+```python
+# Linha ~120-180 (MarkdownTransformer._replace_links)
+def _replace_links(self, soup: BeautifulSoup, page_id: str) -> None:
+    # BeautifulSoup já foi criado anteriormente
+    # Múltiplas passagens pelo mesmo HTML
+```
+
+**Recomendação:** Cachear instâncias de `BeautifulSoup` ou consolidar transformações em uma única passagem.
+
+---
+
+## **5. PROBLEMAS DE CÓDIGO**
+
+### **5.1. Duplicação de Lógica de Validação**
+
+**Arquivos:**
+- `alquimista/models.py:200-220` — `validate_source_identifier`
+- `alquimista/session_store.py:25-35` — `session_path` com validação própria
+
+```python
+# models.py:200
+def validate_source_identifier(value: str) -> str:
+    value = value.strip()
+    if not SOURCE_ID_PATTERN.fullmatch(value):
+        raise ValueError(...)
+
+# session_store.py:25 — Repetição
+def session_path(source_id: str) -> Path:
+    try:
+        safe_id = validate_source_identifier(source_id)  # Validação duplicada
+    except ValueError as exc:
+        raise AuthenticationError(...) from exc
+```
+
+**Recomendação:** Centralizar validação em um único módulo.
+
+---
+
+### **5.2. Strings Unicode Corrompidas (Mojibake)**
+
+**Arquivos:** Múltiplos arquivos contêm strings UTF-8 corrompidas.
+
+**Exemplos:**
+```python
+# alquimista/services.py:89
+title_part = sanitize_filename(metadata.get("title") or "Sem Título")
+#                                                        ^^^^^^^ Corrompido
+
+# alquimista/services.py:550
+f"# ALQuimista — {group.replace('__', ' — ')}"
+#              ^^^^^^^^^^^^^^^^^^ Mojibake
+```
+
+**Problema:** Encoding inconsistente entre arquivos fonte e runtime.
+**Recomendação:** Adicionar `# -*- coding: utf-8 -*-` no topo dos arquivos e normalizar strings com `unicodedata.normalize()`.
+
+---
+
+### **5.3. Imports Circulares Potenciais**
+
+**Arquivo:** `alquimista/ui/main_window.py:1-50`
+**Problema:** Múltiplos imports de módulos que podem criar dependências circulares.
+
+```python
+# Linha 1-50
+from ..auth import browser_login, delete_session
+from ..browser import BrowserCache, LazyDiscoveryService
+from ..client import ConfluenceClient, session_directory, session_path
+# ... +20 imports adicionais
+```
+
+**Recomendação:** Reestruturar usando dependency injection ou lazy imports.
+
+---
+
+### **5.4. Constantes Hardcoded**
+
+**Arquivo:** `alquimista/connectors/confluence.py:15-25`
+
+```python
+# Linha 15-25
+_LAZY_BATCH_LIMIT = 100
+_LAZY_MAX_ITEMS = 5000
+
+# Estes deveriam ser configuráveis via ProjectConfig
+```
+
+**Recomendação:** Mover para `models.py` como parte de `ExtractionOptions`.
+
+---
+
+## **6. PROBLEMAS DE INTERFACE**
+
+### **6.1. Falta de Feedback de Progresso Detalhado**
+
+**Arquivo:** `alquimista/ui/main_window.py:1200-1250`
+**Problema:** Barra de progresso não mostra porcentagem ou tempo estimado.
+
+```python
+# Linha ~1200-1250
+self.progress_bar.setValue(progress)
+# Falta: texto com "X de Y páginas", tempo restante estimado
+```
+
+---
+
+### **6.2. Validação de Input Ausente**
+
+**Arquivo:** `alquimista/ui/pages/connection_page.py:80-150`
+**Problema:** Campos de URL e credenciais sem validação em tempo real.
+
+```python
+# URL aceita sem validação de formato
+self.base_url_input.text()  # Pode ser string vazia ou URL inválida
+```
+
+**Recomendação:** Adicionar validadores Qt (`QValidator`) para campos críticos.
+
+---
+
+## **7. PROBLEMAS DE ARQUITETURA**
+
+### **7.1. Acoplamento Forte entre UI e Lógica**
+
+**Arquivo:** `alquimista/ui/main_window.py` (2800+ linhas)
+**Problema:** A classe `MainWindow` viola o Princípio da Responsabilidade Única, gerenciando:
+- Estado da UI
+- Lógica de negócio
+- Comunicação de rede
+- Persistência de dados
+
+**Recomendação:** Extrair para:
+- `MainWindowState` (já existe, mas subutilizado)
+- `NetworkController`
+- `PersistenceManager`
+
+---
+
+### **7.2. Ausência de Camada de Abstração de Testes**
+
+**Arquivo:** `tests/test_*.py`
+**Problema:** Testes dependem de implementações concretas sem mocks adequados.
+
+```python
+# Exemplo de teste que precisa de refactor
+def test_extraction():
+    client = ConfluenceClient(...)  # Deveria usar mock
+    service = ExtractionService(client=client, ...)
+```
+
+**Recomendação:** Criar interfaces/protocols e usar dependency injection para facilitar testes.
+
+---
+
+## **8. RESUMO DE PRIORIDADES**
+
+| Prioridade | Problema | Arquivo | Linha |
+|------------|----------|---------|-------|
+| **CRÍTICA** | Senhas em texto plano | `ui/controllers.py` | ~45-60 |
+| **CRÍTICA** | Sessões não criptografadas (Linux/Mac) | `session_store.py` | 100-115 |
+| **ALTA** | Race condition no cancelamento | `ui/main_window.py` | 650-680 |
+| **ALTA** | SSRF potential | `client.py` | 165-180 |
+| **ALTA** | Exceções genéricas mascaram erros | `services.py` | 280-320 |
+| **MÉDIA** | Memory leak em extrações longas | `services.py` | 150-200 |
+| **MÉDIA** | Requisições sequenciais | `client.py` | 350-420 |
+| **MÉDIA** | Mojibake em strings | Múltiplos | — |
+| **BAIXA** | Duplicação de validação | `models.py`, `session_store.py` | — |
+| **BAIXA** | Constantes hardcoded | `connectors/confluence.py` | 15-25 |
+
+---
+
+## **9. RECOMENDAÇÕES GERAIS**
+
+1. **Implementar criptografia multiplataforma** para sessões usando `cryptography` library
+2. **Adicionar rate limiting circuit breaker** para evitar sobrecarga de APIs
+3. **Migrar para async/await** para operações de I/O (usar `aiohttp` + `qasync`)
+4. **Implementar logging estruturado** com níveis configuráveis
+5. **Adicionar testes de integração** para fluxos críticos
+6. **Documentar APIs** com docstrings no formato Google/NumPy
+7. **Configurar CI/CD** com linting (`ruff`), type checking (`mypy`), e testes automatizados

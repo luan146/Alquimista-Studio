@@ -51,5 +51,9 @@ class StorageError(AlquimistaError):
     pass
 
 
+class DocumentProcessingError(AlquimistaError):
+    """A local document could not be converted; reported as a per-document failure."""
+
+
 class ExtractionCancelledError(AlquimistaError):
     pass

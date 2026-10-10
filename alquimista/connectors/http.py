@@ -115,95 +115,7 @@ class ApiHttpClient:
         headers: dict[str, str] | None = None,
     ) -> bytes:
         """Download a binary resource with bounded retries and cancellation."""
-        url = (
-            path
-            if path.startswith(("http://", "https://"))
-            else f"{self.base_url}/{path.lstrip('/')}"
-        )
-        last_error: Exception | None = None
-        for attempt in range(1, self.options.retry_count + 1):
-            self.token.check()
-            self.rate_limiter.wait()
-            response: requests.Response | None = None
-            try:
-                response = self.session.get(
-                    url,
-                    params=params,
-                    headers=headers,
-                    timeout=(
-                        self.options.connect_timeout_seconds,
-                        self.options.timeout_seconds,
-                    ),
-                )
-                if response.status_code == 401:
-                    raise AuthenticationError("A API recusou o token (HTTP 401).")
-                if response.status_code == 403:
-                    raise PermissionDeniedError("A conta não possui permissão para este conteúdo (HTTP 403).")
-                if response.status_code == 404:
-                    raise ResourceNotFoundError("O recurso solicitado não foi encontrado (HTTP 404).")
-                if response.status_code in {429, 500, 502, 503, 504}:
-                    if attempt == self.options.retry_count:
-                        if response.status_code == 429:
-                            raise ApiRateLimitError("A API limitou as requisições após o limite de tentativas.")
-                        raise ApiConnectionError(f"A API permaneceu indisponível (HTTP {response.status_code}).")
-                    self.token.wait(self._retry_delay(response, attempt))
-                    continue
-                response.raise_for_status()
-                return response.content
-            except (AuthenticationError, PermissionDeniedError, ResourceNotFoundError, ApiRateLimitError):
-                raise
-            except (requests.Timeout, requests.ConnectionError) as exc:
-                last_error = exc
-                if attempt == self.options.retry_count:
-                    break
-                self.token.wait(self._retry_delay(response, attempt))
-            except requests.RequestException as exc:
-                raise ApiConnectionError(f"Falha HTTP na API: {exc}") from exc
-        raise ApiConnectionError(
-            f"Não foi possível baixar o recurso após {self.options.retry_count} tentativas: {last_error}"
-        )
-
-    def _download_compat(self, path: str, *, params: dict[str, Any] | None = None) -> bytes:
-        """Compatibility alias for older connector code."""
-        url = path if path.startswith(("http://", "https://")) else f"{self.base_url}/{path.lstrip('/')}"
-        last_error: Exception | None = None
-        for attempt in range(1, self.options.retry_count + 1):
-            self.token.check()
-            self.rate_limiter.wait()
-            response: requests.Response | None = None
-            try:
-                response = self.session.get(
-                    url,
-                    params=params,
-                    timeout=(self.options.connect_timeout_seconds, self.options.timeout_seconds),
-                )
-                if response.status_code == 401:
-                    raise AuthenticationError("A API recusou o token (HTTP 401).")
-                if response.status_code == 403:
-                    raise PermissionDeniedError("A conta não possui permissão para este conteúdo (HTTP 403).")
-                if response.status_code == 404:
-                    raise ResourceNotFoundError("O recurso solicitado não foi encontrado (HTTP 404).")
-                if response.status_code in {429, 500, 502, 503, 504}:
-                    if attempt == self.options.retry_count:
-                        if response.status_code == 429:
-                            raise ApiRateLimitError("A API limitou as requisições após o limite de tentativas.")
-                        raise ApiConnectionError(f"A API permaneceu indisponível (HTTP {response.status_code}).")
-                    self.token.wait(self._retry_delay(response, attempt))
-                    continue
-                response.raise_for_status()
-                return response.content
-            except (AuthenticationError, PermissionDeniedError, ResourceNotFoundError, ApiRateLimitError):
-                raise
-            except (requests.Timeout, requests.ConnectionError) as exc:
-                last_error = exc
-                if attempt == self.options.retry_count:
-                    break
-                self.token.wait(self._retry_delay(response, attempt))
-            except requests.RequestException as exc:
-                raise ApiConnectionError(f"Falha HTTP na API: {exc}") from exc
-        raise ApiConnectionError(
-            f"Não foi possível baixar o recurso após {self.options.retry_count} tentativas: {last_error}"
-        )
+        return self._send("GET", path, params=params, headers=headers).content
 
     def _retry_delay(self, response: requests.Response | None, attempt: int) -> float:
         if response is not None:
@@ -229,6 +141,25 @@ class ApiHttpClient:
         params: dict[str, Any] | None = None,
         json_body: Any = None,
     ) -> Any:
+        response = self._send(method, path, params=params, json_body=json_body)
+        self.last_response_headers = {
+            str(key).casefold(): str(value) for key, value in response.headers.items()
+        }
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise InvalidResponseError("A API retornou JSON inválido.") from exc
+
+    def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json_body: Any = None,
+        headers: dict[str, str] | None = None,
+    ) -> requests.Response:
+        """Single retry loop shared by JSON calls and binary downloads."""
         url = path if path.startswith(("http://", "https://")) else f"{self.base_url}/{path.lstrip('/')}"
         last_error: Exception | None = None
         for attempt in range(1, self.options.retry_count + 1):
@@ -241,6 +172,7 @@ class ApiHttpClient:
                     url,
                     params=params,
                     json=json_body,
+                    headers=headers,
                     timeout=(
                         self.options.connect_timeout_seconds,
                         self.options.timeout_seconds,
@@ -262,21 +194,8 @@ class ApiHttpClient:
                     self.token.wait(delay)
                     continue
                 response.raise_for_status()
-                self.last_response_headers = {
-                    str(key).casefold(): str(value)
-                    for key, value in response.headers.items()
-                }
-                try:
-                    return response.json()
-                except ValueError as exc:
-                    raise InvalidResponseError("A API retornou JSON inválido.") from exc
-            except (
-                AuthenticationError,
-                PermissionDeniedError,
-                ResourceNotFoundError,
-                InvalidResponseError,
-                ApiRateLimitError,
-            ):
+                return response
+            except (AuthenticationError, PermissionDeniedError, ResourceNotFoundError, ApiRateLimitError):
                 raise
             except (requests.Timeout, requests.ConnectionError) as exc:
                 last_error = exc
