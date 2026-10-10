@@ -3,8 +3,6 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-
 from alquimista.ui.main_window import MainWindow
 
 
@@ -12,43 +10,6 @@ def _make_source_window(qtbot) -> MainWindow:
     window = MainWindow("complete")
     qtbot.addWidget(window)
     return window
-
-
-def test_rebuild_selection_store_recovers_from_legacy_mutation(qtbot) -> None:
-    """ISSUE-006: after external code mutates legacy
-    ``selected_page_ids`` (e.g. execution recovery), rebuilding the store
-    from ``project.selections`` must keep the canonical SelectionStore in
-    sync so the tree renders correct checkboxes afterwards.
-    """
-    window = _make_source_window(qtbot)
-    source = window.project.sources[0]
-    data = {
-        "root": {"id": "all", "title": "Containers"},
-        "pages": [
-            {
-                "id": "p1",
-                "title": "Page 1",
-                "_container_id": "space-a",
-                "space": {"key": "space-a", "name": "Knowledge"},
-                "ancestors": [],
-                "version": {"number": 1},
-            }
-        ],
-    }
-    window.trees[source.id] = data
-    window._populate_selection_tree(source, data)
-    leaf = window._leaf_items()[0]
-    leaf.setCheckState(0, Qt.CheckState.Checked)
-    assert window.selection_store.is_selected(source.id, "space-a", "p1")
-
-    # Simulate a legacy mutation by external code (e.g. execution recovery)
-    # that rewrites selected_page_ids to a narrower set, and verify that
-    # rebuilding the canonical store keeps the in-memory state consistent.
-    source.selected_page_ids = ["p1"]
-    window._rebuild_selection_store()
-    assert window.selection_store.is_selected(source.id, "space-a", "p1")
-    assert "p1" in source.selected_page_ids
-    window.dirty = False
 
 
 def test_lookup_page_details_source_uses_snapshot_locals() -> None:

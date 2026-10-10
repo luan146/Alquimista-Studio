@@ -205,6 +205,9 @@ class SelectionMixin(WindowBase):
         self.mark_dirty()
 
     def _commit_selection_store(self, store: SelectionStore) -> None:
+        # project.selections is the source of truth; the store and the legacy
+        # selected_page_ids (kept for older project files and counters) are
+        # derived here, the only place the window writes selection state.
         self.project.selections = store.selections()
         self.selection_store = store
         for source in self.project.sources:
@@ -213,39 +216,6 @@ class SelectionMixin(WindowBase):
                 for item in store.selections()
                 if item.source_id == source.id
             )
-
-
-    def _rebuild_selection_store(self) -> None:
-        """Rebuild the canonical SelectionStore from project.selections.
-
-        Called after external code mutates the legacy ``selected_page_ids``
-        field without going through :meth:`_commit_selection_store` (e.g. the
-        execution-recovery flow in ``execution_controller``). Without this the
-        store would stay stale and the selection tree would render incorrect
-        checkbox states until the next user-driven reconciliation.
-        """
-        store = SelectionStore.from_selections(self.project.selections)
-        for source in self.project.sources:
-            selected_docs = set(source.selected_page_ids or [])
-            if not selected_docs:
-                continue
-            source_keys = {
-                (sel.container_id, sel.document_id)
-                for sel in store.selections()
-                if sel.source_id == source.id and sel.selected
-            }
-            if not source_keys:
-                continue
-            store_docs = {doc for _container, doc in source_keys}
-            if store_docs == selected_docs:
-                continue
-            container_id = next(
-                (container for container, _doc in source_keys),
-                str(source.space_key) or "__default__",
-            )
-            for document_id in selected_docs:
-                store.set(source.id, container_id, document_id, True)
-        self.selection_store = store
 
 
     def _update_selection_count(self) -> None:
