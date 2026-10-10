@@ -160,6 +160,26 @@ def test_initial_sync_all_new(sync_env):
     assert all(entry.status == EntryStatus.NEW for entry in manifest.entries)
 
 
+def test_listing_missing_most_documents_is_not_taken_as_removals(sync_env):
+    # A capped crawl or a discovery that fell back to the start page lists far
+    # fewer documents; that must not mark (and delete) the rest as removed.
+    service: IncrementalSyncService = sync_env["service"]
+    runtime: SourceRuntime = sync_env["runtime"]
+    connector: MockConnector = sync_env["connector"]
+    stamp = datetime(2026, 8, 1, 12, 0, 0, tzinfo=timezone.utc)
+    connector.docs_meta["c1"] = [
+        KnowledgeDocumentMetadata(id=f"doc{n}", container_id="c1", title=f"Doc {n}", updated_at=stamp, etag="v1")
+        for n in range(1, 13)
+    ]
+    service.apply_sync(service.plan_sync([runtime], scope=SyncScope.PROJECT), [runtime])
+
+    connector.docs_meta["c1"] = connector.docs_meta["c1"][:1]
+    plan = service.plan_sync([runtime], scope=SyncScope.PROJECT)
+
+    assert plan.removed_count == 0
+    assert any(failure["container_id"] == "c1" for failure in plan.failures)
+
+
 def test_subsequent_sync_unchanged(sync_env):
     service: IncrementalSyncService = sync_env["service"]
     runtime: SourceRuntime = sync_env["runtime"]

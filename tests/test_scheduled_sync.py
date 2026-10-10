@@ -73,6 +73,19 @@ def test_sync_command_extracts_and_picks_up_changes_without_the_window(tmp_path:
     assert any("Concluída" in line for line in log)
 
 
+def test_sync_command_keeps_files_of_removed_documents_unless_the_project_says_so(
+    tmp_path: Path, fake_dpapi: None
+) -> None:
+    # The project's "apagar arquivos removidos" is off by default; --sync used to ignore it.
+    project_path = _local_project(tmp_path)
+    assert sync_project(project_path, lambda _message: None) == EXIT_OK
+    written = list((tmp_path / "base").rglob("guia*.md"))
+
+    (tmp_path / "docs" / "guia.md").unlink()
+    assert sync_project(project_path, lambda _message: None) == EXIT_OK
+    assert written[0].exists()
+
+
 def test_sync_command_reports_unusable_project(tmp_path: Path) -> None:
     log: list[str] = []
     assert sync_project(tmp_path / "nao-existe.json", log.append) == EXIT_ERROR

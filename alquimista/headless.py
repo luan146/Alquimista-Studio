@@ -26,7 +26,8 @@ def sync_project(project_path: Path, log: Callable[[str], None]) -> int:
             f"[Agendado] {project.project_name}: {plan.new_count} novos, "
             f"{plan.updated_count} alterados, {plan.removed_count} removidos."
         )
-        report = service.apply_sync(plan, runtimes, options=SyncOptions())
+        options = SyncOptions(delete_removed_files=project.extraction.delete_removed_files)
+        report = service.apply_sync(plan, runtimes, options=options)
     except Exception as exc:
         # Typically an expired browser session or token: the user must log in again.
         log(f"[Agendado] Sincronização de {project_path} não executada: {exc}")

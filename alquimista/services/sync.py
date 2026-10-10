@@ -222,6 +222,14 @@ class IncrementalSyncService:
                 existing_by_alias[f"{entry.source_id}:{entry.container_id}:{entry.document_id}"] = entry
             elif entry.page_id:
                 existing_by_alias[f"{entry.source_id}:{entry.space_key or ''}:{entry.page_id}"] = entry
+        active_by_container: dict[tuple[str, str], set[str]] = {}
+        for entry in manifest.entries:
+            if entry.active:
+                container_id = str(entry.container_id or entry.space_key or "")
+                doc_id = str(entry.document_id or entry.page_id or "")
+                active_by_container.setdefault((entry.source_id, container_id), set()).add(
+                    entry.document_key or f"{entry.source_id}:{container_id}:{doc_id}"
+                )
 
         discovered_keys: set[str] = set()
         completed_containers: set[tuple[str, str]] = set()
@@ -263,12 +271,10 @@ class IncrementalSyncService:
                 if not self._matches_source_scope(source, container_id, ""):
                     continue
 
-                container_success = True
                 raw_docs: list[KnowledgeDocumentMetadata] = []
                 try:
                     raw_docs = list(connector.list_documents(container_id))
                 except Exception as exc:
-                    container_success = False
                     failures.append({
                         "source_id": source.id,
                         "container_id": container_id,
@@ -276,9 +282,6 @@ class IncrementalSyncService:
                     })
                     self.log(f"Aviso: Erro ao listar documentos no contêiner {container_id}: {exc}")
                     continue
-
-                if container_success:
-                    completed_containers.add((source.id, container_id))
 
                 # Process remote metadata items
                 for meta in raw_docs:
@@ -300,6 +303,24 @@ class IncrementalSyncService:
                         old=old_entry,
                     )
                     items.append(change)
+
+                # A listing missing most known documents is far likelier a capped
+                # crawl or a fallback than a mass deletion: don't infer removals.
+                # ponytail: real mass deletions then need a manual cleanup.
+                known = active_by_container.get((source.id, container_id), set())
+                missing = len(known - discovered_keys)
+                if len(known) >= 10 and missing * 2 > len(known):
+                    failures.append({
+                        "source_id": source.id,
+                        "container_id": container_id,
+                        "error": (
+                            f"A listagem não trouxe {missing} de {len(known)} documentos já extraídos; "
+                            "remoções não foram aplicadas por segurança."
+                        ),
+                    })
+                    self.log(f"Aviso: listagem incompleta em {container_id}; remoções ignoradas.")
+                else:
+                    completed_containers.add((source.id, container_id))
 
         # 2. Identify removals (Strictly bounded by completed_containers)
         # Never mark removed if container was not completely and successfully discovered
