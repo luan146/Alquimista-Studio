@@ -64,7 +64,9 @@ class ApiHttpClient:
         self._credential_headers = {"Authorization"} | {
             name for name in (headers or {}) if name.casefold() not in {"accept", "user-agent", "content-type"}
         }
-        self.rate_limiter = RateLimiter(options.max_requests_per_second, self.token)
+        self.rate_limiter = RateLimiter(
+            options.max_requests_per_second, self.token, min_interval=options.request_delay_ms / 1000
+        )
         self.session.headers.update(
             {
                 "Accept": "application/json",

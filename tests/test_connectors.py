@@ -1062,3 +1062,10 @@ def test_gitbook_flatten_pages_preserves_pre_order_with_siblings() -> None:
     assert flattened[1]["_parent_id"] == "a"
     assert flattened[3]["_parent_id"] == "b"
     connector.close()
+
+
+def test_page_delay_setting_slows_the_request_rate() -> None:
+    # "Intervalo entre páginas (ms)" used to be saved but never read.
+    client = ApiHttpClient("https://api.example.com", ExtractionOptions(request_delay_ms=2000))
+    assert client.rate_limiter.interval == 2.0
+    assert ApiHttpClient("https://api.example.com", ExtractionOptions()).rate_limiter.interval == 0.25

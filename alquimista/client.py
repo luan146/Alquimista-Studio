@@ -59,7 +59,9 @@ class ConfluenceClient:
         self.session = session or requests.Session()
         self._sleep = sleep
         self._random = random_value
-        self.rate_limiter = RateLimiter(options.max_requests_per_second, self.token)
+        self.rate_limiter = RateLimiter(
+            options.max_requests_per_second, self.token, min_interval=options.request_delay_ms / 1000
+        )
         self._configure_session()
 
     @property
