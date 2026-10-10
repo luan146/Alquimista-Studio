@@ -15,6 +15,10 @@ def reset_ui_language_preference() -> None:
     settings = create_settings()
     settings.remove("preferences/language")
     settings.sync()
+    app = QApplication.instance()
+    if app is not None:
+        # A test that switched languages must not leak it into the next one.
+        app.setProperty("_alquimista_language", "pt-BR")
 
 
 @pytest.fixture(autouse=True)
