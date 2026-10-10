@@ -258,6 +258,23 @@ def test_consolidation_cancels_before_next_package(configured):
         service.run()
 
 
+def test_consolidation_reads_each_file_once_for_sizing_and_once_for_the_package(configured, monkeypatch):
+    # Used to read every Markdown file three times and load the manifest twice.
+    project, runtime, _current, base = configured
+    ExtractionService(project, [runtime], base).run()
+    service = ConsolidationService(project, base)
+    reads: list[str] = []
+    loads: list[int] = []
+    original_page_text, original_load = service._page_text, service.store.load
+    monkeypatch.setattr(service, "_page_text", lambda entry: reads.append(entry.document_key) or original_page_text(entry))
+    monkeypatch.setattr(service.store, "load", lambda: loads.append(1) or original_load())
+
+    service.run()
+
+    assert len(reads) == 2
+    assert len(loads) == 1
+
+
 def test_module_consolidation_depth_uses_hierarchy(tmp_path: Path):
     source = SourceConfig(id="s1", name="Produto", space_key="DOC")
     project = ProjectConfig(output_dir="base", sources=[source])

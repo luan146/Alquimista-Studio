@@ -127,10 +127,6 @@ class ConsolidationService:
     def _page_text(self, entry: ManifestEntry) -> str:
         self.token.check()
         path = confined_path(self.base_dir, entry.markdown_path)
-        self.log(
-            f"[Consolidação] Lendo documento {entry.document_key}: "
-            f"relativo={entry.markdown_path!r}; absoluto={path}; existe={path.is_file()}"
-        )
         if not path.is_file():
             raise ManifestError(
                 f"O manifesto {self.store.path} aponta para um arquivo inexistente: "
@@ -196,9 +192,11 @@ class ConsolidationService:
             overhead += max(0, len(entries) - 1) * 8
         return overhead
 
-    def preview(self) -> list[dict[str, Any]]:
+    def preview(self, entries: list[ManifestEntry] | None = None) -> list[dict[str, Any]]:
         self.token.check()
-        _manifest, entries = self._entries()
+        if entries is None:
+            _manifest, entries = self._entries()
+        sizes: dict[str, int] = {}
         groups: dict[str, list[ManifestEntry]] = defaultdict(list)
         for entry in entries:
             self.token.check()
@@ -211,7 +209,7 @@ class ConsolidationService:
             chunks: list[list[ManifestEntry]] = []
             for entry in self._sort(group_entries):
                 self.token.check()
-                size = len(self._page_text(entry))
+                size = sizes[entry.document_key] = len(self._page_text(entry))
                 projected = chars + size + self._estimate_overhead([*current, entry])
                 if current and (
                     len(current) >= self.project.consolidation.max_pages
@@ -226,7 +224,7 @@ class ConsolidationService:
                 chunks.append(current)
             for part, chunk in enumerate(chunks, 1):
                 self.token.check()
-                size = sum(len(self._page_text(entry)) for entry in chunk) + self._estimate_overhead(chunk)
+                size = sum(sizes[entry.document_key] for entry in chunk) + self._estimate_overhead(chunk)
                 result.append(
                     {
                         "group": group,
@@ -255,7 +253,7 @@ class ConsolidationService:
         self.token.check()
         manifest, entries = self._entries()
         self.token.check()
-        preview = self.preview()
+        preview = self.preview(entries)
         self.token.check()
         old_index_path = self.output_dir / PACKAGE_INDEX_NAME
         if self.project.consolidation.clean_output and old_index_path.exists():
