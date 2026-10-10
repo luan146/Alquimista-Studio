@@ -537,6 +537,9 @@ class ExtractionService:
             old
             and self.project.extraction.use_version_shortcut
             and not self.project.extraction.force_reprocess
+            # Without a date or ETag (local files, some APIs) "same version" proves
+            # nothing; fall through and compare the content hash.
+            and (normalized.get("etag") or normalized.get("updated_at"))
             and (not normalized.get("etag") or old.etag == normalized.get("etag"))
             and old.updated_at == normalized.get("updated_at")
             and old.metadata_hash == metadata_hash
