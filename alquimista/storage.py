@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -88,12 +89,30 @@ def atomic_write_json(path: Path, data: Any, *, backup: bool = False) -> None:
     )
 
 
+def _remove_stale_transactions(base: Path, max_age_seconds: float = 86400) -> None:
+    """Delete transaction folders left by a killed process.
+
+    Folders with backups are kept: a crash mid-commit can leave the only copy of
+    an original file there. Recent folders may belong to another running process
+    (e.g. a scheduled sync on the same output folder).
+    """
+    cutoff = time.time() - max_age_seconds
+    for folder in base.glob(".alquimista-txn-*"):
+        try:
+            touched = max(path.stat().st_mtime for path in (folder, folder / "staged") if path.exists())
+            if touched < cutoff and not any((folder / "backups").glob("*")):
+                shutil.rmtree(folder, ignore_errors=True)
+        except OSError:
+            continue
+
+
 class FileTransaction:
     """Stage related file changes and roll back a failed in-process commit."""
 
     def __init__(self, base: Path) -> None:
         self.base = base.resolve()
         self.base.mkdir(parents=True, exist_ok=True)
+        _remove_stale_transactions(self.base)
         self.directory = Path(
             tempfile.mkdtemp(prefix=".alquimista-txn-", dir=self.base)
         )
