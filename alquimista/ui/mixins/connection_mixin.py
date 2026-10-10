@@ -49,27 +49,8 @@ class ConnectionMixin(WindowBase):
 
 
     def _auth_mode_changed(self, mode: str) -> None:
-        basic = mode == AuthMode.BASIC.value
-        secret = mode in {AuthMode.BASIC.value, AuthMode.BEARER.value}
-        browser = mode == AuthMode.BROWSER.value
         source = self.source_by_combo(self.connection_source) if hasattr(self, "connection_source") else None
-        descriptor = self.connector_registry.get(source.source_type) if source else None
-        bearer_only = bool(descriptor and descriptor.form.bearer_only)
-        if bearer_only:
-            basic = False
-            browser = False
-            secret = mode == AuthMode.BEARER.value
-        self.auth_user.setVisible(basic)
-        self.auth_secret.setVisible(secret)
-        self.session_status.setVisible(browser)
-        for field, visible in [
-            (self.auth_user, basic),
-            (self.auth_secret, secret),
-            (self.session_status, browser),
-        ]:
-            label = self.connection_form.labelForField(field)
-            if label:
-                label.setVisible(visible)
+        self._show_auth_fields(mode, source)
         if source:
             try:
                 updated = source.model_copy(
@@ -85,9 +66,29 @@ class ConnectionMixin(WindowBase):
                 QMessageBox.warning(
                     self, translate_text("Configuração de acesso inválida"), str(exc)
                 )
-                public_index = self.auth_mode.findData(AuthMode.BROWSER.value)
+                # Go back to the last valid mode saved on the source.
                 with QSignalBlocker(self.auth_mode):
-                    self.auth_mode.setCurrentIndex(public_index)
+                    self.auth_mode.setCurrentIndex(self.auth_mode.findData(source.auth_mode.value))
+                self._show_auth_fields(source.auth_mode.value, source)
+
+    def _show_auth_fields(self, mode: str, source: SourceConfig | None) -> None:
+        basic = mode == AuthMode.BASIC.value
+        secret = mode in {AuthMode.BASIC.value, AuthMode.BEARER.value}
+        browser = mode == AuthMode.BROWSER.value
+        descriptor = self.connector_registry.get(source.source_type) if source else None
+        if descriptor and descriptor.form.bearer_only:
+            basic = False
+            browser = False
+            secret = mode == AuthMode.BEARER.value
+        for field, visible in [
+            (self.auth_user, basic),
+            (self.auth_secret, secret),
+            (self.session_status, browser),
+        ]:
+            field.setVisible(visible)
+            label = self.connection_form.labelForField(field)
+            if label:
+                label.setVisible(visible)
 
 
 

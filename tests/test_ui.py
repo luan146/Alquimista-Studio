@@ -1005,3 +1005,24 @@ def test_consolidation_preview_is_dispatched_to_worker(
     assert callable(captured["function"])
     assert callable(captured["done"])
     window.dirty = False
+
+
+def test_invalid_auth_choice_returns_to_last_valid_mode(qtbot, monkeypatch) -> None:
+    window = MainWindow("complete")
+    qtbot.addWidget(window)
+    warnings: list[str] = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda _parent, title, _text: warnings.append(title))
+    source = window.source_by_combo(window.connection_source)
+    index = window.project.sources.index(source)
+    # Credentials over plain HTTP are rejected by SourceConfig validation.
+    window.project.sources[index] = source.model_copy(
+        update={"base_url": "http://wiki.example.com", "auth_mode": AuthMode.PUBLIC}
+    )
+
+    window.auth_mode.setCurrentIndex(window.auth_mode.findData(AuthMode.BASIC.value))
+
+    assert warnings
+    assert window.auth_mode.currentData() == AuthMode.PUBLIC.value
+    assert window.auth_user.isHidden() and window.auth_secret.isHidden()
+    assert window.project.sources[index].auth_mode == AuthMode.PUBLIC
+    window.dirty = False
