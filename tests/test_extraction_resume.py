@@ -1,18 +1,19 @@
 """Extraction downloads in parallel, and an interrupted run keeps what it finished."""
 from __future__ import annotations
 
+import json
 import threading
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from alquimista.errors import ExtractionCancelledError
+from alquimista.errors import AuthenticationError, ExtractionCancelledError
 from alquimista.models import KnowledgeDocument, ProjectConfig, SourceConfig
 from alquimista.runtime import CancellationToken
 from alquimista.services import ExtractionService, SourceRuntime
 from alquimista.services import extraction as extraction_module
-from alquimista.storage import MANIFEST_NAME, ManifestStore
+from alquimista.storage import FAILURES_NAME, MANIFEST_NAME, ManifestStore
 
 IDS = [f"doc-{n}" for n in range(1, 7)]
 
@@ -110,3 +111,32 @@ def test_downloads_run_in_parallel_but_file_names_follow_selection_order(tmp_pat
     # doc-2 finished first, yet doc-1 (first in the selection) keeps the plain name.
     assert paths["doc-1"] == "Mesmo_título.md"
     assert paths["doc-2"] != "Mesmo_título.md"
+
+
+class _TokenExpiresAtThird(_Connector):
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls: list[str] = []
+
+    def get_document(self, document_id: str, container_id: str | None = None) -> KnowledgeDocument:
+        self.calls.append(document_id)
+        if document_id >= "doc-3":
+            raise AuthenticationError("A API recusou o token (HTTP 401).")
+        return super().get_document(document_id, container_id)
+
+
+def test_expired_token_stops_the_run_and_keeps_finished_documents(tmp_path: Path) -> None:
+    connector = _TokenExpiresAtThird()
+    service = _service(tmp_path, connector)
+    service.project.extraction.parallel_downloads = 1
+
+    with pytest.raises(AuthenticationError):
+        service.run()
+
+    # Stops at the first 401 instead of failing every remaining document one by one.
+    assert "doc-6" not in connector.calls
+    assert set(_manifest_paths(tmp_path)) == {"doc-1", "doc-2"}
+    assert json.loads((tmp_path / "base" / FAILURES_NAME).read_text(encoding="utf-8")) == {}
+
+    _service(tmp_path, _Connector()).run()  # after logging in again
+    assert set(_manifest_paths(tmp_path)) == set(IDS)

@@ -11,6 +11,7 @@ from typing import Any
 
 from ..errors import (
     AlquimistaError,
+    AuthenticationError,
     ExtractionCancelledError,
 )
 from ..markdown import (
@@ -765,7 +766,9 @@ class ExtractionService:
                                 transaction=transaction,
                                 counters=counters,
                             )
-                        except ExtractionCancelledError:
+                        except (ExtractionCancelledError, AuthenticationError):
+                            # An expired token/session fails every remaining document
+                            # the same way: stop and keep what is done.
                             raise
                         except Exception as exc:
                             self._record_failure(
@@ -787,8 +790,9 @@ class ExtractionService:
                 finally:
                     pool.shutdown(wait=True, cancel_futures=True)
                     connector.close()
-        except ExtractionCancelledError:
-            self.log("Extração cancelada; salvando os documentos já concluídos.")
+        except (ExtractionCancelledError, AuthenticationError) as exc:
+            reason = "cancelada" if isinstance(exc, ExtractionCancelledError) else f"interrompida ({exc})"
+            self.log(f"Extração {reason}; salvando os documentos já concluídos.")
             self._stage_manifest(
                 transaction,
                 previous=previous,
