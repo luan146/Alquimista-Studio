@@ -166,3 +166,29 @@ def test_connection_failure_while_preparing_is_shown_in_the_dialog(qtbot: Any) -
     qtbot.waitUntil(lambda: "Sessão expirada" in dialog.status_label.text())
 
     assert not dialog.sync_button.isEnabled()
+
+
+def test_dialog_follows_the_interface_language(qtbot: Any, tmp_path: Any) -> None:
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+
+    from alquimista.ui.i18n import LanguageManager
+
+    manager = LanguageManager(
+        QApplication.instance(), QSettings(str(tmp_path / "s.ini"), QSettings.Format.IniFormat)
+    )
+    try:
+        manager.set_language("en", persist=False)
+        dialog = _dialog(qtbot, FakeService(_plan(new=2, updated=0)))
+        qtbot.waitUntil(lambda: dialog.plan is not None)
+        assert dialog.windowTitle() == "Incremental Synchronization"
+        assert dialog.status_label.text() == "Ready to synchronize: 2 new, 0 changed, 0 removed."
+        assert dialog.table.item(0, 0).text() == "+ New"
+
+        manager.set_language("es", persist=False)
+        dialog = _dialog(qtbot, FakeService(_plan(new=0, updated=0)))
+        qtbot.waitUntil(lambda: dialog.plan is not None)
+        assert dialog.sync_button.text() == "Sincronizado"
+        assert dialog.status_label.text().startswith("¡Todo actualizado!")
+    finally:
+        manager.set_language("pt-BR", persist=False)

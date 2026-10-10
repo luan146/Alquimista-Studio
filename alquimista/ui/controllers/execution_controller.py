@@ -255,7 +255,7 @@ def sync_project(window: Any) -> None:
     from ...services.sync import SyncScope
 
     _open_sync_dialog(
-        window, snapshot, SyncScope.PROJECT, source_name=snapshot.project_name or "Todas as Fontes"
+        window, snapshot, SyncScope.PROJECT, source_name=snapshot.project_name or translate_text("Todas as Fontes")
     )
 
 
@@ -266,7 +266,7 @@ def sync_selection(window: Any) -> None:
     from ...services.sync import SyncScope
 
     _open_sync_dialog(
-        window, snapshot, SyncScope.SELECTION, source_name="Seleção Atual", allow_empty_selection=False
+        window, snapshot, SyncScope.SELECTION, source_name=translate_text("Seleção Atual"), allow_empty_selection=False
     )
 
 
