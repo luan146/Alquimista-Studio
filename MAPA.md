@@ -2,7 +2,7 @@
 
 Guia de referência rápida para agentes de IA e desenvolvedores. Fonte da verdade é **sempre o código atual**; este mapa indica **onde começar** a investigação.
 
-**Última reconstrução:** 2026-08-14 — gerado por inspeção completa do repositório.
+**Última reconstrução:** 2026-10-10 — métricas recalculadas e guia por tela restaurado. Estado das análises técnicas: [`docs/analises/ESTADO_ATUAL.md`](docs/analises/ESTADO_ATUAL.md).
 
 ---
 
@@ -10,21 +10,21 @@ Guia de referência rápida para agentes de IA e desenvolvedores. Fonte da verda
 
 | Métrica | Valor |
 |---|---|
-| Arquivos `.py` no pacote `alquimista/` | 129 |
-| Linhas de código (pacote) | ~30.500 |
+| Arquivos `.py` no pacote `alquimista/` | 128 |
+| Linhas de código (pacote) | ~31.300 |
 | Conectores implementados | 28 |
 | Processadores de documentos | 8 (PDF, Word, Spreadsheet, Presentation, Ebook, HTML, Image, Text) |
 | Controllers em `ui/controllers/` | 11 arquivos (10 controllers + `__init__.py`) |
 | Mixins em `ui/mixins/` | 5 (connection, selection, source, pages_browser, tree_loading) |
-| Páginas em `ui/pages/` | 9 |
-| Arquivos de teste | 31 (+ 2 em `contracts/`) |
-| Funções de teste | ~233 |
-| Linhas de teste | ~6.500 |
+| Páginas em `ui/pages/` | 9 builders + `settings_page.py` (10) |
+| Arquivos de teste | 40 (+ 2 em `contracts/`) |
+| Testes coletados pelo pytest | ~466 (parametrizados incluídos) |
+| Linhas de teste | ~9.600 |
 | Versão do schema | 4 (`SCHEMA_VERSION` em `models.py`) |
 | Versão do pacote | 0.9.5 (`__version__` em `__init__.py`) |
 | Python | 3.12 |
 | Framework UI | PySide6 ≥ 6.10 |
-| Dependências runtime | pydantic ≥ 2.9, requests ≥ 2.31, beautifulsoup4 ≥ 4.12, markdownify ≥ 1.2 |
+| Dependências runtime | pydantic, requests, beautifulsoup4, markdownify, Pillow; documentos: pypdf, openpyxl, python-docx, python-pptx (ver `config/requirements.txt`) |
 
 ---
 
@@ -53,6 +53,43 @@ Guia de referência rápida para agentes de IA e desenvolvedores. Fonte da verda
 | Navegação entre telas | `controllers/navigation_controller.py` | `main_window.py:_show_page` |
 | Preview de markdown | `controllers/preview_controller.py` | `markdown/preview.py`, `markdown/renderer.py` |
 | Consolidação UI | `controllers/consolidation_controller.py` | `services/consolidation.py` |
+
+---
+
+## GUIA POR TELA — "Problema na tela X" → onde começar
+
+Cada tela é montada por um builder em `ui/pages/` e o comportamento fica nos mixins
+(`ui/mixins/`) ou na própria `MainWindow`. Confirme o fluxo no código antes de alterar.
+
+| Tela (navegação) | Monta a tela | Comportamento | Serviços / modelos envolvidos |
+|---|---|---|---|
+| Dashboard | `pages/dashboard_page.py` | `main_window.py`: `_refresh_dashboard`, `_source_card_clicked` | `models.py:ProjectConfig` |
+| Fontes | `pages/sources_page.py` | `mixins/source_mixin.py`: `_commit_source_from_form`, `_edit_source_row`, `_preview_detected_source`, `_pick_local_file/_folder` | `source_detection.py`, `connectors/registry.py` |
+| Conexão | `pages/connection_page.py` | `mixins/connection_mixin.py`: `_auth_mode_changed`, `_show_auth_fields`, `enter_confluence`, `remove_session` | `auth.py`, `session_store.py`, `controllers/runtime_controller.py:RuntimeSecrets` |
+| Espaços e seleção | `pages/selection_page.py` | `mixins/selection_mixin.py` (marcar, filtrar, árvore), `mixins/tree_loading_mixin.py` (`load_tree`, carregamento lazy), `mixins/pages_browser_mixin.py` (cards, paginação) | `controllers/tree_loader_controller.py`, `tree_models.py`, `browser/` (cache), `selection.py` |
+| Páginas (visão de tabela) | `mixins/pages_browser_mixin.py:_pages_page` | `pages_browser_mixin.py`: `_refresh_pages_home`, `_open_page_container`, colunas | `tree_models.py` |
+| Markdown | `pages/markdown_page.py` | `main_window.py`: `_apply_preset`, `_schedule_preview`, `_update_preview` | `controllers/preview_controller.py`, `connectors/confluence_parser.py`, `markdown/renderer.py` |
+| Consolidação | `pages/consolidation_page.py` | `main_window.py`: `preview_consolidation`, `run_consolidation`, `_depth_choice_changed` | `controllers/consolidation_controller.py`, `services/consolidation.py` |
+| Extração e revisão | `pages/review_page.py` | `main_window.py`: `execute_selected_operation`, `cancel_operation`, `choose_output`, `_refresh_review` | `controllers/execution_controller.py`, `services/extraction.py` |
+| Sincronização (diálogo) | `dialogs/sync_dialog.py` | `controllers/execution_controller.py`: `sync_source`, `sync_project`, `sync_selection` | `services/sync.py:IncrementalSyncService` |
+| Resultados | `pages/results_page.py` | `main_window.py`: `export_report`, `open_output`, `open_manifest`, `open_log` | `controllers/results_controller.py`, `reports.py` |
+| Configurações | `pages/settings_page.py` | `main_window.py`: `_change_language`, `_restore_network_defaults`, `new_project/open_project/save_project_as` | `ui/i18n.py`, `ui/theme.py`, `storage.py` |
+
+### Sintomas comuns
+
+| Sintoma | Comece por |
+|---|---|
+| Árvore não carrega ou para no meio | `mixins/tree_loading_mixin.py:_load_container_for_source` → `controllers/tree_loader_controller.py` → `connectors/<plataforma>.py` |
+| Expandir uma página não mostra filhos | `tree_loading_mixin.py:_load_document_children` + `list_document_children` do conector |
+| Páginas fora de ordem ou filhos antes do pai | `tree_models.py:ordered_pages`, `page_parent_id` |
+| Marcar/desmarcar não funciona ou contagem errada | `mixins/selection_mixin.py:_selection_changed`, `_set_selection` + `selection.py:SelectionStore` |
+| Selo público/privado errado | `tree_models.py:explicit_visibility_kind` + metadados `public` do conector |
+| Prévia do Markdown diferente do arquivo gerado | `controllers/preview_controller.py` (usa o mesmo parser e renderer da extração) |
+| Arquivo local ou do SharePoint não convertido | `document_processing/registry.py` + processador do formato; a falha aparece no relatório |
+| Login pelo navegador não funciona | `auth.py:browser_login` + `session_store.py` (DPAPI) |
+| Credencial enviada para outro domínio | `connectors/http.py:_send` e `client.py:_request` (regra de mesma origem) |
+| Sincronização trava ou não cancela | `dialogs/sync_dialog.py` (`reject`, `_cleanup_thread`) + `services/sync.py` |
+| Pacote consolidado sem algum documento | `services/consolidation.py` + manifesto (`storage.py:ManifestStore`) |
 
 ---
 
@@ -191,17 +228,10 @@ alquimista/                  # Pacote principal (sem UI)
     │   ├── selection_page.py
     │   ├── settings_page.py
     │   ├── review_page.py
-    │   ├── extraction_page.py
     │   ├── markdown_page.py
     │   ├── consolidation_page.py
     │   └── results_page.py
     ├── translations/         # Catálogos QM/TS (EN, ES, PT-BR)
-    ├── page_registry.py      # [INATIVO] Define page_builders — sem callers no runtime
-    ├── process_workers.py    # [APENAS TESTES] Workers multiprocessing (testado em test_process_workers)
-    ├── execution_controller.py   # [FACADE] → controllers/execution_controller
-    ├── operation_controller.py   # [FACADE] → controllers/operation_controller
-    ├── project_controller.py     # [FACADE] → controllers/project_controller
-    └── source_controller.py      # [FACADE] → controllers/source_controller
 ```
 
 **Fluxo de uso:** Dashboard → Fontes → Conexão → Seleção → Markdown → Revisão/Extração → Consolidação → Resultados.
@@ -277,11 +307,10 @@ alquimista/                  # Pacote principal (sem UI)
 | Método | Responsabilidade |
 |---|---|
 | `ExtractionService(project, runtimes, project_dir)` | Construtor |
-| `run() / _run()` | Despacha `_run_generic` ou `_run_legacy` |
+| `run() / _run()` | Exige conector em todo runtime e executa `_run_generic` |
 | `_run_generic()` | Extração moderna: fetch → KnowledgeDocumentRenderer → FileTransaction |
-| `_run_legacy()` | Extração legada (Confluence antigo, sem lazy) |
 | `_relative_page_path()` | Caminho relativo no output |
-| `_metadata_hash() / _summary_metadata_hash()` | Hash para detecção incremental |
+| `_metadata_hash()` | Hash para detecção incremental |
 | `_structured_report()` | Monta `ExecutionReport` |
 
 **Dependências:** `connectors/<plataforma>.py`, `markdown/renderer.py`, `storage.py`, `runtime.py`.
@@ -601,7 +630,7 @@ Orquestrador principal. Herda 3 mixins. Constrói páginas, conecta sinais, gere
 
 | Categoria | Métodos representativos |
 |---|---|
-| Builders de página | `_dashboard_page`, `_sources_page`, `_connection_page`, `_selection_page`, `_markdown_page`, `_consolidation_page`, `_review_page`, `_extraction_page`, `_results_page`, `_settings_page` |
+| Builders de página | `_dashboard_page`, `_sources_page`, `_connection_page`, `_selection_page`, `_markdown_page`, `_consolidation_page`, `_review_page`, `_results_page`, `_settings_page` |
 | Navegação | `_show_page(key)`, `_page_go_back` |
 | Workers | `_start_worker(...)`, `_on_progress`, `_worker_failed`, `_worker_finished` |
 | Estado/Projeto | `save_project`, `save_project_as`, `_load_project_ui`, `_sync_project_ui` |
@@ -643,7 +672,6 @@ Cada arquivo exporta `build_<tela>_page(window) → QWidget`.
 | Conexão | `connection_page.py` | `connection` |
 | Seleção | `selection_page.py` | `pages`, `selection` |
 | Revisão | `review_page.py` | `extraction`, `review`, `output` |
-| Extração | `extraction_page.py` | (embutido no review) |
 | Markdown | `markdown_page.py` | `markdown` |
 | Consolidação | `consolidation_page.py` | `consolidation` |
 | Resultados | `results_page.py` | `results` |
@@ -676,14 +704,10 @@ Dataclass: `trees`, `selection_store`, `connected_sources`, `connection_states`,
 
 ## 12. FACADES DE COMPATIBILIDADE
 
-Módulos no raiz de `ui/` que apenas re-exportam de `ui/controllers/`:
+Módulos que apenas re-exportam outro pacote:
 
 | Facade | Redireciona para |
 |---|---|
-| `ui/execution_controller.py` | `controllers/execution_controller` |
-| `ui/operation_controller.py` | `controllers/operation_controller` |
-| `ui/project_controller.py` | `controllers/project_controller` |
-| `ui/source_controller.py` | `controllers/source_controller` |
 | `source_discovery.py` | `discovery/` |
 
 **Regra:** código novo importa direto de `controllers/` ou `discovery/`. Facades mantidas apenas para compatibilidade.
@@ -694,8 +718,6 @@ Módulos no raiz de `ui/` que apenas re-exportam de `ui/controllers/`:
 
 | Arquivo | Status | Evidência |
 |---|---|---|
-| `ui/page_registry.py` | **Inativo** | `page_builders()` definida mas sem callers no runtime ou testes |
-| `ui/process_workers.py` | **Reserva/teste** | Sem callers no pacote; importado apenas por `test_process_workers.py` |
 | `ui/components.py.bak*` | **Backups** | 3 arquivos `.bak` — lixo de refatoração |
 | `ui/main_window.*.bak*` | **Backups** | 3 arquivos `.bak` — lixo de refatoração |
 | `source_discovery.py` | **Facade** | Redireciona para `discovery/` |
@@ -711,17 +733,6 @@ Módulos no raiz de `ui/` que apenas re-exportam de `ui/controllers/`:
 | `alquimista/__main__.py` | `python -m alquimista` → `run_app("complete")` |
 | `alquimista/__init__.py` | Exports: ProjectConfig, SourceConfig, opções |
 | `abrir_completo.bat` | Atalho Windows → `python -m alquimista` |
-
-### Legacy launchers (tools/legacy/)
-
-| Arquivo | Status |
-|---|---|
-| `alquimista_core.py` | Re-exporta nomes históricos para scripts antigos |
-| `alquimista_gui.py` | Entry point legado da UI |
-| `alquimista_studio_completo.py` | Launcher legado |
-| `alquimista_studio_extrator.py` | Launcher legado → `run_app("complete")` |
-| `alquimista_studio_consolidador.py` | Launcher legado → `run_app("complete")` |
-| `test_alquimista_studio.py` | Launcher legado de pytest |
 
 ### Build e packaging
 
@@ -775,7 +786,6 @@ Módulos no raiz de `ui/` que apenas re-exportam de `ui/controllers/`:
 | `test_browser_cache.py` | BrowserCache SQLite | 8 |
 | `test_ui_controllers.py` | Controllers | 7 |
 | `test_i18n.py` | Internacionalização | 6 |
-| `test_process_workers.py` | ProcessWorker | 6 |
 | `test_error_hierarchy.py` | Hierarquia de erros | 6 |
 | `test_registry_metadata.py` | Registry metadata | 6 |
 | `test_document_processors.py` | Processadores de documentos | 6 |
@@ -830,9 +840,6 @@ As duplicações documentadas no MAPA anterior (selection_mixin, connection_mixi
 
 | Risco | Detalhes |
 |---|---|
-| `page_registry.py` | Sem callers. Se ativar, precisa integrar com `main_window.py:_show_page` |
-| `process_workers.py` | Sem callers no runtime. Apenas testado. Se ativar, workers multiprocessing precisam de objetos picklable |
-| Facades em `ui/` root | Não editar — são apenas re-exports. Editar em `controllers/` |
 | `client.py` | Legado Confluence. Código novo deve usar `connectors/confluence.py` |
 | `source_discovery.py` | Facade. Código novo deve usar `discovery/` |
 | `main_window.py` | 90KB — alto risco de conflito. Prefira editar mixins/controllers/pages |
