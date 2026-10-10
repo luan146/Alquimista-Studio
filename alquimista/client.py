@@ -207,6 +207,7 @@ class ConfluenceClient:
                         f"Tentativa {attempt} falhou com HTTP {response.status_code} em {url}; "
                         f"nova tentativa em {delay:.1f}s."
                     )
+                    self.rate_limiter.pause(delay)
                     self.token.wait(delay)
                     continue
                 response.raise_for_status()

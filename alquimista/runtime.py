@@ -44,3 +44,8 @@ class RateLimiter:
             if remaining > 0:
                 self.token.wait(remaining)
             self.last_request = time.monotonic()
+
+    def pause(self, seconds: float) -> None:
+        """Hold every caller (e.g. parallel downloads) for ``seconds`` after an HTTP 429/5xx."""
+        with self._lock:
+            self.last_request = max(self.last_request, time.monotonic() + seconds - self.interval)

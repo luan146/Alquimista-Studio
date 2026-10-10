@@ -31,7 +31,7 @@ from alquimista.models import (
     ProjectConfig,
     SourceConfig,
 )
-from alquimista.runtime import CancellationToken
+from alquimista.runtime import CancellationToken, RateLimiter
 from alquimista.selection import SelectionStore
 from alquimista.services import ConsolidationService, ExtractionService, SourceRuntime
 from alquimista.ui.controllers import RuntimeBuilder, RuntimeSecrets
@@ -1069,3 +1069,26 @@ def test_page_delay_setting_slows_the_request_rate() -> None:
     client = ApiHttpClient("https://api.example.com", ExtractionOptions(request_delay_ms=2000))
     assert client.rate_limiter.interval == 2.0
     assert ApiHttpClient("https://api.example.com", ExtractionOptions()).rate_limiter.interval == 0.25
+
+
+def test_rate_limiter_pause_holds_every_caller() -> None:
+    limiter = RateLimiter(100, CancellationToken())
+    waits: list[float] = []
+    limiter.token.wait = waits.append  # type: ignore[method-assign]
+    limiter.pause(7)
+    limiter.wait()  # any thread sharing the limiter
+    assert waits == [pytest.approx(7, abs=0.5)]
+
+
+@pytest.mark.parametrize("headers", [{"Retry-After": "7"}, {"X-RateLimit-Reset": "7"}])
+def test_http_429_pauses_parallel_downloads_for_the_requested_time(headers: dict[str, str]) -> None:
+    # Parallel downloads share one limiter: a 429 must slow all of them, not just
+    # the thread that got it. X-RateLimit-Reset may be seconds left, not a timestamp.
+    session = FakeHttpSession()
+    session.responses = [FakeHttpResponse(429, {}, headers), FakeHttpResponse(200, {"ok": True})]
+    client = ApiHttpClient("https://api.example.com", ExtractionOptions(), session=session)  # type: ignore[arg-type]
+    paused: list[float] = []
+    client.token.wait = lambda _seconds: None  # type: ignore[method-assign]
+    client.rate_limiter.pause = paused.append  # type: ignore[method-assign]
+    assert client.get_json("items") == {"ok": True}
+    assert paused == [pytest.approx(7, abs=0.5)]

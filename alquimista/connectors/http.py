@@ -138,7 +138,9 @@ class ApiHttpClient:
                     pass
             reset = response.headers.get("X-RateLimit-Reset", "").strip()
             if reset.isdigit():
-                return max(0.0, min(float(reset) - time.time(), 120.0))
+                # Unix timestamp for most APIs; small values are seconds left.
+                seconds = float(reset) - time.time() if int(reset) > 1_000_000_000 else float(reset)
+                return max(0.0, min(seconds, 120.0))
         return min(30.0, (2 ** (attempt - 1)) + self._random())
 
     def _request_json(
@@ -203,6 +205,7 @@ class ApiHttpClient:
                         raise ApiConnectionError(f"A API permaneceu indisponível (HTTP {response.status_code}).")
                     delay = self._retry_delay(response, attempt)
                     self.log(f"API temporariamente indisponível (HTTP {response.status_code}); nova tentativa em {delay:.1f}s.")
+                    self.rate_limiter.pause(delay)
                     self.token.wait(delay)
                     continue
                 response.raise_for_status()
