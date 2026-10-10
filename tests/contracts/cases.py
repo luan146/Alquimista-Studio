@@ -236,7 +236,8 @@ class _NotionClient:
                         "id": "b1",
                         "type": "paragraph",
                         "paragraph": {"rich_text": [{"plain_text": "Conteúdo estável."}]},
-                    }
+                    },
+                    {"id": "sub-1", "type": "child_page", "child_page": {"title": "Anexo"}},
                 ],
                 "has_more": False,
             }
@@ -1453,13 +1454,13 @@ CASES: tuple[ConnectorContractCase, ...] = (
         normalize_payload=lambda: {
             "id": "page-1",
             "title": "Contrato Notion",
-            "markdown": "Conteúdo estável.",
+            "markdown": "Conteúdo estável.\n\n📄 [Anexo](https://www.notion.so/sub1)",
             "last_edited_time": "2026-01-02T03:04:05Z",
             "url": "https://notion.test/page-1",
             "_container_id": "notion_workspace",
         },
         expected_container_ids=("notion_workspace", "db-1"),
-        expected_child_ids=("b1",),
+        expected_child_ids=("sub-1",),
         optional_capabilities=frozenset(
             {"list_root_documents", "list_document_children", "search_documents"}
         ),

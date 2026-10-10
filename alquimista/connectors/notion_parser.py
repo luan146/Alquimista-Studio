@@ -53,7 +53,7 @@ class NotionDocumentParser:
         if not isinstance(data, dict):
             data = {}
         text = self._text(data.get("rich_text"))
-        indent = "  " * max(depth - 1, 0)
+        indent = "  " * depth
 
         if btype == "paragraph":
             line = f"{indent}{text}" if text else ""
@@ -106,8 +106,11 @@ class NotionDocumentParser:
         elif btype == "embed":
             url = data.get("url") or ""
             line = f"[Embed]({url})" if url else ""
-        elif btype == "child_page":
-            line = f"## {data.get('title') or 'Página filha'}"
+        elif btype in {"child_page", "child_database"}:
+            # Subpages and databases are separate documents: link instead of inlining.
+            title = data.get("title") or ("Página filha" if btype == "child_page" else "Base de dados")
+            page_id = str(block.get("id") or "").replace("-", "")
+            line = f"📄 [{title}](https://www.notion.so/{page_id})" if page_id else f"📄 {title}"
         elif btype == "table":
             # Bloco contêiner de tabela: renderiza linhas filhas
             rows = block.get("_children", [])
