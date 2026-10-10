@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import random
 import time
+from collections.abc import Mapping
 from email.utils import parsedate_to_datetime
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 import requests
 
@@ -59,6 +60,10 @@ class ApiHttpClient:
         self._sleep = sleep
         self._random = random_value
         self.last_response_headers: dict[str, str] = {}
+        # Headers that carry credentials; stripped from requests to other origins.
+        self._credential_headers = {"Authorization"} | {
+            name for name in (headers or {}) if name.casefold() not in {"accept", "user-agent", "content-type"}
+        }
         self.rate_limiter = RateLimiter(options.max_requests_per_second, self.token)
         self.session.headers.update(
             {
@@ -157,10 +162,14 @@ class ApiHttpClient:
         *,
         params: dict[str, Any] | None = None,
         json_body: Any = None,
-        headers: dict[str, str] | None = None,
+        headers: Mapping[str, str | None] | None = None,
     ) -> requests.Response:
         """Single retry loop shared by JSON calls and binary downloads."""
         url = path if path.startswith(("http://", "https://")) else f"{self.base_url}/{path.lstrip('/')}"
+        if urlsplit(url)[:2] != urlsplit(self.base_url)[:2]:
+            # Absolute URLs returned by an API may point elsewhere (CDN, other host,
+            # plain HTTP). Never send the connector's credentials there.
+            headers = {**(headers or {}), **dict.fromkeys(self._credential_headers)}
         last_error: Exception | None = None
         for attempt in range(1, self.options.retry_count + 1):
             self.token.check()

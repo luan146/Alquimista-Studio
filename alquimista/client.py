@@ -5,7 +5,7 @@ import time
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlsplit
 
 import requests
 
@@ -30,6 +30,11 @@ def session_directory() -> Path:
 
 def session_path(source_id: str) -> Path:
     return _session_path(source_id)
+
+
+def _no_auth(request: requests.PreparedRequest) -> requests.PreparedRequest:
+    """Request-level auth that overrides ``session.auth`` with no credentials."""
+    return request
 
 
 class ConfluenceClient:
@@ -142,6 +147,14 @@ class ConfluenceClient:
         expect_json: bool = True,
     ) -> Any:
         url = self._request_url(path)
+        # Credentials go only to the configured origin; absolute links returned by
+        # the API to another host (or to plain HTTP) are fetched anonymously.
+        # Browser-session cookies are already scoped by domain in the cookie jar.
+        anonymous: dict[str, Any] = (
+            {"headers": {"Authorization": None}, "auth": _no_auth}
+            if urlsplit(url)[:2] != urlsplit(self.base_url)[:2]
+            else {}
+        )
         query = "" if not params else f" params={params!r}"
         self.log(f"[Confluence] GET {url}{query}")
         last_error: Exception | None = None
@@ -157,6 +170,7 @@ class ConfluenceClient:
                         self.options.connect_timeout_seconds,
                         self.options.timeout_seconds,
                     ),
+                    **anonymous,
                 )
                 self.log(
                     f"[Confluence] resposta HTTP {response.status_code} "
