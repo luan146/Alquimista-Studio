@@ -11,6 +11,7 @@ from ...auth import browser_login, delete_session
 from ...client import session_path
 from ...models import AuthMode, SourceConfig
 from ...runtime import CancellationToken
+from ...session_store import delete_secret, save_secret
 from ..i18n import translate_text
 from . import WindowBase
 
@@ -30,6 +31,7 @@ class ConnectionMixin(WindowBase):
     auth_mode: Any
     auth_user: Any
     auth_secret: Any
+    remember_secret: Any
     connection_source: Any
     connection_form: Any
     login_button: Any
@@ -83,6 +85,7 @@ class ConnectionMixin(WindowBase):
         for field, visible in [
             (self.auth_user, basic),
             (self.auth_secret, secret),
+            (self.remember_secret, secret),
             (self.session_status, browser),
         ]:
             field.setVisible(visible)
@@ -244,6 +247,7 @@ class ConnectionMixin(WindowBase):
             self.auth_mode.setCurrentIndex(mode_index if mode_index >= 0 else -1)
         self.auth_user.setText(source.username)
         self.auth_secret.setText(self.secrets.get(source.id, ""))
+        self.remember_secret.setChecked(source.remember_secret)
         self.session_status.setText(
             translate_text("Sessão disponível")
             if session_path(source.id).exists()
@@ -383,12 +387,17 @@ class ConnectionMixin(WindowBase):
                 update={
                     "auth_mode": auth_mode,
                     "username": self.auth_user.text().strip(),
+                    "remember_secret": self.remember_secret.isChecked(),
                 }
             )
             updated = SourceConfig.model_validate(updated.model_dump())
             index = self.project.sources.index(source)
             self.project.sources[index] = updated
             self.secrets.set(updated.id, self.auth_secret.text())
+            if updated.remember_secret and self.auth_secret.text():
+                save_secret(updated.id, self.auth_secret.text())
+            else:
+                delete_secret(updated.id)
             return updated
         except Exception as exc:
             QMessageBox.warning(

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sys
 from typing import Any
 
+from PySide6.QtCore import QTime
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -10,10 +12,12 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QSpinBox,
+    QTimeEdit,
     QWidget,
 )
 
 from ..components import button, card, page_header
+from ..controllers import schedule_controller
 from ..i18n import LANGUAGE_NAMES
 from ..theme import apply_theme
 
@@ -102,5 +106,23 @@ def build_settings_page(window: Any) -> QWidget:
         )
     )
     layout.addWidget(network)
+
+    schedule, schedule_layout = card()
+    schedule_layout.addWidget(QLabel("⏰ Sincronização agendada do projeto"))
+    window.schedule_status = QLabel("")
+    window.schedule_status.setObjectName("subtitle")
+    window.schedule_status.setWordWrap(True)
+    schedule_layout.addWidget(window.schedule_status)
+    window.schedule_time = QTimeEdit(QTime(2, 0))
+    window.schedule_time.setDisplayFormat("HH:mm")
+    schedule_row = QHBoxLayout()
+    schedule_row.addWidget(QLabel("Todos os dias às"))
+    schedule_row.addWidget(window.schedule_time)
+    schedule_row.addWidget(button("Agendar", lambda: schedule_controller.schedule_daily(window), primary=True))
+    schedule_row.addWidget(button("Remover agendamento", lambda: schedule_controller.remove_schedule(window)))
+    schedule_row.addStretch()
+    schedule_layout.addLayout(schedule_row)
+    schedule.setVisible(sys.platform == "win32")
+    layout.addWidget(schedule)
     layout.addStretch()
     return page

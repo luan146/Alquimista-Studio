@@ -610,6 +610,51 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
     "URL da Base Docs do Help Scout": {"en": "Help Scout Docs Base URL", "es": "URL de la base Docs de Help Scout"},
     "URL da API Document360": {"en": "Document360 API URL", "es": "URL de la API de Document360"},
     "Downloads simultâneos": {"en": "Parallel downloads", "es": "Descargas simultáneas"},
+    # Remembered tokens and scheduled synchronization
+    "Lembrar neste computador": {"en": "Remember on this computer", "es": "Recordar en este equipo"},
+    "Guarda o token criptografado para o seu usuário do Windows. Necessário para a sincronização agendada.": {
+        "en": "Stores the token encrypted for your Windows user. Required for scheduled synchronization.",
+        "es": "Guarda el token cifrado para su usuario de Windows. Necesario para la sincronización programada.",
+    },
+    "⏰ Sincronização agendada do projeto": {
+        "en": "⏰ Scheduled project synchronization",
+        "es": "⏰ Sincronización programada del proyecto",
+    },
+    "Todos os dias às": {"en": "Every day at", "es": "Todos los días a las"},
+    "Agendar": {"en": "Schedule", "es": "Programar"},
+    "Remover agendamento": {"en": "Remove schedule", "es": "Quitar programación"},
+    "Salve o projeto para poder agendar.": {
+        "en": "Save the project to be able to schedule it.",
+        "es": "Guarde el proyecto para poder programarlo.",
+    },
+    "Consultando o Agendador de Tarefas…": {
+        "en": "Checking the Task Scheduler…",
+        "es": "Consultando el Programador de tareas…",
+    },
+    "Agendado todos os dias às {time}.": {
+        "en": "Scheduled every day at {time}.",
+        "es": "Programado todos los días a las {time}.",
+    },
+    "Nenhum agendamento para este projeto.": {
+        "en": "No schedule for this project.",
+        "es": "Ninguna programación para este proyecto.",
+    },
+    "Agendamento não criado": {"en": "Schedule not created", "es": "Programación no creada"},
+    "Agendamento não removido": {"en": "Schedule not removed", "es": "Programación no eliminada"},
+    "Sincronização agendada": {"en": "Synchronization scheduled", "es": "Sincronización programada"},
+    "O projeto será sincronizado e consolidado todos os dias às {time}, com o computador ligado "
+    "e você conectado ao Windows.\n\nFontes com token precisam da opção “Lembrar neste "
+    "computador”. Fontes com login pelo navegador usam a sessão salva; quando ela expirar, "
+    "faça login de novo. O resultado fica no relatório de sincronização e no log técnico.": {
+        "en": "The project will be synchronized and consolidated every day at {time}, while the computer is on "
+        "and you are signed in to Windows.\n\nSources with a token need the “Remember on this computer” "
+        "option. Sources with browser login use the saved session; when it expires, log in again. "
+        "The result goes to the synchronization report and the technical log.",
+        "es": "El proyecto se sincronizará y consolidará todos los días a las {time}, con el equipo encendido "
+        "y usted conectado a Windows.\n\nLas fuentes con token necesitan la opción “Recordar en este "
+        "equipo”. Las fuentes con inicio de sesión en el navegador usan la sesión guardada; cuando caduque, "
+        "inicie sesión de nuevo. El resultado queda en el informe de sincronización y en el registro técnico.",
+    },
     # Incremental synchronization dialog
     "Sincronização Incremental": {"en": "Incremental Synchronization", "es": "Sincronización incremental"},
     "Prévia de Mudanças": {"en": "Changes Preview", "es": "Vista previa de cambios"},

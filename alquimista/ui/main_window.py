@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QStackedWidget,
+    QTimeEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -66,6 +67,7 @@ from .controllers import (
     run_complete,
     run_extraction,
     save_project_file,
+    schedule_controller,
     sync_project,
     sync_selection,
     sync_source,
@@ -108,6 +110,8 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
     retries_spin: QSpinBox
     delay_spin: QSpinBox
     parallel_spin: QSpinBox
+    schedule_status: QLabel
+    schedule_time: QTimeEdit
 
     def __init__(
         self,
@@ -514,6 +518,8 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
             self._refresh_review()
         elif key == "output":
             self._update_output_preview()
+        elif key == "settings" and sys.platform == "win32":
+            schedule_controller.refresh_schedule_status(self)
 
     def _show_page(self, key: str) -> None:
         if hasattr(self, "navigation_controller"):
@@ -638,6 +644,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
             )
             self.trees.clear()
             self.secrets.clear()
+            self.secrets.load_remembered(self.project.sources, self._append_log)
             self.dirty = False
             self._load_project_ui()
             self._append_log(f"Projeto aberto: {self.project_path}")

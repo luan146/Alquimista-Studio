@@ -177,6 +177,8 @@ class SourceConfig(Model):
     root_page_id: str = ""
     auth_mode: AuthMode = AuthMode.PUBLIC
     username: str = ""
+    # The token itself is never stored here; it goes to the DPAPI-protected session folder.
+    remember_secret: bool = False
     include_root: bool = False
     enabled: bool = True
     # Non-secret connector-specific settings. Secrets remain runtime-only.

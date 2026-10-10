@@ -4,6 +4,7 @@ from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -96,6 +97,10 @@ def build_connection_page(window: Any) -> QWidget:
     window.auth_secret = QLineEdit()
     window.auth_secret.setPlaceholderText("Senha, token ou PAT")
     window.auth_secret.setEchoMode(QLineEdit.EchoMode.Password)
+    window.remember_secret = QCheckBox("Lembrar neste computador")
+    window.remember_secret.setToolTip(
+        "Guarda o token criptografado para o seu usuário do Windows. Necessário para a sincronização agendada."
+    )
     window.session_status = QLabel("○ Nenhuma sessão salva")
     window.session_status.setObjectName("subtitle")
     def auth_field_label(icon_index: int, text: str) -> QWidget:
@@ -111,6 +116,7 @@ def build_connection_page(window: Any) -> QWidget:
 
     form.addRow(auth_field_label(2, "Usuário ou e-mail"), window.auth_user)
     form.addRow(auth_field_label(4, "Senha, token ou PAT"), window.auth_secret)
+    form.addRow("", window.remember_secret)
     form.addRow(auth_field_label(6, "Sessão do navegador"), window.session_status)
     panel_layout.addLayout(form)
 

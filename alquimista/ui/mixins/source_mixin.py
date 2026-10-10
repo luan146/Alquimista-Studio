@@ -19,6 +19,7 @@ from ...client import ConfluenceClient
 from ...confluence_url import parse_confluence_url
 from ...models import AuthMode, SourceConfig, now_iso
 from ...runtime import CancellationToken
+from ...session_store import delete_secret
 from ...source_detection import DetectedSource, detect_source_url
 from ..controllers.source_controller import source_by_combo as resolve_source_by_combo
 from ..controllers.source_controller import source_by_index as resolve_source_by_index
@@ -852,6 +853,7 @@ class SourceMixin(WindowBase):
         """Drop runtime state that is not portable across connector types."""
         self.secrets.pop(source.id, None)
         delete_session(source)
+        delete_secret(source.id)
         self.trees.pop(source.id, None)
         self.connected_sources.discard(source.id)
         self.connection_states.pop(source.id, None)

@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from typing import Any
 
 from ...connectors import ConnectorRegistry, KnowledgeSourceConnector, default_registry
-from ...errors import AlquimistaError
+from ...errors import AlquimistaError, AuthenticationError
 from ...models import (
     KnowledgeContainer,
     KnowledgeDocumentMetadata,
     ProjectConfig,
+    SourceConfig,
 )
 from ...runtime import CancellationToken
 from ...services import SelectedDocumentRef, SourceRuntime
+from ...session_store import load_secret
 
 
 class RuntimeSecrets:
@@ -34,6 +37,16 @@ class RuntimeSecrets:
 
     def clear(self) -> None:
         self._values.clear()
+
+    def load_remembered(self, sources: Iterable[SourceConfig], log: Callable[[str], None]) -> None:
+        """Fill in the tokens the user chose to remember on this computer."""
+        for source in sources:
+            if not source.remember_secret or self.get(source.id):
+                continue
+            try:
+                self.set(source.id, load_secret(source.id))
+            except AuthenticationError as exc:
+                log(f"{source.name}: {exc}")
 
 
 class RuntimeBuilder:
