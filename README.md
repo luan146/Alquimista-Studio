@@ -71,7 +71,7 @@ Your exported content remains portable instead of being locked to a specific AI 
 
 ## 🧭 How it works
 
-In the interface these stages appear as **Home + 5 steps** in the sidebar (Sources, Selection, Output, Run, Results), each marked ✓ when done, with a **Next** button at the bottom. **Home** shows the project status, the next step and recent projects; the last project reopens on startup. Shortcuts: Ctrl+N/O/S (new, open, save), Ctrl+1…5 (steps), F5 (run).
+In the interface these stages appear as **Home + 5 steps** in the sidebar (Sources, Selection, Output, Run, Results), each marked ✓ when done, with a **Next** button at the bottom. **Home** shows the project status, the next step and recent projects; the last project reopens on startup. Shortcuts: Ctrl+N/O/S (new, open, save), Ctrl+1…5 (steps), F5 (run). Drop a URL, file or folder on the window to add a source; in Selection, check **Whole** to take an entire space and double-click a page to see its real Markdown. To try it without credentials: **Settings → Open sample project**.
 
 ### 1. 📚 Add a knowledge source
 

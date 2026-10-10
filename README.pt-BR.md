@@ -71,7 +71,7 @@ O conteúdo exportado continua portátil, sem ficar preso a uma plataforma espec
 
 ## 🧭 Como funciona
 
-Na interface, as etapas abaixo aparecem como **Início + 5 passos** na barra lateral (Fontes, Seleção, Saída, Executar, Resultados), cada um com ✓ quando concluído e um botão **Próximo** no rodapé. O **Início** mostra a situação do projeto, o próximo passo e os projetos recentes; o último projeto é reaberto ao iniciar. Atalhos: Ctrl+N/O/S (novo, abrir, salvar), Ctrl+1…5 (etapas), F5 (executar).
+Na interface, as etapas abaixo aparecem como **Início + 5 passos** na barra lateral (Fontes, Seleção, Saída, Executar, Resultados), cada um com ✓ quando concluído e um botão **Próximo** no rodapé. O **Início** mostra a situação do projeto, o próximo passo e os projetos recentes; o último projeto é reaberto ao iniciar. Atalhos: Ctrl+N/O/S (novo, abrir, salvar), Ctrl+1…5 (etapas), F5 (executar). Arraste uma URL, arquivo ou pasta para a janela para adicionar uma fonte; em Seleção, marque **Inteiro** para levar um espaço todo e clique duas vezes numa página para ver o Markdown real dela. Para experimentar sem credenciais: **Configurações → Abrir projeto de exemplo**.
 
 ### 1. 📚 Adicione uma fonte de conhecimento
 

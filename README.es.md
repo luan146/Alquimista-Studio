@@ -71,7 +71,7 @@ El contenido exportado sigue siendo portátil y no queda bloqueado en una plataf
 
 ## 🧭 Cómo funciona
 
-En la interfaz, estas etapas aparecen como **Inicio + 5 pasos** en la barra lateral (Fuentes, Selección, Salida, Ejecutar, Resultados), cada uno con ✓ cuando está completo y un botón **Siguiente** al pie. **Inicio** muestra el estado del proyecto, el próximo paso y los proyectos recientes; el último proyecto se reabre al iniciar. Atajos: Ctrl+N/O/S (nuevo, abrir, guardar), Ctrl+1…5 (pasos), F5 (ejecutar).
+En la interfaz, estas etapas aparecen como **Inicio + 5 pasos** en la barra lateral (Fuentes, Selección, Salida, Ejecutar, Resultados), cada uno con ✓ cuando está completo y un botón **Siguiente** al pie. **Inicio** muestra el estado del proyecto, el próximo paso y los proyectos recientes; el último proyecto se reabre al iniciar. Atajos: Ctrl+N/O/S (nuevo, abrir, guardar), Ctrl+1…5 (pasos), F5 (ejecutar). Arrastre una URL, archivo o carpeta a la ventana para agregar una fuente; en Selección, marque **Completo** para llevar un espacio entero y haga doble clic en una página para ver su Markdown real. Para probar sin credenciales: **Configuración → Abrir proyecto de ejemplo**.
 
 ### 1. 📚 Añade una fuente de conocimiento
 

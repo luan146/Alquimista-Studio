@@ -15,7 +15,7 @@ Guia de referência rápida para agentes de IA e desenvolvedores. Fonte da verda
 | Conectores implementados | 28 |
 | Processadores de documentos | 8 (PDF, Word, Spreadsheet, Presentation, Ebook, HTML, Image, Text) |
 | Controllers em `ui/controllers/` | 12 arquivos (11 controllers + `__init__.py`) |
-| Mixins em `ui/mixins/` | 6 (connection, selection, source, pages_browser, tree_loading, workflow) |
+| Mixins em `ui/mixins/` | 7 (connection, selection, source, pages_browser, tree_loading, workflow, ux) |
 | Páginas em `ui/pages/` | 11 builders (home, sources, connection panel, selection, format, markdown, consolidation, review, results, settings, source_catalog) |
 | Arquivos de teste | 41 (+ 2 em `contracts/`) |
 | Testes coletados pelo pytest | ~476 (parametrizados incluídos) |
@@ -63,13 +63,16 @@ Cada tela é montada por um builder em `ui/pages/` e o comportamento fica nos mi
 A barra lateral tem **Início + 5 etapas** (`components.py:NAVIGATION`); chaves antigas
 (`connection`, `markdown`, `consolidation`, `review`, `output`) seguem válidas via `PAGE_ALIASES`.
 O estado das etapas (✓ ● ○), o rodapé Voltar/Próximo, o bloqueio do Executar, projetos recentes,
-atalhos e a notificação de fim ficam em `mixins/workflow_mixin.py`.
+atalhos e a notificação de fim ficam em `mixins/workflow_mixin.py`. Avisos (`notify`; `components.inform`
+substitui pop-ups informativos), barra lateral recolhível, tema/escala salvos, arrastar e soltar,
+prévia com página real, tour (`TourDialog`) e projeto de exemplo (`assets/exemplo/`) ficam em
+`mixins/ux_mixin.py`.
 
 | Tela (navegação) | Monta a tela | Comportamento | Serviços / modelos envolvidos |
 |---|---|---|---|
 | Início | `pages/home_page.py` | `workflow_mixin.py`: `_refresh_home`, `_next_pending_step`, `open_project_path`; `schedule_controller.refresh_home_schedule` | `storage.py` (relatório), `recent_projects.py` |
 | 1 Fontes (+ conexão) | `pages/sources_page.py` (lista) + `pages/connection_page.py:build_connection_panel` + `dialogs/add_source_dialog.py` (URL e catálogo `pages/source_catalog.py`) | `mixins/source_mixin.py`: `_commit_source_from_form`, `_edit_source_row`, `_refresh_source_table`; `mixins/connection_mixin.py`: `_auth_mode_changed`, `enter_confluence`, `remove_session`; `workflow_mixin.py:_source_connection_badge` | `source_detection.py`, `auth.py`, `session_store.py`, `controllers/runtime_controller.py:RuntimeSecrets` |
-| 2 Seleção | `pages/selection_page.py` | `mixins/selection_mixin.py` (marcar, filtrar, árvore), `mixins/tree_loading_mixin.py` (`load_tree`; carrega sozinho ao entrar com acesso: `workflow_mixin._maybe_autoload_tree`), `mixins/pages_browser_mixin.py` | `controllers/tree_loader_controller.py`, `tree_models.py`, `browser/` (cache), `selection.py` |
+| 2 Seleção | `pages/selection_page.py` (tabela de espaços com "Inteiro" + árvore) | `mixins/selection_mixin.py` (`_mark_whole_space`, `_set_space_selection`, marcar, filtrar, árvore; duplo clique → `ux_mixin._preview_real_page`), `mixins/tree_loading_mixin.py` (`load_tree`; carrega sozinho ao entrar com acesso: `workflow_mixin._maybe_autoload_tree`), `mixins/pages_browser_mixin.py` | `controllers/tree_loader_controller.py`, `tree_models.py`, `browser/` (cache), `selection.py` |
 | Páginas (visão de tabela) | `mixins/pages_browser_mixin.py:_pages_page` | `pages_browser_mixin.py`: `_refresh_pages_home`, `_open_page_container`, colunas | `tree_models.py` |
 | 3 Saída (abas Markdown / Pacotes) | `pages/format_page.py` → `pages/markdown_page.py` + `pages/consolidation_page.py` | `main_window.py`: `_apply_preset`, `_update_preview`, `preview_consolidation`, `run_consolidation` | `controllers/preview_controller.py`, `controllers/consolidation_controller.py`, `services/consolidation.py` |
 | 4 Executar | `pages/review_page.py` | `main_window.py:_refresh_review`; `workflow_mixin.py:_execution_blocker`; `controllers/execution_controller.py:execute_selected_operation`; progresso com tempo restante em `operation_controller.progress_eta` | `services/extraction.py` |
