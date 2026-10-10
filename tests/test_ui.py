@@ -64,15 +64,17 @@ def test_three_modes_open(qtbot, mode: str) -> None:
         ("sanity_api", "sanity_api"),
     ],
 )
-def test_dashboard_source_cards_open_sources_page(
-    qtbot, source_type: str, expected_platform: str
+def test_catalog_cards_open_sources_page(
+    qtbot, monkeypatch, source_type: str, expected_platform: str
 ) -> None:
     window = MainWindow("complete")
     qtbot.addWidget(window)
+    # The local-files card opens a folder picker; the user cancels it here.
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args, **kwargs: "")
 
     cards = {
         card.source_type: card
-        for card in window.pages["dashboard"].findChildren(SourceCard)
+        for card in window.add_source_dialog.findChildren(SourceCard)
     }
     assert set(cards) == {
         "confluence_rest",

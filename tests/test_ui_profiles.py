@@ -27,7 +27,7 @@ def test_visual_profile_switches_style_and_persists(qtbot) -> None:
         assert settings.value(key) == "legacy"
         assert "#126E75" in QApplication.instance().styleSheet()
         assert "border-radius: 9px" in QApplication.instance().styleSheet()
-        assert len(first.pages["dashboard"].findChildren(_LegacySourceCard)) == 28
+        assert len(first.add_source_dialog.findChildren(_LegacySourceCard)) == 28
 
         first.close()
         second = MainWindow()
@@ -38,7 +38,7 @@ def test_visual_profile_switches_style_and_persists(qtbot) -> None:
             second.visual_profile_combo.findData("atelier")
         )
         assert second.visual_profile == "atelier"
-        assert len(second.pages["dashboard"].findChildren(SourceCard)) == 28
+        assert len(second.add_source_dialog.findChildren(SourceCard)) == 28
         second.close()
     finally:
         if previous is None:

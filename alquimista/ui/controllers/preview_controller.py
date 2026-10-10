@@ -35,7 +35,6 @@ class PreviewController:
         output_path_status_label: Any | None = None,
         output_structure_label: Any | None = None,
         output_dir_input: QLineEdit | None = None,
-        output_subfolder_checkbox: QCheckBox | None = None,
     ) -> None:
         self.md_controls = md_controls
         self.preview_mode_combo = preview_mode_combo
@@ -45,7 +44,6 @@ class PreviewController:
         self.output_path_status_label = output_path_status_label
         self.output_structure_label = output_structure_label
         self.output_dir_input = output_dir_input
-        self.output_subfolder_checkbox = output_subfolder_checkbox
         self._preview_raw = ""
 
     def load_markdown_controls(self, options: MarkdownOptions) -> None:
@@ -191,7 +189,6 @@ class PreviewController:
         output_dir_text: str,
         pages_subdir: str,
         consolidation_subdir: str,
-        use_subfolder: bool = False,
     ) -> None:
         if self.output_path_status_label is None:
             return
@@ -228,7 +225,7 @@ class PreviewController:
                 )
             )
         root = path.name or "ALQuimista"
-        execution = "Extracao-AAAA-MM-DD" if use_subfolder else root
+        execution = root
         if self.output_structure_label is not None:
             self.output_structure_label.setText(
                 translate_text(

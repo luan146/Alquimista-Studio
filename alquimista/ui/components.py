@@ -161,16 +161,26 @@ class FlowLayout(QLayout):
             line_height = max(line_height, hint.height())
         return y + line_height - rect.y()
 
+# Home plus the five workflow steps shown in the sidebar.
 NAVIGATION = [
-    ("dashboard", "Dashboard"),
+    ("dashboard", "Início"),
     ("sources", "Fontes"),
-    ("connection", "Conexão"),
-    ("selection", "Espaços e seleção"),
-    ("markdown", "Markdown"),
-    ("consolidation", "Consolidação"),
-    ("extraction", "Extração e revisão"),
+    ("selection", "Seleção"),
+    ("format", "Saída"),
+    ("extraction", "Executar"),
     ("results", "Resultados"),
 ]
+WORKFLOW_STEPS = [key for key, _label in NAVIGATION if key != "dashboard"]
+
+# Older page keys (8-step layout) still route somewhere sensible; the tab index
+# selects Markdown (0) or Pacotes (1) inside the "Saída" page.
+PAGE_ALIASES: dict[str, tuple[str, int | None]] = {
+    "connection": ("sources", None),
+    "markdown": ("format", 0),
+    "consolidation": ("format", 1),
+    "review": ("extraction", None),
+    "output": ("extraction", None),
+}
 
 NAV_ICON_INDEX = {
     "dashboard": 0,
@@ -180,6 +190,7 @@ NAV_ICON_INDEX = {
     "selection": 3,
     "markdown": 5,
     "consolidation": 6,
+    "format": 5,
     "extraction": 7,
     "review": 7,
     "output": 7,

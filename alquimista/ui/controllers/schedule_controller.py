@@ -35,6 +35,28 @@ def refresh_schedule_status(window: Any) -> None:
     window.thread_pool.start(worker)
 
 
+def refresh_home_schedule(window: Any) -> None:
+    """Fill the 'Sincronização agendada' card of Início (queried off the UI thread)."""
+    path = window.project_path
+    if path is None or not hasattr(window, "home_metrics"):
+        return
+    worker = Worker(lambda _token, _progress, _log: scheduler.scheduled_time(path))
+
+    def done(at: str | None) -> None:
+        if window.project_path != path:
+            return
+        values = (
+            at or translate_text("Desligada"),
+            translate_text("todos os dias") if at else translate_text("ative em Configurações"),
+        )
+        window._home_schedule = (path, values)
+        window._set_home_metric("schedule", *values)
+
+    worker.signals.succeeded.connect(done)
+    window.home_schedule_worker = worker
+    window.thread_pool.start(worker)
+
+
 def schedule_daily(window: Any) -> None:
     # The task runs the file on disk, so pending edits must be saved first.
     if (window.project_path is None or window.dirty) and not window.save_project():
@@ -42,6 +64,7 @@ def schedule_daily(window: Any) -> None:
     at = window.schedule_time.time().toString("HH:mm")
     try:
         scheduler.schedule_daily(window.project_path, at)
+        window._home_schedule = None
     except AlquimistaError as exc:
         QMessageBox.warning(window, translate_text("Agendamento não criado"), str(exc))
         return
@@ -63,6 +86,7 @@ def remove_schedule(window: Any) -> None:
         return
     try:
         scheduler.remove_schedule(window.project_path)
+        window._home_schedule = None
     except AlquimistaError as exc:
         QMessageBox.warning(window, translate_text("Agendamento não removido"), str(exc))
     refresh_schedule_status(window)

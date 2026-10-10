@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
@@ -18,57 +17,30 @@ from ...models import AuthMode
 from ..components import AlchemistIconAtlas, VisibleArrowComboBox, animated_button
 
 
-def build_connection_page(window: Any) -> QWidget:
-    page = QWidget()
-    layout = QVBoxLayout(page)
-    layout.setContentsMargins(26, 30, 26, 26)
-    layout.setSpacing(12)
-
+def build_connection_panel(window: Any) -> QFrame:
+    """Connection of the source selected in the Fontes list (embedded panel)."""
     panel = QFrame()
     panel.setObjectName("connectionPanel")
-    panel.setMaximumWidth(1120)
-    panel.setMinimumWidth(560)
+    panel.setMinimumWidth(380)
     panel_layout = QVBoxLayout(panel)
-    panel_layout.setContentsMargins(52, 38, 52, 38)
-    panel_layout.setSpacing(28)
+    panel_layout.setContentsMargins(22, 20, 22, 20)
+    panel_layout.setSpacing(14)
 
-    hero = QHBoxLayout()
-    hero.setSpacing(16)
-    lock = QLabel("🔐")
-    lock.setObjectName("connectionIcon")
-    lock.setStyleSheet("font-size: 38pt;")
-    hero.addWidget(lock)
-    hero_text = QVBoxLayout()
-    hero_text.setSpacing(8)
-    title = QLabel("Conexão e autenticação")
+    title = QLabel("Conexão")
+    title.setStyleSheet("font-size: 13pt; font-weight: 700;")
+    panel_layout.addWidget(title)
+    window.connection_title = QLabel("Selecione uma fonte na lista.")
+    window.connection_title.setObjectName("subtitle")
+    window.connection_title.setWordWrap(True)
+    panel_layout.addWidget(window.connection_title)
 
-    title.setObjectName("pageTitle")
-    hero_text.addWidget(title)
-    subtitle = QLabel(
-        "Selecione como o ALQuimista acessará a fonte."
-    )
-    subtitle.setObjectName("subtitle")
-    subtitle.setWordWrap(True)
-    subtitle.setAlignment(Qt.AlignmentFlag.AlignLeft)
-    subtitle.setMinimumHeight(40)
-    hero_text.addWidget(subtitle)
-    hero.addLayout(hero_text, 1)
-    panel_layout.addLayout(hero)
-    separator = QFrame()
-    separator.setFrameShape(QFrame.Shape.HLine)
-    separator.setObjectName("connectionSeparator")
-    panel_layout.addWidget(separator)
-
-    source_row = QHBoxLayout()
-    source_label = QLabel("Fonte selecionada")
-    source_label.setObjectName("connectionLabel")
-    source_row.addWidget(source_label)
+    # The list on the left chooses the source; this combo stays as the internal
+    # model the connection handlers read (source_by_combo).
     window.connection_source = VisibleArrowComboBox()
     window.connection_source.setObjectName("connectionCombo")
-    window.connection_source.setMinimumHeight(50)
     window.connection_source.currentIndexChanged.connect(window._connection_source_changed)
-    source_row.addWidget(window.connection_source, 1)
-    panel_layout.addLayout(source_row)
+    window.connection_source.setVisible(False)
+    panel_layout.addWidget(window.connection_source)
     auth_label = QLabel("Modo de autenticação")
     auth_label.setObjectName("connectionLabel")
     panel_layout.addWidget(auth_label)
@@ -152,17 +124,14 @@ def build_connection_page(window: Any) -> QWidget:
 
     # Spacer to prevent overlap with connection state label
     panel_layout.addSpacing(12)
-    panel_layout.addWidget(window.connection_state, 0, Qt.AlignmentFlag.AlignCenter)
+    panel_layout.addWidget(window.connection_state)
 
     notice = QLabel(
-        "🛡  Segurança: senhas e tokens permanecem somente na memória. "
-        "A sessão do navegador só é salva quando você escolhe entrar e pode ser apagada a qualquer momento."
+        "🛡  Segurança: senhas e tokens ficam só na memória, a menos que você marque "
+        "“Lembrar neste computador”. A sessão do navegador pode ser apagada a qualquer momento."
     )
     notice.setObjectName("subtitle")
     notice.setWordWrap(True)
-    notice.setAlignment(Qt.AlignmentFlag.AlignCenter)
     panel_layout.addWidget(notice)
-    layout.addStretch(1)
-    layout.addWidget(panel, 0, Qt.AlignmentFlag.AlignHCenter)
-    layout.addStretch(1)
-    return page
+    panel_layout.addStretch(1)
+    return panel

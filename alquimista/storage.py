@@ -19,6 +19,37 @@ MANIFEST_INDEX_NAME = "indice_manifesto_alquimista.sqlite3"
 FAILURES_NAME = "falhas_alquimista.json"
 REPORT_NAME = "relatorio_execucao_alquimista.json"
 PACKAGE_INDEX_NAME = "indice_pacotes_alquimista.json"
+# One JSON line per extraction run (manual, sync or scheduled), newest last.
+HISTORY_NAME = "historico_execucoes_alquimista.jsonl"
+
+
+def append_history(output_dir: Path, report: dict[str, Any]) -> None:
+    entry = {
+        "executed_at": report.get("executed_at"),
+        "duration_seconds": report.get("duration_seconds"),
+        "pages_selected": report.get("pages_selected"),
+        "counters": report.get("counters", {}),
+        "failures": report.get("failures", 0),
+    }
+    with (output_dir / HISTORY_NAME).open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def load_history(output_dir: Path, limit: int = 50) -> list[dict[str, Any]]:
+    """Most recent runs first; unreadable lines are skipped."""
+    try:
+        lines = (output_dir / HISTORY_NAME).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    runs: list[dict[str, Any]] = []
+    for line in reversed(lines[-limit:]):
+        try:
+            item = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(item, dict):
+            runs.append(item)
+    return runs
 
 
 def confined_path(base: Path, relative: str | Path) -> Path:

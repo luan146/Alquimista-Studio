@@ -56,6 +56,15 @@ def run_extraction(
 
 def execute_selected_operation(window: Any) -> None:
     """Executa a opção escolhida no fluxo único da aplicação."""
+    if window.worker is not None:
+        return
+    blocker = window._execution_blocker()
+    if blocker is not None:
+        message, target = blocker
+        QMessageBox.information(window, translate_text("Ainda não dá para executar"), message)
+        if target:
+            window._show_page(target)
+        return
     operation = (
         str(window.execution_mode.currentData())
         if hasattr(window, "execution_mode")

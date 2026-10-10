@@ -23,6 +23,26 @@ WorkerFunction = Callable[..., Any]
 DoneCallback = Callable[[Any], None]
 
 
+def _duration(seconds: float) -> str:
+    minutes, secs = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h{minutes:02d}"
+    return f"{minutes} min" if minutes else f"{secs}s"
+
+
+def progress_eta(done: int, total: int, elapsed: float) -> str:
+    """'3 min decorridos · 42/min · ~12 min restantes' once there is enough data."""
+    text = translate_text("{elapsed} decorridos").format(elapsed=_duration(elapsed))
+    if done < 3 or elapsed < 5 or not total or done >= total:
+        return text
+    rate = done / elapsed
+    remaining = (total - done) / rate
+    return translate_text("{elapsed} decorridos · {rate:.0f}/min · ~{remaining} restantes").format(
+        elapsed=_duration(elapsed), rate=rate * 60, remaining=_duration(remaining)
+    )
+
+
 def _connection_error_presentation(
     error: Exception | str,
     integration_name: str,
@@ -141,6 +161,8 @@ class WorkerOperationController:
         worker.signals.finished.connect(self.worker_finished)
         self.thread_pool.start(worker)
         self._set_state("RUNNING")
+        if hasattr(window, "_refresh_execute_blocker"):
+            window._refresh_execute_blocker()
         window._refresh_dashboard()
         if hasattr(window, "_update_consolidation_action_availability"):
             window._update_consolidation_action_availability()
@@ -151,8 +173,8 @@ class WorkerOperationController:
         window.progress.setValue(percent)
         elapsed = time.monotonic() - window.started_at
         window.progress_label.setText(
-            translate_text("{done}/{total}  —  {item}  —  {elapsed:.1f}s decorridos").format(
-                done=done, total=total, item=item, elapsed=elapsed
+            translate_text("{done}/{total}  —  {item}  —  {elapsed}").format(
+                done=done, total=total, item=item, elapsed=progress_eta(done, total, elapsed)
             )
         )
         if getattr(window, "_tree_loading", False) and hasattr(
@@ -223,6 +245,23 @@ class WorkerOperationController:
             QMessageBox.critical(window, title, f"{state}\n\n{message}")
             return
 
+        if hasattr(window, "_notify_finished") and not getattr(window, "_tree_loading", False):
+            window._notify_finished(translate_text("ALQuimista: operação não concluída"), message[:200])
+        if isinstance(error, AuthenticationError) or "401" in message:
+            # Expired session/token: offer the way out instead of only the error text.
+            hint = translate_text("Faça login ou informe o token novamente em Fontes.")
+            box = QMessageBox(
+                QMessageBox.Icon.Critical,
+                translate_text("Acesso expirado ou inválido"),
+                f"{hint}\n\n{message}",
+                parent=window,
+            )
+            go = box.addButton(translate_text("Ir para Fontes"), QMessageBox.ButtonRole.AcceptRole)
+            box.addButton(QMessageBox.StandardButton.Close)
+            box.exec()
+            if box.clickedButton() is go:
+                window._show_page("sources")
+            return
         QMessageBox.critical(window, translate_text("Operação não concluída"), message)
 
     def worker_finished(self) -> None:
@@ -235,6 +274,8 @@ class WorkerOperationController:
             window._set_tree_loading(False)
         window.cancel_button.setEnabled(False)
         window._refresh_dashboard()
+        if hasattr(window, "_refresh_workflow_state"):
+            window._refresh_workflow_state()
         if hasattr(window, "_update_consolidation_action_availability"):
             window._update_consolidation_action_availability()
         self._set_state("IDLE")

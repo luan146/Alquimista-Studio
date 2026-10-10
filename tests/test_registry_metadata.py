@@ -13,7 +13,7 @@ from alquimista.models import ConnectorStatus
 from alquimista.source_detection import detect_source_url
 from alquimista.ui.components import SourceCard
 from alquimista.ui.connector_forms import ConnectorFormSpec, form_spec
-from alquimista.ui.pages.dashboard_page import _grid_position, build_dashboard_page
+from alquimista.ui.pages.source_catalog import _grid_position, build_source_catalog
 
 
 def test_default_registry_is_the_single_source_for_form_and_card_metadata() -> None:
@@ -132,7 +132,7 @@ def test_dashboard_cards_are_created_from_registry_order(qtbot) -> None:
         _source_card_clicked=lambda _source_type: None,
     )
 
-    page = build_dashboard_page(window)
+    page = build_source_catalog(window)
     qtbot.addWidget(page)
     cards = page.findChildren(SourceCard)
 

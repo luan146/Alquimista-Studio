@@ -1,4 +1,4 @@
-"""Dashboard page construction with categorized connector cards and smooth scrolling."""
+"""Platform catalog (categorized connector cards) shown inside "Adicionar fonte"."""
 
 from __future__ import annotations
 
@@ -9,14 +9,13 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QGridLayout,
     QHBoxLayout,
-    QLabel,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
-from ..components import AlchemistIconAtlas, SourceCard, card
+from ..components import SourceCard, card
 from ..i18n import translate_text
 
 
@@ -36,38 +35,21 @@ CATEGORIES = [
     ("knowledge_base", "Bases de Conhecimento"),
     ("customer_support", "Atendimento / Suporte"),
     ("developer", "Desenvolvedores"),
-    ("cms", "CMS & Headless"),
+    ("cms", "CMS && Headless"),  # "&&": a single "&" is a Qt mnemonic and disappears
     ("web", "Web"),
     ("files", "Arquivos Locais"),
 ]
 
 
-def build_dashboard_page(window: Any) -> QWidget:
+def build_source_catalog(window: Any) -> QWidget:
+    """Category filter plus a scrollable grid of platform cards.
+
+    Clicking a card calls ``window._source_card_clicked(source_type)``.
+    """
     page = QWidget()
     main_layout = QVBoxLayout(page)
-    main_layout.setContentsMargins(20, 16, 20, 16)
+    main_layout.setContentsMargins(0, 0, 0, 0)
     main_layout.setSpacing(10)
-
-    # Header
-    hero_icon = QLabel()
-    hero_icon.setObjectName("sourceHeroIcon")
-    hero_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    hero_icon.setPixmap(AlchemistIconAtlas.pixmap(0, 72))
-    main_layout.addWidget(hero_icon)
-
-    title = QLabel("Escolha sua fonte de conhecimento")
-    title.setObjectName("pageTitle")
-    title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    main_layout.addWidget(title)
-
-    subtitle = QLabel(
-        "Selecione a origem do conhecimento que você deseja usar.\n"
-        "Você poderá configurar os detalhes da conexão na próxima etapa."
-    )
-    subtitle.setObjectName("subtitle")
-    subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    subtitle.setWordWrap(True)
-    main_layout.addWidget(subtitle)
 
     # Category Filter Bar
     filter_bar = QHBoxLayout()
@@ -147,12 +129,4 @@ def build_dashboard_page(window: Any) -> QWidget:
 
     # Initial population
     refresh_cards("all")
-
-    window.dashboard_status = QLabel(
-        "🔒  Sua conexão é segura. Nenhum dado é armazenado sem o seu consentimento."
-    )
-    window.dashboard_status.setObjectName("subtitle")
-    window.dashboard_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    main_layout.addWidget(window.dashboard_status)
-
     return page

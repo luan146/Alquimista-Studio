@@ -35,6 +35,7 @@ from ..storage import (
     REPORT_NAME,
     FileTransaction,
     ManifestStore,
+    append_history,
     confined_path,
 )
 from .helpers import sanitize_filename
@@ -828,6 +829,10 @@ class ExtractionService:
             self.store.index.rebuild(manifest)
         except Exception as exc:
             self.log(f"Índice SQLite não atualizado; o manifesto JSON permanece válido: {exc}")
+        try:
+            append_history(self.output_dir, report)
+        except OSError as exc:
+            self.log(f"Histórico de execuções não atualizado: {exc}")
         self.log("Extração concluída.")
         return report
 

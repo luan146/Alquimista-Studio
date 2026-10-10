@@ -10,6 +10,7 @@ from PySide6.QtCore import (
     QSize,
     Qt,
     QThreadPool,
+    QTimer,
 )
 from PySide6.QtGui import QCloseEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
@@ -24,9 +25,11 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QStackedWidget,
     QTimeEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -46,6 +49,7 @@ from .components import (
     APP_TITLE,
     NAV_ICON_INDEX,
     NAVIGATION,
+    PAGE_ALIASES,
     AlchemistIconAtlas,
     button,
     card,
@@ -83,21 +87,23 @@ from .mixins.pages_browser_mixin import PagesBrowserMixin
 from .mixins.selection_mixin import SelectionMixin
 from .mixins.source_mixin import SourceMixin
 from .mixins.tree_loading_mixin import TreeLoadingMixin
-from .pages.connection_page import build_connection_page
-from .pages.consolidation_page import build_consolidation_page
-from .pages.dashboard_page import build_dashboard_page
-from .pages.markdown_page import build_markdown_page
+from .mixins.workflow_mixin import WorkflowMixin
+from .pages.format_page import build_format_page
+from .pages.home_page import build_home_page
 from .pages.results_page import build_results_page
 from .pages.review_page import build_review_page
 from .pages.selection_page import build_selection_page
 from .pages.settings_page import build_settings_page
 from .pages.sources_page import build_sources_page
+from .recent_projects import recent_projects
 from .state import MainWindowState
 from .theme import apply_theme
 from .workers import Worker
 
 
-class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin, TreeLoadingMixin, QMainWindow):
+class MainWindow(
+    WorkflowMixin, ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin, TreeLoadingMixin, QMainWindow
+):
     # Widgets assigned by the page builders in ui/pages/.
     progress: QProgressBar
     progress_label: QLabel
@@ -112,6 +118,8 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
     parallel_spin: QSpinBox
     schedule_status: QLabel
     schedule_time: QTimeEdit
+    results_empty: QFrame
+    results_body: QWidget
 
     def __init__(
         self,
@@ -160,6 +168,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         self.log_path = default_log_path()
         self.technical_logger = configure_logging(self.log_path)
         self.nav_buttons: dict[str, QPushButton] = {}
+        self.nav_status: dict[str, QLabel] = {}
         self.pages: dict[str, QWidget] = {}
         self.setWindowTitle(APP_TITLE)
         self.logo_path = Path(__file__).with_name("assets") / "d20.svg"
@@ -219,6 +228,10 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
                 lambda: self._refresh_results()
                 if hasattr(self, "result_summary")
                 else None,
+                lambda: self._refresh_source_table()
+                if hasattr(self, "source_table")
+                else None,
+                self._refresh_workflow_state,
             ],
         )
         self.dirty = dirty_before
@@ -249,6 +262,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
                 lambda: self._refresh_results()
                 if hasattr(self, "result_summary")
                 else None,
+                self._refresh_workflow_state,
             ],
         )
 
@@ -357,6 +371,15 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
             nav.clicked.connect(
                 lambda _checked=False, name=key: self._show_page(name)
             )
+            if key != "dashboard":
+                status = QLabel("○", nav)
+                status.setObjectName("navStepStatus")
+                status.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+                nav_layout = QHBoxLayout(nav)
+                nav_layout.setContentsMargins(0, 0, 12, 0)
+                nav_layout.addStretch()
+                nav_layout.addWidget(status)
+                self.nav_status[key] = status
             self.nav_buttons[key] = nav
             side.addWidget(nav)
         side.addStretch()
@@ -373,6 +396,16 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         )
         top_layout = QHBoxLayout(top)
         top_layout.setContentsMargins(22, 10, 22, 10)
+        self.project_menu_button = QToolButton()
+        self.project_menu_button.setToolTip("Novo, abrir, recentes e salvar como")
+        self.project_menu_button.setText("📁 ▾")
+        self.project_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.project_menu_button.clicked.connect(
+            lambda: self._project_menu().exec(
+                self.project_menu_button.mapToGlobal(self.project_menu_button.rect().bottomLeft())
+            )
+        )
+        top_layout.addWidget(self.project_menu_button)
         self.top_project = QLabel(self.project.project_name)
         self.top_project.setStyleSheet("font-weight: 700;")
         top_layout.addWidget(self.top_project)
@@ -384,39 +417,56 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         settings_button.setIconSize(QSize(22, 22))
         top_layout.addWidget(settings_button)
         save_button = button("Salvar", self.save_project, primary=True)
+        save_button.setToolTip("Salvar o projeto (Ctrl+S)")
         save_button.setIcon(AlchemistIconAtlas.icon(15, 22))
         save_button.setIconSize(QSize(22, 22))
         top_layout.addWidget(save_button)
         content.addWidget(top)
         self.stack = QStackedWidget()
         content.addWidget(self.stack, 1)
+        self.step_footer = QFrame()
+        self.step_footer.setObjectName("card")
+        self.step_footer.setStyleSheet(
+            "border-radius: 0; border-bottom: 0; border-left: 0; border-right: 0;"
+        )
+        footer_layout = QHBoxLayout(self.step_footer)
+        footer_layout.setContentsMargins(22, 8, 22, 8)
+        self.step_back_button = button("Voltar", lambda: self._go_step("back"))
+        self.step_next_button = button("Próximo", lambda: self._go_step("next"), primary=True)
+        for step_button in (self.step_back_button, self.step_next_button):
+            step_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+            step_button.setMinimumWidth(220)
+        footer_layout.addWidget(self.step_back_button)
+        footer_layout.addStretch()
+        footer_layout.addWidget(self.step_next_button)
+        content.addWidget(self.step_footer)
         outer.addLayout(content, 1)
 
+        format_page, markdown_tab, packages_tab = build_format_page(self)
         builders = {
             "dashboard": self._dashboard_page,
             "sources": self._sources_page,
-            "connection": self._connection_page,
             "selection": self._selection_page,
-            "markdown": self._markdown_page,
-            "consolidation": self._consolidation_page,
+            "format": lambda: format_page,
             "extraction": self._review_page,
             "results": self._results_page,
-            "settings": self._settings_page,
         }
         for key in (item[0] for item in NAVIGATION):
-            if key not in builders:
-                continue
             page = builders[key]()
             self.pages[key] = page
             self.stack.addWidget(page)
-        settings_page = builders["settings"]()
+        settings_page = self._settings_page()
         self.pages["settings"] = settings_page
         self.stack.addWidget(settings_page)
-        self.pages["review"] = self.pages["extraction"]
         self.pages["pages"] = self._pages_page()
         self.stack.addWidget(self.pages["pages"])
-        self.pages["output"] = self.pages["extraction"]
+        # Old keys keep working for code and tests that still use them.
+        self.pages["markdown"] = markdown_tab
+        self.pages["consolidation"] = packages_tab
+        for alias, (target, _tab) in PAGE_ALIASES.items():
+            self.pages.setdefault(alias, self.pages[target])
         self._init_controllers()
+        self._install_shortcuts()
 
     def _init_controllers(self) -> None:
         self.navigation_controller = NavigationController(
@@ -465,7 +515,6 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
             output_path_status_label=getattr(self, "output_path_status", None),
             output_structure_label=getattr(self, "output_structure", None),
             output_dir_input=getattr(self, "output_dir", None),
-            output_subfolder_checkbox=getattr(self, "output_subfolder", None),
         )
         self.consolidation_controller = ConsolidationController(
             group_combo=getattr(self, "con_group", None),
@@ -493,7 +542,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         self.results_controller = ResultsController(
             summary_widget=getattr(self, "result_summary", None),
             status_bar=self.statusBar(),
-            output_dir_getter=self._project_dir,
+            output_dir_getter=self._output_path,
             log_path=self.log_path,
             metric_widgets={
                 "total": getattr(self, "result_metric_total", None),
@@ -507,33 +556,32 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
     def _on_nav_page_changed(self, key: str) -> None:
         if key == "dashboard":
             self._refresh_dashboard()
+            if sys.platform == "win32" and self.project_path is not None:
+                schedule_controller.refresh_home_schedule(self)
         elif key == "selection":
             self._selection_go_back()
+            self._maybe_autoload_tree()
         elif key == "results":
             self._refresh_results()
-        elif key == "consolidation":
+        elif key == "format":
             self._sync_consolidation_ui()
             self._update_consolidation_action_availability()
-        elif key in {"extraction", "review"}:
+        elif key == "extraction":
             self._refresh_review()
-        elif key == "output":
             self._update_output_preview()
         elif key == "settings" and sys.platform == "win32":
             schedule_controller.refresh_schedule_status(self)
+        self._refresh_workflow_state()
 
     def _show_page(self, key: str) -> None:
+        target, tab = PAGE_ALIASES.get(key, (key, None))
+        if tab is not None and hasattr(self, "format_tabs"):
+            self.format_tabs.setCurrentIndex(tab)
         if hasattr(self, "navigation_controller"):
-            self.navigation_controller.show_page(key)
+            self.navigation_controller.show_page(target)
 
     def _dashboard_page(self) -> QWidget:
-        return build_dashboard_page(self)
-
-    def _source_card_clicked(self, source_type: str) -> None:
-        """Open the source editor and preselect the platform represented by the card."""
-        self._show_page("sources")
-        platform_index = self.src_platform.findData(source_type)
-        if platform_index >= 0:
-            self.src_platform.setCurrentIndex(platform_index)
+        return build_home_page(self)
 
     def _metric(self, value: str, label: str, emoji: str) -> QFrame:
         frame, layout = card()
@@ -556,21 +604,12 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
     def _sources_page(self) -> QWidget:
         return build_sources_page(self)
 
-    def _connection_page(self) -> QWidget:
-        return build_connection_page(self)
-
     def _selection_page(self) -> QWidget:
         return build_selection_page(self)
-
-    def _markdown_page(self) -> QWidget:
-        return build_markdown_page(self)
 
     def _toggle_all_markdown_sections(self, expanded: bool) -> None:
         for current in getattr(self, "markdown_sections", []):
             current.set_expanded(expanded)
-
-    def _consolidation_page(self) -> QWidget:
-        return build_consolidation_page(self)
 
     def _results_page(self) -> QWidget:
         return build_results_page(self)
@@ -594,6 +633,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
     def mark_dirty(self) -> None:
         self.dirty = True
         self.project_badge.setText(translate_text("● Alterações não salvas"))
+        self._schedule_workflow_refresh()
 
     def _confirm_discard(self) -> bool:
         if not self.dirty:
@@ -634,24 +674,36 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         )
         if not selected:
             return
+        self._load_project_file_into_window(Path(selected))
+
+    def _load_project_file_into_window(self, path: Path) -> bool:
         try:
-            candidate_path = Path(selected).resolve()
+            candidate_path = path.resolve()
             candidate_project = load_project_file(candidate_path)
-            self.project_path = candidate_path
-            self.project = candidate_project
-            self.selection_store = SelectionStore.from_selections(
-                self.project.selections
-            )
-            self.trees.clear()
-            self.secrets.clear()
-            self.secrets.load_remembered(self.project.sources, self._append_log)
-            self.dirty = False
-            self._load_project_ui()
-            self._append_log(f"Projeto aberto: {self.project_path}")
         except Exception as exc:
-            QMessageBox.critical(
-                self, translate_text("Projeto inválido"), str(exc)
-            )
+            self._confirm_open_failure(path, exc)
+            return False
+        self.project_path = candidate_path
+        self.project = candidate_project
+        self.selection_store = SelectionStore.from_selections(
+            self.project.selections
+        )
+        self.trees.clear()
+        self.secrets.clear()
+        self.secrets.load_remembered(self.project.sources, self._append_log)
+        self.last_result = {}
+        self.dirty = False
+        self._load_project_ui()
+        self._remember_current_project()
+        self._append_log(f"Projeto aberto: {self.project_path}")
+        self._show_page("dashboard")
+        return True
+
+    def reopen_last_project(self) -> None:
+        """Startup: continue where the user stopped."""
+        recent = recent_projects(self.ui_settings)
+        if recent:
+            self._load_project_file_into_window(recent[0])
 
     def save_project(self) -> bool:
         if self.project_path is None:
@@ -660,6 +712,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         try:
             self._sync_project_ui()
             save_project_file(self.project_path, self.project)
+            self._remember_current_project()
             self.dirty = False
             self.project_badge.setText(
                 translate_text("● Salvo em {path}").format(
@@ -689,6 +742,11 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
 
     def _project_dir(self) -> Path:
         return resolve_project_dir(self.project_path)
+
+    def _output_path(self) -> Path:
+        """Where extraction writes manifest, report and Markdown (project dir / output dir)."""
+        output = Path(self.project.output_dir)
+        return output if output.is_absolute() else self._project_dir() / output
 
     def _load_project_ui(self) -> None:
         self.selection_store = SelectionStore.from_selections(
@@ -793,13 +851,11 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         if (
             hasattr(self, "preview_controller")
             and hasattr(self, "output_dir")
-            and hasattr(self, "output_subfolder")
         ):
             self.preview_controller.update_output_preview(
                 self.output_dir.text(),
                 self.project.extraction.pages_subdir,
                 self.project.consolidation.output_subdir,
-                use_subfolder=self.output_subfolder.isChecked(),
             )
 
     def _prepare_runtimes(
@@ -949,6 +1005,10 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         self.progress_label.setText(translate_text("Operação concluída."))
         self._refresh_results()
         self._show_page("results")
+        self._notify_finished(
+            translate_text("ALQuimista: operação concluída"),
+            translate_text("Abra o ALQuimista para ver o resultado."),
+        )
         QMessageBox.information(
             self,
             translate_text("Concluído"),
@@ -956,8 +1016,15 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         )
 
     def _refresh_results(self) -> None:
-        if hasattr(self, "results_controller"):
-            self.results_controller.refresh_results(self.last_result)
+        if not hasattr(self, "results_controller"):
+            return
+        # After reopening a project the last run comes from its report on disk.
+        report = self.last_result or self._last_report()
+        self.results_empty.setVisible(not report)
+        self.results_body.setVisible(bool(report))
+        if report:
+            self.results_controller.refresh_results(report)
+        self._refresh_results_tables()
 
     def copy_report(self) -> None:
         self.results_controller.copy_report()
@@ -1011,18 +1078,7 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
         )
 
     def _refresh_dashboard(self) -> None:
-        active = [source for source in self.project.sources if source.enabled]
-        selected = sum(
-            len(self.project.selected_keys_for(source.id)) for source in active
-        )
-        if hasattr(self, "dashboard_status"):
-            state = translate_text("Executando" if self.worker else "Pronto")
-            self.dashboard_status.setText(
-                translate_text(
-                    "🛡  Sua conexão é segura. {sources} fonte(s) ativa(s), "
-                    "{selected} página(s) selecionada(s) — {state}."
-                ).format(sources=len(active), selected=selected, state=state)
-            )
+        self._refresh_home()
         self._update_consolidation_action_availability()
 
     def _refresh_review(self) -> None:
@@ -1087,8 +1143,16 @@ class MainWindow(ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin
             label = self.review_values.get(key)
             if label is not None:
                 label.setText(value)
+        ready = {
+            "source": source is not None,
+            "connection": source is not None and self._credentials_available(source),
+            "selection": bool(selected),
+            "format": True,
+            "consolidation": True,
+        }
+        for key, icon in getattr(self, "review_status_icons", {}).items():
+            icon.setText("✓" if ready[key] else "⚠")
         estimate = len(self.last_consolidation_preview)
-        self.review_summary.setVisible(True)
         self.review_summary.setText(
             f"{translate_text('Fonte')}\n{source_text}\n\n"
             f"{translate_text('Modo de acesso')}\n{connection_text}\n\n"
@@ -1133,6 +1197,7 @@ def run_app(mode: str = "complete") -> None:
     apply_theme(app, "system")
     window = MainWindow(mode, language_manager)
     window.show()
+    QTimer.singleShot(0, window.reopen_last_project)
     raise SystemExit(app.exec())
 
 

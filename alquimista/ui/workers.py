@@ -38,8 +38,17 @@ class Worker(QRunnable):
                 self.signals.log.emit,
             )
         except Exception as exc:
-            self.signals.failed.emit(exc, traceback.format_exc())
+            self._emit(self.signals.failed, exc, traceback.format_exc())
         else:
-            self.signals.succeeded.emit(result)
+            self._emit(self.signals.succeeded, result)
         finally:
-            self.signals.finished.emit()
+            self._emit(self.signals.finished)
+
+    @staticmethod
+    def _emit(signal: Any, *args: Any) -> None:
+        try:
+            signal.emit(*args)
+        except RuntimeError:
+            # The window that owned the signals was closed while this ran;
+            # there is nobody left to notify.
+            pass

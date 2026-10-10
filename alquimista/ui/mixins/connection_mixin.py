@@ -232,6 +232,12 @@ class ConnectionMixin(WindowBase):
         if not source:
             return
         descriptor = self.connector_registry.get(source.source_type)
+        if hasattr(self, "connection_title"):
+            self.connection_title.setText(
+                translate_text("Fonte: {name} ({platform})").format(
+                    name=source.name, platform=descriptor.display_name
+                )
+            )
         bearer_only = descriptor.form.bearer_only
         for index in range(self.auth_mode.count()):
             item = self.auth_mode.model().item(index)

@@ -12,18 +12,21 @@ from PySide6.QtWidgets import (
         QLabel,
         QLineEdit,
         QListWidget,
+        QSplitter,
         QTableWidget,
         QVBoxLayout,
         QWidget,
 )
 
 from ..components import button, card, page_header
+from ..dialogs.add_source_dialog import AddSourceDialog
+from .connection_page import build_connection_panel
 
 
 def build_sources_page(window: Any) -> QWidget:
         page, layout = page_header(
-            "Fontes de conteúdo",
-            "Cole uma URL e o ALQuimista identifica a plataforma e prepara a conexão automaticamente.",
+            "Fontes",
+            "Adicione as fontes do projeto e conecte cada uma. Selecione uma fonte na lista para ver a conexão.",
             "📚",
         )
         # These controls remain as the internal compatibility form used by
@@ -70,76 +73,32 @@ def build_sources_page(window: Any) -> QWidget:
             "A URL pode apontar para uma página, espaço, site ou raiz da plataforma.", legacy
         )
 
-        entry, entry_layout = card()
-        entry_title = QLabel("Adicionar uma fonte")
-        entry_title.setStyleSheet("font-size: 13pt; font-weight: 700;")
-        entry_layout.addWidget(entry_title)
-        entry_row = QHBoxLayout()
-        url_column = QVBoxLayout()
-        url_header_row = QHBoxLayout()
-        url_header_row.addWidget(QLabel("URL ou Caminho da fonte"))
-        url_header_row.addStretch()
-        pick_file_btn = button("📁 Arquivo...", window._pick_local_file)
-        pick_file_btn.setMaximumHeight(26)
-        pick_folder_btn = button("📂 Pasta...", window._pick_local_folder)
-        pick_folder_btn.setMaximumHeight(26)
-        url_header_row.addWidget(pick_file_btn)
-        url_header_row.addWidget(pick_folder_btn)
-        url_column.addLayout(url_header_row)
-        window.source_url_input = QLineEdit()
-        window.source_url_input.setPlaceholderText("Cole aqui a URL do Confluence, Notion, SharePoint, GitBook ou Zendesk")
-        window.source_url_input.setAccessibleName("URL da fonte")
-        window.source_url_input.textChanged.connect(window._preview_detected_source)
-        url_column.addWidget(window.source_url_input)
-
-        entry_row.addLayout(url_column, 3)
-        name_column = QVBoxLayout()
-        name_column.addWidget(QLabel("Nome da fonte (opcional)"))
-        window.source_name_input = QLineEdit()
-        window.source_name_input.setPlaceholderText("Nome da fonte")
-        window.source_name_input.setAccessibleName("Nome opcional da fonte")
-        name_column.addWidget(window.source_name_input)
-        entry_row.addLayout(name_column, 1)
-        entry_buttons = QVBoxLayout()
-        window.source_add_button = button("＋ Adicionar", window._commit_source_from_form, primary=True)
+        toolbar = QHBoxLayout()
+        window.add_source_button = button("＋ Adicionar fonte", window.open_add_source_dialog, primary=True)
+        toolbar.addWidget(window.add_source_button)
         window.source_remove_button = button("🗑 Remover", window.remove_selected_sources, danger=True)
-        window.source_cancel_button = button("Cancelar", window._cancel_source_edit)
-        window.source_cancel_button.setEnabled(False)
-        entry_buttons.addWidget(window.source_add_button)
-        entry_buttons.addWidget(window.source_remove_button)
-        entry_buttons.addWidget(window.source_cancel_button)
-
-        entry_row.addLayout(entry_buttons)
-        entry_layout.addLayout(entry_row)
-        window.source_detection_status = QLabel(
-            "A plataforma, a API e os detalhes iniciais serão identificados pela URL."
-        )
-        window.source_detection_status.setObjectName("subtitle")
-        window.source_detection_status.setWordWrap(True)
-        entry_layout.addWidget(window.source_detection_status)
-        layout.addWidget(entry)
-
-        listing, listing_layout = card()
-        listing_header = QHBoxLayout()
-        listing_title = QLabel("Lista de URLs")
-        listing_title.setStyleSheet("font-size: 13pt; font-weight: 700;")
-        listing_header.addWidget(listing_title)
-        listing_header.addStretch()
+        toolbar.addWidget(window.source_remove_button)
+        toolbar.addStretch()
         window.source_count_label = QLabel("0 itens")
         window.source_count_label.setObjectName("subtitle")
-        listing_header.addWidget(window.source_count_label)
-        window.sync_all_sources_button = button(
-            "🔄 Sincronizar Fontes", window.sync_project
-        )
-        window.sync_all_sources_button.setMaximumHeight(32)
+        toolbar.addWidget(window.source_count_label)
+        window.sync_all_sources_button = button("🔄 Sincronizar Fontes", window.sync_project)
         window.sync_all_sources_button.setToolTip("Verificar e sincronizar alterações em todas as fontes ativas")
-        listing_header.addWidget(window.sync_all_sources_button)
-        listing_layout.addLayout(listing_header)
+        toolbar.addWidget(window.sync_all_sources_button)
+        layout.addLayout(toolbar)
+
+        window.sources_split = QSplitter(Qt.Orientation.Horizontal)
+        window.sources_split.setChildrenCollapsible(False)
+
+        listing, listing_layout = card()
+        listing_title = QLabel("Fontes do projeto")
+        listing_title.setStyleSheet("font-size: 13pt; font-weight: 700;")
+        listing_layout.addWidget(listing_title)
         window.source_table = QTableWidget(0, 6)
         window.source_table.setHorizontalHeaderLabels(
-            ["", "URL", "Nome da fonte", "Plataforma / API", "Adicionado em", ""]
+            ["", "Nome da fonte", "URL", "Plataforma / API", "Conexão", ""]
         )
-        window.source_table.setAccessibleName("Lista de URLs de fontes configuradas")
+        window.source_table.setAccessibleName("Lista de fontes configuradas")
         window.source_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         window.source_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         window.source_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -149,7 +108,8 @@ def build_sources_page(window: Any) -> QWidget:
         source_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         source_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         source_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        source_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        source_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        window.source_table.setWordWrap(False)
         source_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         source_header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         window.source_table.setColumnWidth(0, 42)
@@ -161,6 +121,10 @@ def build_sources_page(window: Any) -> QWidget:
             lambda row, _column: window._edit_source_row(row)
         )
         listing_layout.addWidget(window.source_table, 1)
+
+        window.sources_empty = QWidget()
+        empty_layout = QVBoxLayout(window.sources_empty)
+        empty_layout.addStretch()
         window.sources_empty_label = QLabel(
             "Adicione URLs de páginas para que o ALQuimista possa extrair e consolidar "
             "as informações automaticamente."
@@ -168,8 +132,21 @@ def build_sources_page(window: Any) -> QWidget:
         window.sources_empty_label.setObjectName("subtitle")
         window.sources_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         window.sources_empty_label.setWordWrap(True)
-        listing_layout.addWidget(window.sources_empty_label)
-        layout.addWidget(listing, 1)
+        empty_layout.addWidget(window.sources_empty_label)
+        empty_layout.addWidget(
+            button("＋ Adicionar a primeira fonte", window.open_add_source_dialog, primary=True),
+            0,
+            Qt.AlignmentFlag.AlignCenter,
+        )
+        empty_layout.addStretch()
+        listing_layout.addWidget(window.sources_empty, 1)
+        window.sources_split.addWidget(listing)
+
+        window.connection_card = build_connection_panel(window)
+        window.sources_split.addWidget(window.connection_card)
+        window.sources_split.setStretchFactor(0, 3)
+        window.sources_split.setStretchFactor(1, 2)
+        layout.addWidget(window.sources_split, 1)
+
+        window.add_source_dialog = AddSourceDialog(window)
         return page
-
-
