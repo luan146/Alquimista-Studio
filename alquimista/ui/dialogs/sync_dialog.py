@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import QObject, Qt, QThread, Signal
@@ -30,6 +31,8 @@ from ...services.sync import (
 )
 from ..components import button
 
+RuntimesOrFactory = list[Any] | Callable[[CancellationToken], list[Any]]
+
 
 class _PlanWorker(QObject):
     finished = Signal(object)
@@ -39,7 +42,7 @@ class _PlanWorker(QObject):
     def __init__(
         self,
         service: IncrementalSyncService,
-        runtimes: list[Any],
+        runtimes: RuntimesOrFactory,
         scope: SyncScope,
         target_source_id: str | None,
         token: CancellationToken,
@@ -55,10 +58,13 @@ class _PlanWorker(QObject):
         try:
             self.service.log = lambda msg: self.log_message.emit(str(msg))
             self.service.token = self.token
+            # Connecting to the sources may take a while (or fail on auth):
+            # it runs here, off the UI thread, together with the planning.
+            runtimes = self.runtimes(self.token) if callable(self.runtimes) else self.runtimes
             plan = self.service.plan_sync(
-                self.runtimes, scope=self.scope, target_source_id=self.target_source_id
+                runtimes, scope=self.scope, target_source_id=self.target_source_id
             )
-            self.finished.emit(plan)
+            self.finished.emit((plan, runtimes))
         except Exception as exc:
             self.failed.emit(str(exc))
 
@@ -106,7 +112,7 @@ class SyncPreviewDialog(QDialog):
         self,
         parent: QWidget | None,
         service: IncrementalSyncService,
-        runtimes: list[Any],
+        runtimes: RuntimesOrFactory,
         *,
         scope: SyncScope = SyncScope.SOURCE,
         target_source_id: str | None = None,
@@ -114,7 +120,8 @@ class SyncPreviewDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.service = service
-        self.runtimes = runtimes
+        self._runtimes_source = runtimes
+        self.runtimes: list[Any] = []  # filled once planning has prepared the sources
         self.scope = scope
         self.target_source_id = target_source_id
         self.source_name = source_name
@@ -235,7 +242,7 @@ class SyncPreviewDialog(QDialog):
     def _start_planning(self) -> None:
         self._thread = QThread(self)
         self._worker = _PlanWorker(
-            self.service, self.runtimes, self.scope, self.target_source_id, self.token
+            self.service, self._runtimes_source, self.scope, self.target_source_id, self.token
         )
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
@@ -247,8 +254,9 @@ class SyncPreviewDialog(QDialog):
     def _on_log(self, message: str) -> None:
         self.status_label.setText(message)
 
-    def _on_plan_finished(self, plan: SyncPlan) -> None:
+    def _on_plan_finished(self, result: tuple[SyncPlan, list[Any]]) -> None:
         self._cleanup_thread()
+        plan, self.runtimes = result
         self.plan = plan
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)

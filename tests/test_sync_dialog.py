@@ -135,3 +135,34 @@ def test_cancel_waits_for_worker_instead_of_destroying_running_thread(qtbot: Any
 
     qtbot.waitUntil(lambda: not dialog.isVisible(), timeout=3000)
     assert dialog._thread is None
+
+
+def test_sources_are_prepared_off_the_ui_thread(qtbot: Any) -> None:
+    import threading
+
+    threads: list[threading.Thread] = []
+
+    def prepare(_token: Any) -> list[Any]:
+        threads.append(threading.current_thread())
+        return ["runtime"]
+
+    service = FakeService(_plan(), _report())
+    dialog = SyncPreviewDialog(None, service, prepare, scope=SyncScope.SOURCE)  # type: ignore[arg-type]
+    qtbot.addWidget(dialog)
+    qtbot.waitUntil(lambda: dialog.plan is not None)
+
+    assert threads and threads[0] is not threading.main_thread()
+    assert dialog.runtimes == ["runtime"]  # reused by the apply step
+
+
+def test_connection_failure_while_preparing_is_shown_in_the_dialog(qtbot: Any) -> None:
+    from alquimista.errors import AuthenticationError
+
+    def prepare(_token: Any) -> list[Any]:
+        raise AuthenticationError("Sessão expirada")
+
+    dialog = SyncPreviewDialog(None, FakeService(_plan()), prepare, scope=SyncScope.SOURCE)  # type: ignore[arg-type]
+    qtbot.addWidget(dialog)
+    qtbot.waitUntil(lambda: "Sessão expirada" in dialog.status_label.text())
+
+    assert not dialog.sync_button.isEnabled()

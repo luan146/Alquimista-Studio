@@ -194,6 +194,34 @@ def run_complete(window: Any) -> None:
     window._start_worker(work, window._operation_done)
 
 
+def _open_sync_dialog(
+    window: Any,
+    snapshot: ProjectConfig,
+    scope: Any,
+    *,
+    source_name: str,
+    target_source_id: str | None = None,
+    allow_empty_selection: bool = True,
+) -> None:
+    from ...services.sync import IncrementalSyncService
+    from ..dialogs.sync_dialog import SyncPreviewDialog
+
+    log = window.technical_logger.info
+
+    def prepare(token: CancellationToken) -> list[SourceRuntime]:
+        return prepare_runtimes(window, snapshot, token, log, allow_empty_selection=allow_empty_selection)
+
+    dialog = SyncPreviewDialog(
+        window,
+        IncrementalSyncService(snapshot, window._project_dir()),
+        prepare,
+        scope=scope,
+        target_source_id=target_source_id,
+        source_name=source_name,
+    )
+    dialog.exec()
+
+
 def sync_source(window: Any, source_id: str) -> None:
     snapshot = window._validated_project_snapshot()
     if snapshot is None:
@@ -206,22 +234,11 @@ def sync_source(window: Any, source_id: str) -> None:
             translate_text("A fonte selecionada não está configurada neste projeto."),
         )
         return
-    from ...services.sync import IncrementalSyncService, SyncScope
-    from ..dialogs.sync_dialog import SyncPreviewDialog
+    from ...services.sync import SyncScope
 
-    token = CancellationToken()
-    log = window.technical_logger.info
-    runtimes = prepare_runtimes(window, snapshot, token, log, allow_empty_selection=True)
-    service = IncrementalSyncService(snapshot, window._project_dir())
-    dialog = SyncPreviewDialog(
-        window,
-        service,
-        runtimes,
-        scope=SyncScope.SOURCE,
-        target_source_id=source_id,
-        source_name=source.name,
+    _open_sync_dialog(
+        window, snapshot, SyncScope.SOURCE, source_name=source.name, target_source_id=source_id
     )
-    dialog.exec()
 
 
 def sync_project(window: Any) -> None:
@@ -235,45 +252,22 @@ def sync_project(window: Any) -> None:
             translate_text("Ative ao menos uma fonte para sincronizar."),
         )
         return
-    from ...services.sync import IncrementalSyncService, SyncScope
-    from ..dialogs.sync_dialog import SyncPreviewDialog
+    from ...services.sync import SyncScope
 
-    token = CancellationToken()
-    log = window.technical_logger.info
-    runtimes = prepare_runtimes(window, snapshot, token, log, allow_empty_selection=True)
-    service = IncrementalSyncService(snapshot, window._project_dir())
-    dialog = SyncPreviewDialog(
-        window,
-        service,
-        runtimes,
-        scope=SyncScope.PROJECT,
-        source_name=snapshot.project_name or "Todas as Fontes",
+    _open_sync_dialog(
+        window, snapshot, SyncScope.PROJECT, source_name=snapshot.project_name or "Todas as Fontes"
     )
-    dialog.exec()
 
 
 def sync_selection(window: Any) -> None:
     snapshot = window._validated_project_snapshot()
     if snapshot is None:
         return
-    from ...services.sync import IncrementalSyncService, SyncScope
-    from ..dialogs.sync_dialog import SyncPreviewDialog
+    from ...services.sync import SyncScope
 
-    token = CancellationToken()
-    log = window.technical_logger.info
-    runtimes = prepare_runtimes(window, snapshot, token, log, allow_empty_selection=False)
-    service = IncrementalSyncService(snapshot, window._project_dir())
-    dialog = SyncPreviewDialog(
-        window,
-        service,
-        runtimes,
-        scope=SyncScope.SELECTION,
-        source_name="Seleção Atual",
+    _open_sync_dialog(
+        window, snapshot, SyncScope.SELECTION, source_name="Seleção Atual", allow_empty_selection=False
     )
-    dialog.exec()
-
-
-
 
 
 def validated_project_snapshot(window: Any) -> ProjectConfig | None:
