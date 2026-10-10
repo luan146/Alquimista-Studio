@@ -200,6 +200,8 @@ Large files are bounded by the processor registry, and optional format dependenc
 
 The synchronization service can operate at selection, source, or project scope. It builds a plan from the remote inventory and the existing manifest, classifying items as **new, updated, unchanged, removed, failed, or preserved after an error**. Only changed documents are downloaded, remote removals are handled safely, attachments can be compared, and the operation writes a structured `sync_report.json` report. Consolidation can run automatically after a successful synchronization.
 
+**Scheduled synchronization (Windows):** in **Settings → Scheduled project synchronization**, pick a time and click **Schedule**; the Task Scheduler then runs `"ALQuimista Studio.exe" --sync "<project.json>"` every day without opening the window. Sources with a token need **Remember on this computer**; sources with browser login use the saved session (log in again when it expires). Results go to `sync_report.json` and the technical log.
+
 ---
 
 ## 📄 What does ALQuimista generate?
@@ -306,7 +308,7 @@ For browser authentication support:
 
 ALQuimista is designed to avoid storing sensitive authentication data inside project files.
 
-- 🔑 API passwords and tokens remain in runtime memory and are not serialized into the project.
+- 🔑 API passwords and tokens remain in runtime memory and are not serialized into the project. With **Remember on this computer**, the token is stored outside the project, protected by Windows DPAPI.
 - 🌐 Browser sessions are stored separately from project files and can be deleted by the user.
 - 🛡️ On Windows, persisted browser session data is protected with Windows DPAPI.
 - 🧹 Discovery cache stores metadata only — not document content or credentials.

@@ -178,6 +178,8 @@ Los archivos grandes respetan el límite del registry de procesadores y las depe
 
 El servicio de sincronización puede operar en el ámbito de selección, fuente o proyecto. Crea un plan usando el inventario remoto y el manifiesto existente y clasifica los elementos como **nuevos, actualizados, sin cambios, eliminados, fallidos o conservados después de un error**. Solo se descargan los documentos modificados, las eliminaciones remotas se manejan de forma segura, los adjuntos pueden compararse y la operación escribe el informe estructurado `sync_report.json`. La consolidación puede ejecutarse automáticamente después de una sincronización correcta.
 
+**Sincronización programada (Windows):** en **Configuración → Sincronización programada del proyecto**, elija la hora y haga clic en **Programar**; el Programador de tareas ejecutará `"ALQuimista Studio.exe" --sync "<proyecto.json>"` todos los días sin abrir la ventana. Las fuentes con token necesitan **Recordar en este equipo**; las fuentes con inicio de sesión en el navegador usan la sesión guardada (inicie sesión de nuevo cuando caduque). El resultado queda en `sync_report.json` y en el registro técnico.
+
 ---
 
 ## 🎯 ¿Qué puedo hacer con el contenido exportado?
@@ -306,7 +308,7 @@ Para habilitar la autenticación mediante navegador:
 
 ALQuimista está diseñado para evitar guardar datos sensibles de autenticación dentro de los archivos del proyecto.
 
-- 🔑 Las contraseñas y tokens de API permanecen en memoria y no se serializan en el proyecto.
+- 🔑 Las contraseñas y tokens de API permanecen en memoria y no se serializan en el proyecto. Con **Recordar en este equipo**, el token se guarda fuera del proyecto, protegido por Windows DPAPI.
 - 🌐 Las sesiones del navegador se guardan separadas de los archivos del proyecto.
 - 🛡️ En Windows, las sesiones persistentes del navegador se protegen con Windows DPAPI.
 - 🧹 La caché de discovery almacena solo metadatos, no contenido de documentos ni credenciales.

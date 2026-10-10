@@ -10,18 +10,18 @@ Guia de referência rápida para agentes de IA e desenvolvedores. Fonte da verda
 
 | Métrica | Valor |
 |---|---|
-| Arquivos `.py` no pacote `alquimista/` | 128 |
-| Linhas de código (pacote) | ~31.300 |
+| Arquivos `.py` no pacote `alquimista/` | 131 |
+| Linhas de código (pacote) | ~31.800 |
 | Conectores implementados | 28 |
 | Processadores de documentos | 8 (PDF, Word, Spreadsheet, Presentation, Ebook, HTML, Image, Text) |
-| Controllers em `ui/controllers/` | 11 arquivos (10 controllers + `__init__.py`) |
+| Controllers em `ui/controllers/` | 12 arquivos (11 controllers + `__init__.py`) |
 | Mixins em `ui/mixins/` | 5 (connection, selection, source, pages_browser, tree_loading) |
 | Páginas em `ui/pages/` | 9 builders + `settings_page.py` (10) |
-| Arquivos de teste | 40 (+ 2 em `contracts/`) |
-| Testes coletados pelo pytest | ~466 (parametrizados incluídos) |
-| Linhas de teste | ~9.600 |
+| Arquivos de teste | 41 (+ 2 em `contracts/`) |
+| Testes coletados pelo pytest | ~476 (parametrizados incluídos) |
+| Linhas de teste | ~9.850 |
 | Versão do schema | 4 (`SCHEMA_VERSION` em `models.py`) |
-| Versão do pacote | 0.9.5 (`__version__` em `__init__.py`) |
+| Versão do pacote | 0.9.5 (`__version__` em `__init__.py`, única fonte; build e instalador leem dela) |
 | Python | 3.12 |
 | Framework UI | PySide6 ≥ 6.10 |
 | Dependências runtime | pydantic, requests, beautifulsoup4, markdownify, Pillow; documentos: pypdf, openpyxl, python-docx, python-pptx (ver `config/requirements.txt`) |
@@ -551,8 +551,9 @@ Cache SQLite de **apenas metadados** (nunca credenciais/conteúdo). `_SENSITIVE_
 ### session_store.py (5KB)
 
 Sessão de browser criptografada com Windows DPAPI. Funções: `save_session`, `load_session`, `session_exists`, `delete_session_file`.
+Tokens de API só são gravados aqui quando a fonte tem `remember_secret=True` ("Lembrar neste computador"): `save_secret`, `load_secret`, `delete_secret` (mesmo formato DPAPI, arquivo `<id>.secret.json`).
 
-**Regra:** tokens bearer NÃO são persistidos aqui. Ficam em `RuntimeSecrets` (memória).
+**Regra:** sem essa opção, tokens ficam só em `RuntimeSecrets` (memória). `RuntimeSecrets.load_remembered` carrega os lembrados ao abrir o projeto e no modo `--sync`.
 
 ---
 
@@ -730,7 +731,9 @@ Módulos que apenas re-exportam outro pacote:
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `alquimista/__main__.py` | `python -m alquimista` → `run_app("complete")` |
+| `alquimista/__main__.py` | `python -m alquimista` → `run_app("complete")`; `--sync <projeto.json>` → `headless.sync_project` (sem janela) |
+| `alquimista/headless.py` | Sincronização incremental + consolidação sem UI; códigos de saída 0/1/2 |
+| `alquimista/scheduler.py` | Tarefa diária no Agendador do Windows (`Register-ScheduledTask`); usado pelo card das Configurações via `ui/controllers/schedule_controller.py` |
 | `alquimista/__init__.py` | Exports: ProjectConfig, SourceConfig, opções |
 | `abrir_completo.bat` | Atalho Windows → `python -m alquimista` |
 
