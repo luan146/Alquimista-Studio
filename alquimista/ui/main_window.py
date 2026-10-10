@@ -53,6 +53,7 @@ from .components import (
     AlchemistIconAtlas,
     button,
     card,
+    inform,
 )
 from .controllers import (
     ConsolidationController,
@@ -87,6 +88,7 @@ from .mixins.pages_browser_mixin import PagesBrowserMixin
 from .mixins.selection_mixin import SelectionMixin
 from .mixins.source_mixin import SourceMixin
 from .mixins.tree_loading_mixin import TreeLoadingMixin
+from .mixins.ux_mixin import UxMixin
 from .mixins.workflow_mixin import WorkflowMixin
 from .pages.format_page import build_format_page
 from .pages.home_page import build_home_page
@@ -102,7 +104,14 @@ from .workers import Worker
 
 
 class MainWindow(
-    WorkflowMixin, ConnectionMixin, SourceMixin, SelectionMixin, PagesBrowserMixin, TreeLoadingMixin, QMainWindow
+    UxMixin,
+    WorkflowMixin,
+    ConnectionMixin,
+    SourceMixin,
+    SelectionMixin,
+    PagesBrowserMixin,
+    TreeLoadingMixin,
+    QMainWindow,
 ):
     # Widgets assigned by the page builders in ui/pages/.
     progress: QProgressBar
@@ -191,7 +200,7 @@ class MainWindow(
         self.visual_profile_combo.currentIndexChanged.connect(
             self._visual_profile_changed
         )
-        apply_theme(QApplication.instance(), "system")
+        apply_theme(QApplication.instance(), self._theme_preference())
         self._build()
         self._load_project_ui()
         self._update_load_context()
@@ -294,7 +303,7 @@ class MainWindow(
         self.ui_settings.setValue("preferences/visual_profile", profile)
         self.ui_settings.sync()
         if QApplication.instance():
-            apply_theme(QApplication.instance(), "system")
+            apply_theme(QApplication.instance(), self._theme_preference())
 
     @property
     def trees(self) -> dict[str, dict[str, Any]]:
@@ -355,6 +364,12 @@ class MainWindow(
         brand.setObjectName("brand")
         brand_row.addWidget(brand_icon)
         brand_row.addWidget(brand, 1)
+        self.sidebar_toggle = QToolButton()
+        self.sidebar_toggle.setText("«")
+        self.sidebar_toggle.setToolTip("Recolher barra lateral")
+        self.sidebar_toggle.setAutoRaise(True)
+        self.sidebar_toggle.clicked.connect(self._toggle_sidebar)
+        brand_row.addWidget(self.sidebar_toggle)
         side.addLayout(brand_row)
         tagline = QLabel("Transforme conhecimento")
         tagline.setObjectName("subtitle")
@@ -386,6 +401,8 @@ class MainWindow(
         self.project_badge = QLabel("● Projeto não salvo")
         self.project_badge.setObjectName("subtitle")
         side.addWidget(self.project_badge)
+        self.sidebar = sidebar
+        self.sidebar_texts = [brand, tagline, self.project_badge]
         outer.addWidget(sidebar)
         content = QVBoxLayout()
         content.setContentsMargins(0, 0, 0, 0)
@@ -413,15 +430,43 @@ class MainWindow(
         settings_button = button(
             "Configurações", lambda: self._show_page("settings")
         )
-        settings_button.setIcon(AlchemistIconAtlas.icon(9, 22))
+        settings_button.setIcon(AlchemistIconAtlas.icon(8, 22))
         settings_button.setIconSize(QSize(22, 22))
         top_layout.addWidget(settings_button)
         save_button = button("Salvar", self.save_project, primary=True)
         save_button.setToolTip("Salvar o projeto (Ctrl+S)")
-        save_button.setIcon(AlchemistIconAtlas.icon(15, 22))
+        save_button.setIcon(AlchemistIconAtlas.icon(9, 22))
         save_button.setIconSize(QSize(22, 22))
         top_layout.addWidget(save_button)
         content.addWidget(top)
+        self.banner = QFrame()
+        self.banner.setObjectName("banner")
+        self.banner.setStyleSheet(
+            "QFrame#banner { background: rgba(66, 184, 190, 0.16); border: 1px solid #42B8BE;"
+            " border-radius: 8px; }"
+            "QFrame#banner[kind=\"success\"] { background: rgba(127, 228, 181, 0.16); border-color: #3FB984; }"
+            "QFrame#banner[kind=\"warning\"] { background: rgba(240, 180, 80, 0.16); border-color: #D9A441; }"
+        )
+        banner_layout = QHBoxLayout(self.banner)
+        banner_layout.setContentsMargins(14, 8, 8, 8)
+        self.banner_label = QLabel()
+        self.banner_label.setWordWrap(True)
+        banner_layout.addWidget(self.banner_label, 1)
+        self.banner_action = QPushButton()
+        self.banner_action.setVisible(False)
+        self.banner_action.clicked.connect(self._banner_action_clicked)
+        banner_layout.addWidget(self.banner_action)
+        banner_close = QToolButton()
+        banner_close.setText("✕")
+        banner_close.setAutoRaise(True)
+        banner_close.setToolTip("Fechar aviso")
+        banner_close.clicked.connect(lambda: self.banner.hide())
+        banner_layout.addWidget(banner_close)
+        self.banner.hide()
+        banner_holder = QVBoxLayout()
+        banner_holder.setContentsMargins(22, 8, 22, 0)
+        banner_holder.addWidget(self.banner)
+        content.addLayout(banner_holder)
         self.stack = QStackedWidget()
         content.addWidget(self.stack, 1)
         self.step_footer = QFrame()
@@ -467,6 +512,7 @@ class MainWindow(
             self.pages.setdefault(alias, self.pages[target])
         self._init_controllers()
         self._install_shortcuts()
+        self.setAcceptDrops(True)
 
     def _init_controllers(self) -> None:
         self.navigation_controller = NavigationController(
@@ -1009,7 +1055,7 @@ class MainWindow(
             translate_text("ALQuimista: operação concluída"),
             translate_text("Abra o ALQuimista para ver o resultado."),
         )
-        QMessageBox.information(
+        inform(
             self,
             translate_text("Concluído"),
             translate_text("Operação concluída com sucesso."),
@@ -1188,16 +1234,27 @@ class MainWindow(
 
 def run_app(mode: str = "complete") -> None:
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
+    from PySide6.QtCore import QSettings
+
+    from .i18n import settings_path
+
+    # The interface scale must be set before the QApplication exists.
+    scale: Any = QSettings(str(settings_path()), QSettings.Format.IniFormat).value("preferences/ui_scale", 1.0)
+    try:
+        if float(scale or 1.0) != 1.0:
+            os.environ["QT_SCALE_FACTOR"] = str(float(scale))
+    except (TypeError, ValueError):
+        pass
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("ALQuimista Studio")
     app.setOrganizationName("ALQuimista")
     from .i18n import initialize_language
 
     language_manager = initialize_language(app)
-    apply_theme(app, "system")
     window = MainWindow(mode, language_manager)
     window.show()
     QTimer.singleShot(0, window.reopen_last_project)
+    QTimer.singleShot(400, window.offer_tour_once)
     raise SystemExit(app.exec())
 
 

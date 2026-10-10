@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from ... import scheduler
 from ...errors import AlquimistaError
+from ..components import inform
 from ..i18n import translate_text
 from ..workers import Worker
 
@@ -68,7 +69,7 @@ def schedule_daily(window: Any) -> None:
     except AlquimistaError as exc:
         QMessageBox.warning(window, translate_text("Agendamento não criado"), str(exc))
         return
-    QMessageBox.information(
+    inform(
         window,
         translate_text("Sincronização agendada"),
         translate_text(

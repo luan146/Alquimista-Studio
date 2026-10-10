@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
         QLabel,
         QLineEdit,
         QListWidget,
+        QScrollArea,
         QSplitter,
         QTableWidget,
         QVBoxLayout,
@@ -108,6 +109,7 @@ def build_sources_page(window: Any) -> QWidget:
         source_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         source_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         source_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        source_header.setMinimumSectionSize(90)
         source_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         window.source_table.setWordWrap(False)
         source_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
@@ -142,7 +144,11 @@ def build_sources_page(window: Any) -> QWidget:
         listing_layout.addWidget(window.sources_empty, 1)
         window.sources_split.addWidget(listing)
 
-        window.connection_card = build_connection_panel(window)
+        window.connection_card = QScrollArea()
+        window.connection_card.setWidgetResizable(True)
+        window.connection_card.setFrameShape(QScrollArea.Shape.NoFrame)
+        window.connection_card.setWidget(build_connection_panel(window))
+        window.connection_card.setMinimumWidth(340)
         window.sources_split.addWidget(window.connection_card)
         window.sources_split.setStretchFactor(0, 3)
         window.sources_split.setStretchFactor(1, 2)

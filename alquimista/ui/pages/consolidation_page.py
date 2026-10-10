@@ -62,8 +62,10 @@ def build_consolidation_page(window: Any) -> QWidget:
         window.con_group.addItem(label, value)
     window.con_pages = QSpinBox()
     window.con_pages.setRange(1, 10_000)
+    window.con_pages.setGroupSeparatorShown(True)
     window.con_chars = QSpinBox()
     window.con_chars.setRange(1_000, 100_000_000)
+    window.con_chars.setGroupSeparatorShown(True)
     window.con_depth = QSpinBox()
     window.con_depth.setRange(1, 10)
     window.con_depth.setToolTip(
@@ -190,10 +192,10 @@ def build_consolidation_page(window: Any) -> QWidget:
     stats.setSpacing(8)
     for column, (key, title, suffix) in enumerate(
         [
-            ("packages", "Pacotes estimados", "arquivos"),
-            ("pages", "Páginas totais", "páginas"),
-            ("characters", "Caracteres totais", "caracteres"),
-            ("average", "Média por pacote", "páginas"),
+            ("packages", "Pacotes", "arquivos estimados"),
+            ("pages", "Páginas", "no total"),
+            ("characters", "Caracteres", "no total"),
+            ("average", "Média", "páginas por pacote"),
         ]
     ):
         metric = QFrame()

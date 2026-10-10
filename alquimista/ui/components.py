@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLayout,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -1141,3 +1142,15 @@ def timestamp_sort_value(value: str) -> float:
 
 
 _LegacySourceCard = SourceCard
+
+
+def inform(parent: Any, title: str, message: str) -> None:
+    """Informational message: a banner when the window has one, a dialog otherwise.
+
+    Errors and confirmations keep using QMessageBox; only "FYI" messages come here.
+    """
+    notify = getattr(parent, "notify", None)
+    if callable(notify):
+        notify(message)
+        return
+    QMessageBox.information(parent, title, message)

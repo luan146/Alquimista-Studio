@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QSignalBlocker, Qt
-from PySide6.QtWidgets import QTreeWidgetItem
+from PySide6.QtWidgets import QMenu, QPushButton, QTableWidgetItem, QTreeWidgetItem
 
 from ...models import SourceConfig
 from ...selection import SelectionStore
-from ..components import SortableTreeItem, SourceCard, VisibilityBadgeDelegate, timestamp_sort_value
+from ..components import SortableTreeItem, VisibilityBadgeDelegate, timestamp_sort_value
 from ..i18n import translate_text
-from ..tree_models import ordered_pages, page_parent_id, parent_ids_in_list
+from ..tree_models import display_timestamp, ordered_pages, page_parent_id, parent_ids_in_list
 from . import WindowBase
 
 
@@ -29,8 +29,9 @@ class SelectionMixin(WindowBase):
     selection_source: Any
     selection_search: Any
     selection_filter: Any
-    selection_cards_layout: Any
-    selection_cards_scroll: Any
+    selection_spaces_table: Any
+    selection_total: Any
+    _preview_real_page: Any
     selection_count: Any
     selection_home_empty: Any
     selection_render_status: Any
@@ -49,10 +50,8 @@ class SelectionMixin(WindowBase):
     _container_visibility: Any
     _page_visibility: Any
     _selection_containers: Any
-    _selection_container_cards: Any
     _load_container_for_source: Any
     _load_expanded_document: Any
-    _reflow_space_cards: Any
     _update_load_context: Any
     _update_extraction_summary: Any
     statusBar: Any
@@ -71,60 +70,68 @@ class SelectionMixin(WindowBase):
         return self.source_by_combo(self.selection_source)
 
     def _refresh_selection_home(self) -> None:
+        """Spaces of the selected source as a compact table with a whole-space checkbox."""
         if not hasattr(self, "selection_home_layout"):
             return
-        while self.selection_cards_layout.count():
-            item = self.selection_cards_layout.takeAt(0)
-            if item is None:
-                continue
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-        self._selection_container_cards.clear()
         source = self._selection_source()
         containers = self._selection_containers(source) if source else []
-        if not containers:
-            self.selection_home_empty.setVisible(True)
-            self.selection_space_search.setVisible(False)
-            self.selection_cards_scroll.setVisible(False)
-            return
-        if source is None:
-            return
-        self.selection_home_empty.setVisible(False)
-        self.selection_space_search.setVisible(True)
-        self.selection_cards_scroll.setVisible(True)
-
-        accents = ["#7FE4B5", "#B09AFF", "#67B7FF", "#75E7BA", "#A995F4"]
-        for index, container in enumerate(containers):
-            container_id = str(container["id"])
-            loaded = bool(container.get("loaded"))
-            subtitle = (
-                f"{container['pages']} páginas · {container['selected']} selecionadas"
-                if loaded
-                else "Clique para carregar as páginas"
+        table = self.selection_spaces_table
+        self._refreshing_spaces = True
+        try:
+            table.setRowCount(0)
+            if not containers or source is None:
+                self.selection_home_empty.setVisible(True)
+                self.selection_space_search.setVisible(False)
+                table.setVisible(False)
+                self.selection_total.setVisible(False)
+                return
+            self.selection_home_empty.setVisible(False)
+            self.selection_space_search.setVisible(True)
+            table.setVisible(True)
+            data = self.trees.get(source.id, {})
+            table.setRowCount(len(containers))
+            total_selected = 0
+            spaces_with_selection = 0
+            for row, container in enumerate(containers):
+                container_id = str(container["id"])
+                pages = int(container.get("pages") or 0)
+                selected = int(container.get("selected") or 0)
+                total_selected += selected
+                spaces_with_selection += bool(selected)
+                whole = QTableWidgetItem()
+                whole.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+                whole.setData(Qt.ItemDataRole.UserRole, container_id)
+                whole.setCheckState(
+                    Qt.CheckState.Checked
+                    if pages and selected >= pages
+                    else Qt.CheckState.PartiallyChecked
+                    if selected
+                    else Qt.CheckState.Unchecked
+                )
+                table.setItem(row, 0, whole)
+                name = QTableWidgetItem(str(container["name"]))
+                name.setData(Qt.ItemDataRole.UserRole, container_id)
+                table.setItem(row, 1, name)
+                loaded = bool(container.get("loaded"))
+                table.setItem(row, 2, QTableWidgetItem(str(pages) if loaded or pages else "—"))
+                table.setItem(row, 3, QTableWidgetItem(str(selected)))
+                visibility, _kind = self._container_visibility(source, data, container)
+                table.setItem(row, 4, QTableWidgetItem(str(visibility or "")))
+                open_button = QPushButton(translate_text("Abrir →"))
+                open_button.setToolTip(translate_text("Escolher páginas deste espaço"))
+                open_button.clicked.connect(
+                    lambda _checked=False, cid=container_id: self._open_selection_container(cid)
+                )
+                table.setCellWidget(row, 5, open_button)
+            self.selection_total.setVisible(True)
+            self.selection_total.setText(
+                translate_text("{pages} páginas selecionadas em {spaces} de {total} espaços desta fonte.").format(
+                    pages=total_selected, spaces=spaces_with_selection, total=len(containers)
+                )
             )
-            visibility, visibility_kind = self._container_visibility(
-                source, self.trees.get(source.id, {}), container
-            )
-            card = SourceCard(
-                container_id,
-                str(container["name"]),
-                subtitle,
-                3,
-                accents[index % len(accents)],
-                visibility=visibility,
-                visibility_kind=visibility_kind,
-            )
-            card.setFixedWidth(300)
-            card.setProperty("container_name", str(container["name"]))
-            card.clicked.connect(self._open_selection_container)
-            self._selection_container_cards[container_id] = card
-            row = index % 2
-            column = index // 2
-            self.selection_cards_layout.addWidget(card, row, column)
+        finally:
+            self._refreshing_spaces = False
         self._filter_selection_space_cards()
-
-
 
     def _filter_selection_space_cards(self, text: str | None = None) -> None:
         if not hasattr(self, "selection_space_search"):
@@ -132,10 +139,89 @@ class SelectionMixin(WindowBase):
         query = (
             text if text is not None else self.selection_space_search.text()
         ).strip().casefold()
-        self._reflow_space_cards(
-            self.selection_cards_layout, self._selection_container_cards, query
+        table = self.selection_spaces_table
+        for row in range(table.rowCount()):
+            name = table.item(row, 1)
+            table.setRowHidden(row, bool(query) and query not in (name.text() if name else "").casefold())
+
+    def _open_space_row(self, row: int) -> None:
+        item = self.selection_spaces_table.item(row, 1)
+        if item is not None:
+            self._open_selection_container(str(item.data(Qt.ItemDataRole.UserRole)))
+
+    def _space_check_changed(self, item: QTableWidgetItem) -> None:
+        if getattr(self, "_refreshing_spaces", False) or item.column() != 0:
+            return
+        container_id = str(item.data(Qt.ItemDataRole.UserRole))
+        self._mark_whole_space(container_id, item.checkState() != Qt.CheckState.Unchecked)
+
+    def _mark_whole_space(self, container_id: str, selected: bool) -> None:
+        """Select or clear every page of a space, loading it first when needed."""
+        source = self._selection_source()
+        data = self.trees.get(source.id) if source else None
+        if source is None or data is None:
+            return
+        complete = self._container_loaded(source, data, container_id) and not self._container_requires_full_load(
+            data, container_id
+        )
+        if not selected or complete:
+            self._set_space_selection(source, container_id, selected)
+            return
+        if self.worker is not None:
+            self.statusBar().showMessage(translate_text("Aguarde a operação atual terminar…"), 4000)
+            self._refresh_selection_home()
+            return
+        self._load_container_for_source(
+            source,
+            container_id,
+            target="selection",
+            load_all=True,
+            on_loaded=lambda: self._set_space_selection(source, container_id, True),
         )
 
+    def _set_space_selection(self, source: SourceConfig, container_id: str, selected: bool) -> None:
+        data = self.trees.get(source.id, {})
+        store = SelectionStore.from_selections(self.project.selections)
+        if selected:
+            for page in self._tree_pages(data, container_id):
+                page_id = str(page.get("id") or "")
+                if page_id and self._page_container_id(source, page) == container_id:
+                    store.set(source.id, container_id, page_id, True)
+        else:
+            for item in store.selections():
+                if item.source_id == source.id and item.container_id == container_id:
+                    store.set(source.id, container_id, item.document_id, False)
+        self._commit_selection_store(store)
+        self._flush_selection_state()
+        self._refresh_selection_home()
+
+    def _toggle_page_id_column(self) -> None:
+        self.selection_tree.setColumnHidden(1, not self.selection_tree.isColumnHidden(1))
+
+    def _selection_item_double_clicked(self, item: QTreeWidgetItem, _column: int) -> None:
+        if item.data(0, VisibilityBadgeDelegate.DOCUMENT_ROLE):
+            self._preview_tree_item(item)
+
+    def _selection_context_menu(self, position: Any) -> None:
+        item = self.selection_tree.itemAt(position)
+        if item is None or not item.data(0, VisibilityBadgeDelegate.DOCUMENT_ROLE):
+            return
+        menu = QMenu(self)
+        menu.addAction(
+            translate_text("👁 Prévia do Markdown desta página"), lambda: self._preview_tree_item(item)
+        )
+        menu.exec(self.selection_tree.viewport().mapToGlobal(position))
+
+    def _preview_tree_item(self, item: QTreeWidgetItem) -> None:
+        source = self._selection_source()
+        if source is None:
+            return
+        self._preview_real_page(
+            source,
+            str(item.data(0, VisibilityBadgeDelegate.CONTAINER_ROLE) or ""),
+            str(item.data(0, VisibilityBadgeDelegate.DOCUMENT_ROLE) or ""),
+            str(item.data(0, VisibilityBadgeDelegate.TITLE_ROLE) or ""),
+        )
 
     def _open_selection_container(self, container_id: str) -> None:
         source = self._selection_source()
@@ -349,7 +435,7 @@ class SelectionMixin(WindowBase):
                     title,
                     page_id,
                     path,
-                    str(version.get("when") or ""),
+                    display_timestamp(str(version.get("when") or "")),
                     state_text,
                 ]
             )
@@ -363,7 +449,10 @@ class SelectionMixin(WindowBase):
             for column, value in enumerate(sort_values):
                 item.setData(column, SortableTreeItem.SORT_ROLE, value)
             visibility, visibility_kind = self._page_visibility(source, page)
-            item.setData(0, VisibilityBadgeDelegate.VISIBILITY_ROLE, visibility)
+            # Public is the usual case; only restricted/unknown pages get a badge.
+            item.setData(
+                0, VisibilityBadgeDelegate.VISIBILITY_ROLE, "" if visibility_kind == "public" else visibility
+            )
             item.setData(0, VisibilityBadgeDelegate.VISIBILITY_KIND_ROLE, visibility_kind)
             item.setData(0, VisibilityBadgeDelegate.TITLE_ROLE, title)
             sel_icon = "📁" if (page_id in parent_ids or bool(page.get("has_children"))) else "📄"

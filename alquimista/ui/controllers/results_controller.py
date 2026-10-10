@@ -10,13 +10,13 @@ from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QLabel,
-    QMessageBox,
     QPlainTextEdit,
     QStatusBar,
     QWidget,
 )
 
 from ...storage import MANIFEST_NAME
+from ..components import inform
 from ..i18n import translate_text
 
 
@@ -136,7 +136,7 @@ class ResultsController:
         if path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
         else:
-            QMessageBox.information(
+            inform(
                 parent,
                 translate_text("Manifesto"),
                 translate_text("O manifesto ainda não foi criado."),
@@ -146,7 +146,7 @@ class ResultsController:
         if self.log_path and self.log_path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.log_path)))
         else:
-            QMessageBox.information(
+            inform(
                 parent,
                 translate_text("Log técnico"),
                 translate_text("O log ainda não foi criado."),

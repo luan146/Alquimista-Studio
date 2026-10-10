@@ -4,13 +4,16 @@ from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
-    QFrame,
-    QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QStackedWidget,
+    QTableWidget,
+    QToolButton,
     QTreeWidget,
     QVBoxLayout,
     QWidget,
@@ -18,7 +21,6 @@ from PySide6.QtWidgets import (
 
 from ..components import (
     FlowLayout,
-    HorizontalScrollArea,
     VisibilityBadgeDelegate,
     button,
     page_header,
@@ -54,6 +56,9 @@ def build_selection_page(window: Any) -> QWidget:
     home_layout = QVBoxLayout(home)
     home_layout.setContentsMargins(0, 4, 0, 0)
     window.selection_home_layout = home_layout
+    window.selection_total = QLabel("")
+    window.selection_total.setStyleSheet("font-weight: 700;")
+    home_layout.addWidget(window.selection_total)
     window.selection_home_empty = QLabel(
         "🌳 Carregue a árvore da fonte para visualizar os espaços e containers disponíveis."
     )
@@ -66,24 +71,27 @@ def build_selection_page(window: Any) -> QWidget:
     window.selection_space_search.setClearButtonEnabled(True)
     window.selection_space_search.textChanged.connect(window._filter_selection_space_cards)
     home_layout.addWidget(window.selection_space_search)
-    window.selection_cards_scroll = HorizontalScrollArea()
-    window.selection_cards_scroll.setObjectName("spaceCardsScroll")
-    window.selection_cards_scroll.setWidgetResizable(True)
-    window.selection_cards_scroll.setFrameShape(QFrame.Shape.NoFrame)
-    window.selection_cards_scroll.setHorizontalScrollBarPolicy(
-        Qt.ScrollBarPolicy.ScrollBarAsNeeded
+    window.selection_spaces_table = QTableWidget(0, 6)
+    window.selection_spaces_table.setHorizontalHeaderLabels(
+        ["Inteiro", "Espaço", "Páginas", "Selecionadas", "Acesso", ""]
     )
-    window.selection_cards_scroll.setVerticalScrollBarPolicy(
-        Qt.ScrollBarPolicy.ScrollBarAsNeeded
+    window.selection_spaces_table.setAccessibleName("Espaços da fonte")
+    window.selection_spaces_table.setToolTip(
+        "Marque “Inteiro” para selecionar todas as páginas do espaço sem abri-lo. "
+        "Clique duas vezes para escolher páginas."
     )
-    selection_cards_host = QWidget()
-    window.selection_cards_layout = QGridLayout(selection_cards_host)
-    window.selection_cards_layout.setContentsMargins(8, 12, 8, 16)
-    window.selection_cards_layout.setHorizontalSpacing(16)
-    window.selection_cards_layout.setVerticalSpacing(16)
-    window.selection_cards_scroll.setWidget(selection_cards_host)
-    home_layout.addWidget(window.selection_cards_scroll, 1)
-    window.selection_cards_scroll.setVisible(False)
+    window.selection_spaces_table.verticalHeader().setVisible(False)
+    window.selection_spaces_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+    window.selection_spaces_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+    spaces_header = window.selection_spaces_table.horizontalHeader()
+    spaces_header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+    spaces_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+    window.selection_spaces_table.itemChanged.connect(window._space_check_changed)
+    window.selection_spaces_table.cellDoubleClicked.connect(
+        lambda row, _column: window._open_space_row(row)
+    )
+    home_layout.addWidget(window.selection_spaces_table, 1)
+    window.selection_spaces_table.setVisible(False)
     window.selection_stack.addWidget(home)
 
     detail = QWidget()
@@ -143,25 +151,18 @@ def build_selection_page(window: Any) -> QWidget:
     selection_actions.addWidget(
         selection_button("Inverter seleção", window._invert_selection, "Inverte a seleção atual.")
     )
-    selection_actions.addWidget(
-        button(
-            "📂 Expandir tudo",
-            lambda: window.selection_tree.expandAll(),
-        )
-    )
-    selection_actions.addWidget(
-        button(
-            "📁 Recolher tudo",
-            lambda: window.selection_tree.collapseAll(),
-        )
-    )
-    selection_actions.addWidget(
-        selection_button(
-            "🔄 Sincronizar seleção",
-            lambda _checked=False: window.sync_selection(),
-            "Verifica e sincroniza incrementalmente apenas as páginas selecionadas.",
-        )
-    )
+    more_button = QToolButton()
+    more_button.setText("Mais ▾")
+    more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+    more_button.setMinimumHeight(40)
+    more_menu = QMenu(more_button)
+    more_menu.addAction("📂 Expandir tudo", lambda: window.selection_tree.expandAll())
+    more_menu.addAction("📁 Recolher tudo", lambda: window.selection_tree.collapseAll())
+    more_menu.addAction("🆔 Mostrar/ocultar Page ID", window._toggle_page_id_column)
+    more_menu.addSeparator()
+    more_menu.addAction("🔄 Sincronizar seleção", lambda: window.sync_selection())
+    more_button.setMenu(more_menu)
+    selection_actions.addWidget(more_button)
     controls.addLayout(selection_actions)
     detail_layout.addLayout(controls)
 
@@ -175,6 +176,11 @@ def build_selection_page(window: Any) -> QWidget:
     window.selection_tree.setItemDelegateForColumn(0, VisibilityBadgeDelegate(window.selection_tree))
     window.selection_tree.itemExpanded.connect(window._selection_tree_item_expanded)
     window.selection_tree.itemChanged.connect(window._selection_changed)
+    # The Page ID is technical; search still finds it. "Mais" shows the column.
+    window.selection_tree.setColumnHidden(1, True)
+    window.selection_tree.itemDoubleClicked.connect(window._selection_item_double_clicked)
+    window.selection_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+    window.selection_tree.customContextMenuRequested.connect(window._selection_context_menu)
     detail_layout.addWidget(window.selection_tree, 1)
     selection_render_tools = QHBoxLayout()
     window.selection_render_status = QLabel("Nenhum espaço carregado")
@@ -187,8 +193,8 @@ def build_selection_page(window: Any) -> QWidget:
     selection_render_tools.addWidget(window.selection_load_more_button)
     detail_layout.addLayout(selection_render_tools)
     guidance = QLabel(
-        "💡 As pastas organizam a árvore. As seleções ficam preservadas quando você volta "
-        "aos espaços ou abre outro container."
+        "💡 Clique duas vezes numa página para ver o Markdown dela. As seleções ficam "
+        "preservadas quando você volta aos espaços ou abre outro."
     )
     guidance.setObjectName("subtitle")
     guidance.setWordWrap(True)

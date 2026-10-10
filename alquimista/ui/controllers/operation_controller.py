@@ -16,6 +16,7 @@ from ...errors import (
     ResourceNotFoundError,
 )
 from ...runtime import CancellationToken
+from ..components import inform
 from ..i18n import translate_text
 from ..workers import Worker
 
@@ -140,7 +141,7 @@ class WorkerOperationController:
     def start(self, function: WorkerFunction, done: DoneCallback) -> None:
         window = self.window
         if self.worker is not None:
-            QMessageBox.information(
+            inform(
                 window,
                 translate_text("Operação em andamento"),
                 translate_text("Aguarde ou cancele a operação atual."),

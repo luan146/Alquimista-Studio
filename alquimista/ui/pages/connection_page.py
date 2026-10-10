@@ -21,7 +21,7 @@ def build_connection_panel(window: Any) -> QFrame:
     """Connection of the source selected in the Fontes list (embedded panel)."""
     panel = QFrame()
     panel.setObjectName("connectionPanel")
-    panel.setMinimumWidth(380)
+    panel.setMinimumWidth(320)
     panel_layout = QVBoxLayout(panel)
     panel_layout.setContentsMargins(22, 20, 22, 20)
     panel_layout.setSpacing(14)
@@ -109,7 +109,7 @@ def build_connection_panel(window: Any) -> QFrame:
         danger=True,
         accent="#F17882",
     )
-    connection_actions = QHBoxLayout()
+    connection_actions = QVBoxLayout()
     connection_actions.setContentsMargins(0, 4, 0, 4)
     connection_actions.setSpacing(12)
     # Keep authentication actions together and reserve the destructive action
@@ -119,7 +119,8 @@ def build_connection_panel(window: Any) -> QFrame:
         window.remove_session_button,
     ):
         action.setMinimumWidth(0)
-        connection_actions.addWidget(action, 1)
+        action.setMinimumHeight(48)
+        connection_actions.addWidget(action)
     panel_layout.addLayout(connection_actions)
 
     # Spacer to prevent overlap with connection state label

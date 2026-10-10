@@ -137,8 +137,8 @@ class WorkflowMixin(WindowBase):
         if platform_index >= 0:
             self.src_platform.setCurrentIndex(platform_index)
         if source_type == "local_files":
-            self.add_source_dialog.reject()
             self._pick_local_folder()
+            self.source_url_input.setFocus()
             return
         try:
             name = self.connector_registry.get(source_type).display_name

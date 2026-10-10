@@ -182,7 +182,9 @@ class SourceMixin(WindowBase):
             self.source_table.setItem(table_row, 0, checkbox)
 
             original_url = str(source.connector_options.get("source_url") or source.base_url)
-            self.source_table.setItem(table_row, 1, QTableWidgetItem(source.name))
+            name_item = QTableWidgetItem(source.name)
+            name_item.setToolTip(original_url)
+            self.source_table.setItem(table_row, 1, name_item)
             url_item = QTableWidgetItem(original_url)
             url_item.setToolTip(original_url)
             self.source_table.setItem(table_row, 2, url_item)

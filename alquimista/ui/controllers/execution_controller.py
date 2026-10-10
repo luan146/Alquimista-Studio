@@ -8,6 +8,7 @@ from ...models import KnowledgeSelection, ProjectConfig
 from ...runtime import CancellationToken
 from ...services import ConsolidationService, ExtractionService, SourceRuntime
 from ...storage import MANIFEST_NAME, ManifestStore
+from ..components import inform
 from ..i18n import translate_text
 from .project_controller import validate_project_snapshot
 from .runtime_controller import RuntimeBuilder
@@ -61,7 +62,7 @@ def execute_selected_operation(window: Any) -> None:
     blocker = window._execution_blocker()
     if blocker is not None:
         message, target = blocker
-        QMessageBox.information(window, translate_text("Ainda não dá para executar"), message)
+        inform(window, translate_text("Ainda não dá para executar"), message)
         if target:
             window._show_page(target)
         return
@@ -89,7 +90,7 @@ def retry_failures(window: Any) -> None:
             if entry.status.value in {"failed", "preserved_after_error"}
         ]
         if not failed_entries:
-            QMessageBox.information(
+            inform(
                 window,
                 translate_text("Falhas"),
                 translate_text("Não há páginas com falha para repetir."),

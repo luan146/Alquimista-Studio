@@ -7,9 +7,23 @@ without constructing a window.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from ..models import AuthMode, SourceConfig
+
+
+def display_timestamp(raw: str) -> str:
+    """'2026-09-01T10:00:00Z' -> '01/09/2026 07:00' (local time); unparsable text is kept."""
+    if not raw:
+        return ""
+    try:
+        moment = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return raw
+    if moment.tzinfo is not None:
+        moment = moment.astimezone()
+    return moment.strftime("%d/%m/%Y %H:%M")
 
 
 def page_container_id(source: SourceConfig, page: dict[str, Any]) -> str:

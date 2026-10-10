@@ -12,6 +12,7 @@ from ...client import session_path
 from ...models import AuthMode, SourceConfig
 from ...runtime import CancellationToken
 from ...session_store import delete_secret, save_secret
+from ..components import inform
 from ..i18n import translate_text
 from . import WindowBase
 
@@ -99,7 +100,7 @@ class ConnectionMixin(WindowBase):
     def test_connection(self) -> None:
         source = self._store_runtime_secret() or self.source_by_combo(getattr(self, "tree_source", getattr(self, "selection_source", None)))
         if not source:
-            QMessageBox.information(
+            inform(
                 self, translate_text("Fonte"), translate_text("Adicione uma fonte primeiro.")
             )
             return
@@ -155,7 +156,7 @@ class ConnectionMixin(WindowBase):
                 )
             self.connection_states[source.id] = state
             self.connection_state.setText(state)
-            QMessageBox.information(
+            inform(
                 self,
                 translate_text("Conexão concluída"),
                 translate_text(
@@ -190,7 +191,7 @@ class ConnectionMixin(WindowBase):
                 translate_text("Login concluído — carregando os espaços disponíveis…")
             )
             self._connection_source_changed()
-            QMessageBox.information(
+            inform(
                 self,
                 translate_text("Login"),
                 translate_text(
@@ -302,7 +303,7 @@ class ConnectionMixin(WindowBase):
         """Dispatch the action according to the currently selected auth mode."""
         source = self.source_by_combo(self.connection_source)
         if not source:
-            QMessageBox.information(
+            inform(
                 self, translate_text("Fonte"), translate_text("Adicione uma fonte primeiro.")
             )
             return
@@ -361,7 +362,7 @@ class ConnectionMixin(WindowBase):
         """Select public access for the current source without starting a login."""
         source = self.source_by_combo(self.connection_source)
         if not source:
-            QMessageBox.information(
+            inform(
                 self, translate_text("Fonte"), translate_text("Adicione uma fonte primeiro.")
             )
             return
@@ -373,7 +374,7 @@ class ConnectionMixin(WindowBase):
         state = translate_text("Sem login — somente páginas públicas serão consideradas")
         self.connection_states[updated.id] = state
         self.connection_state.setText(state)
-        QMessageBox.information(
+        inform(
             self,
             translate_text("Acesso público"),
             translate_text(

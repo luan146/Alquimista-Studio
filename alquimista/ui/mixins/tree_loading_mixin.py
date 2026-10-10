@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -283,6 +284,7 @@ class TreeLoadingMixin(WindowBase):
         target: str,
         load_all: bool = False,
         cursor: str | None = None,
+        on_loaded: Callable[[], None] | None = None,
     ) -> None:
         data = self.trees.get(source.id)
         if data is None or self.worker is not None:
@@ -381,6 +383,8 @@ class TreeLoadingMixin(WindowBase):
                     translate_text("Resultado reutilizado do cache local."),
                     7000,
                 )
+            if on_loaded is not None:
+                on_loaded()
 
         self.tree_loader_controller.load_container_for_source(
             source,

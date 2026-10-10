@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from ...connectors.confluence_parser import ConfluenceDocumentParser
 from ...markdown import KnowledgeDocumentRenderer, sample_page
-from ...models import MarkdownOptions, SourceConfig
+from ...models import KnowledgeDocument, MarkdownOptions, SourceConfig
 from ..i18n import translate_text
 
 
@@ -45,6 +45,8 @@ class PreviewController:
         self.output_structure_label = output_structure_label
         self.output_dir_input = output_dir_input
         self._preview_raw = ""
+        # A page fetched from the real source (Seleção → "Prévia"); None = fictional sample.
+        self.real_document: tuple[KnowledgeDocument, SourceConfig] | None = None
 
     def load_markdown_controls(self, options: MarkdownOptions) -> None:
         for key, control in self.md_controls.items():
@@ -131,12 +133,15 @@ class PreviewController:
                     or translate_text("Espaço de exemplo"),
                 }
             )
-            page = sample_page(translate_text)
-            page["space"] = {
-                "key": source.space_key,
-                "name": source.space_name,
-            }
-            document = ConfluenceDocumentParser(source, options).parse(page)
+            if self.real_document is not None:
+                document, source = self.real_document
+            else:
+                page = sample_page(translate_text)
+                page["space"] = {
+                    "key": source.space_key,
+                    "name": source.space_name,
+                }
+                document = ConfluenceDocumentParser(source, options).parse(page)
             renderer = KnowledgeDocumentRenderer(options)
             prepared = renderer.prepare(document, source)
             self._preview_raw = renderer.render_prepared(

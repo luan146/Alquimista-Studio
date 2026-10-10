@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QProgressBar,
+    QScrollArea,
     QSizePolicy,
     QTextEdit,
     QVBoxLayout,
@@ -30,6 +31,15 @@ def _section(title: str) -> tuple[QFrame, QVBoxLayout]:
     heading.setStyleSheet("font-size: 11pt; font-weight: 700;")
     layout.addWidget(heading)
     return frame, layout
+
+
+def _toggle_log(window: Any) -> None:
+    visible = not window.log_text.isVisible()
+    window.log_text.setVisible(visible)
+    window.log_toggle.setText("▾ Ocultar detalhes" if visible else "▸ Mostrar detalhes")
+    if visible:
+        bar = window.log_text.verticalScrollBar()
+        bar.setValue(bar.maximum())
 
 
 def build_review_page(window: Any) -> QWidget:
@@ -157,13 +167,22 @@ def build_review_page(window: Any) -> QWidget:
     note.setObjectName("reviewInfo")
     note.setWordWrap(True)
     execution_layout.addWidget(note)
+    window.log_toggle = button("▸ Mostrar detalhes", lambda: _toggle_log(window))
+    window.log_toggle.setToolTip("Mostra o registro da execução em tempo real")
+    execution_layout.addWidget(window.log_toggle)
     window.log_text = QTextEdit()
     window.log_text.setObjectName("logTerminal")
     window.log_text.setReadOnly(True)
+    window.log_text.setMinimumHeight(180)
     window.log_text.setVisible(False)
     execution_layout.addWidget(window.log_text)
     execution_layout.addStretch()
-    columns.addWidget(execution, 1)
+    # The run column scrolls so the live log has room on short windows.
+    execution_scroll = QScrollArea()
+    execution_scroll.setWidgetResizable(True)
+    execution_scroll.setFrameShape(QFrame.Shape.NoFrame)
+    execution_scroll.setWidget(execution)
+    columns.addWidget(execution_scroll, 1)
     layout.addLayout(columns, 1)
 
     window._update_output_preview()
