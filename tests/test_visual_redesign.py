@@ -122,12 +122,14 @@ def _card_center(window: MainWindow, container_id: str, *, pill: bool) -> Any:
 
 
 def test_relative_dates() -> None:
-    now = datetime(2026, 10, 10, 12, tzinfo=timezone.utc)
-    assert relative_timestamp("2026-10-10T08:00:00Z", now) == "hoje"
-    assert relative_timestamp("2026-10-09T08:00:00Z", now) == "ontem"
-    assert relative_timestamp("2026-10-07T08:00:00Z", now) == "há 3 dias"
-    assert relative_timestamp("2026-08-01T08:00:00Z", now) == "há 2 meses"
-    assert relative_timestamp("2024-01-01T08:00:00Z", now) == "há 2 anos"
+    now = datetime(2026, 10, 10, 12, tzinfo=timezone.utc)  # noon UTC on both sides: same local day anywhere
+    assert relative_timestamp("2026-10-10T12:00:00Z", now) == "hoje"
+    assert relative_timestamp("2026-10-09T12:00:00Z", now) == "ontem"
+    assert relative_timestamp("2026-10-07T12:00:00Z", now) == "há 3 dias"
+    assert relative_timestamp("2026-09-01T12:00:00Z", now) == "há 1 mês"
+    assert relative_timestamp("2026-08-01T12:00:00Z", now) == "há 2 meses"
+    assert relative_timestamp("2025-09-05T12:00:00Z", now) == "há 1 ano"
+    assert relative_timestamp("2024-01-01T12:00:00Z", now) == "há 2 anos"
     assert relative_timestamp("", now) == "" and relative_timestamp("ontem?", now) == "ontem?"
 
 
@@ -192,3 +194,20 @@ def test_space_card_colors_follow_theme(window: MainWindow) -> None:
 def test_selection_filter_pills_drive_the_hidden_combo(window: MainWindow) -> None:
     window.selection_filter_pills.buttons()[1].click()
     assert window.selection_filter.currentData() == "selected"
+
+
+def test_relative_dates_count_days_on_the_local_clock() -> None:
+    late = datetime(2026, 10, 9, 22, 30).astimezone()  # 22:30 local yesterday, whatever the zone
+    now = datetime(2026, 10, 10, 9, 0).astimezone()
+    assert relative_timestamp(late.astimezone(timezone.utc).isoformat(), now) == "ontem"
+
+
+def test_space_key_marks_the_current_card(window: MainWindow, qtbot: Any) -> None:
+    source = _spaces(window)
+    view = window.selection_spaces
+    view.setCurrentRow(next(r for r in range(view.count()) if view.item(r).data(Qt.ItemDataRole.UserRole) == "A"))
+    qtbot.keyClick(view, Qt.Key.Key_Space)
+    assert len(window.project.selected_keys_for(source.id)) == 3
+    assert view.currentItem().data(Qt.ItemDataRole.UserRole) == "A"  # refresh keeps the keyboard position
+    qtbot.keyClick(view, Qt.Key.Key_Space)
+    assert not window.project.selected_keys_for(source.id)

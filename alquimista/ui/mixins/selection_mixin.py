@@ -77,6 +77,8 @@ class SelectionMixin(WindowBase):
         source = self._selection_source()
         containers = self._selection_containers(source) if source else []
         view = self.selection_spaces
+        current = view.currentItem()
+        current_id = current.data(Qt.ItemDataRole.UserRole) if current else None
         view.clear()
         if not containers or source is None:
             self.selection_home_empty.setVisible(True)
@@ -108,6 +110,10 @@ class SelectionMixin(WindowBase):
             item.setToolTip(f"{name}\n{visibility}" if visibility else name)
             item.setSizeHint(SpaceCardDelegate.SIZE)
             view.addItem(item)
+            if container_id == current_id:
+                view.setCurrentItem(item)
+        if view.currentItem() is None:
+            view.setCurrentRow(0)  # keyboard users land on a card: Space marks it, Enter opens it
         self.selection_total.setVisible(True)
         self.selection_total.setText(
             translate_text("{pages} páginas selecionadas em {spaces} de {total} espaços desta fonte.").format(

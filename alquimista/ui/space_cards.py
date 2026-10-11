@@ -5,7 +5,7 @@ import zlib
 from typing import Any
 
 from PySide6.QtCore import QEvent, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QKeyEvent, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
 
 from .i18n import translate_text
@@ -55,8 +55,9 @@ class SpaceCardDelegate(QStyledItemDelegate):
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         hover = bool(option.state & QStyle.StateFlag.State_MouseOver)
-        border = QColor(c["primary"] if whole or hover else c["border"])
-        painter.setPen(QPen(border, 2 if whole else 1))
+        focus = bool(option.state & QStyle.StateFlag.State_HasFocus)
+        border = QColor(c["primary"] if whole or hover or focus else c["border"])
+        painter.setPen(QPen(border, 2 if whole or focus else 1))
         painter.setBrush(QColor(c["surface"]))
         painter.drawRoundedRect(rect, 12, 12)
 
@@ -110,11 +111,15 @@ class SpaceCardDelegate(QStyledItemDelegate):
         painter.restore()
 
     def editorEvent(self, event: QEvent, _model: Any, option: QStyleOptionViewItem, index: Any) -> bool:
+        container_id = str(index.data(Qt.ItemDataRole.UserRole))
+        # The view hands Space on the current item to the delegate, as it does for checkboxes.
+        if isinstance(event, QKeyEvent) and event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Select):
+            self.whole_toggled.emit(container_id, not self._counts(index)[2])
+            return True
         if event.type() != QEvent.Type.MouseButtonRelease or not isinstance(event, QMouseEvent):
             return False
         if event.button() != Qt.MouseButton.LeftButton:
             return False
-        container_id = str(index.data(Qt.ItemDataRole.UserRole))
         if self.pill_rect(option.rect).contains(event.position().toPoint()):
             _pages, _selected, whole = self._counts(index)
             self.whole_toggled.emit(container_id, not whole)
