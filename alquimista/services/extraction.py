@@ -804,6 +804,18 @@ class ExtractionService:
             )
             transaction.stage_json(self.output_dir / FAILURES_NAME, failures)
             transaction.commit()
+            self._record_history(
+                self._structured_report(
+                    started=started,
+                    collected_at=collected_at,
+                    current=current,
+                    discovered_keys=discovered_keys,
+                    selected_keys=selected_keys,
+                    counters=counters,
+                    failures=failures,
+                ),
+                "cancelled" if isinstance(exc, ExtractionCancelledError) else "interrupted",
+            )
             raise
         else:
             manifest = self._stage_manifest(
@@ -833,12 +845,15 @@ class ExtractionService:
             self.store.index.rebuild(manifest)
         except Exception as exc:
             self.log(f"Índice SQLite não atualizado; o manifesto JSON permanece válido: {exc}")
-        try:
-            append_history(self.output_dir, report)
-        except OSError as exc:
-            self.log(f"Histórico de execuções não atualizado: {exc}")
+        self._record_history(report, "completed")
         self.log("Extração concluída.")
         return report
+
+    def _record_history(self, report: dict[str, Any], status: str) -> None:
+        try:
+            append_history(self.output_dir, report, status=status)
+        except OSError as exc:
+            self.log(f"Histórico de execuções não atualizado: {exc}")
 
     def _stage_manifest(
         self,

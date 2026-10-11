@@ -144,6 +144,7 @@ def test_results_show_failures_from_the_manifest_and_the_run_history(window: Mai
     (output / MANIFEST_NAME).write_text(manifest.model_dump_json(), encoding="utf-8")
     report = {"executed_at": "2026-10-10T08:00:00+00:00", "duration_seconds": 3.5, "counters": {"new": 2}, "failures": 1}
     (output / REPORT_NAME).write_text(json.dumps(report), encoding="utf-8")
+    append_history(output, {**report, "executed_at": "2026-10-09T08:00:00+00:00"}, status="cancelled")
     append_history(output, report)
 
     window._show_page("results")
@@ -152,8 +153,10 @@ def test_results_show_failures_from_the_manifest_and_the_run_history(window: Mai
     assert window.result_failures_table.item(0, 0).text() == "Guia"
     assert window.result_failures_table.item(0, 2).text() == "HTTP 500"
     assert window.retry_failures_button.isEnabled()
-    assert window.result_history_table.rowCount() == 1
+    assert window.result_history_table.rowCount() == 2
     assert window.result_history_table.item(0, 2).text() == "2"
+    assert window.result_history_table.item(0, 1).text() == "3.5s"
+    assert window.result_history_table.item(1, 1).text() == "3.5s (cancelada)"
 
 
 def test_history_keeps_newest_first(tmp_path: Path) -> None:

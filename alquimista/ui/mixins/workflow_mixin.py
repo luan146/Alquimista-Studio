@@ -471,9 +471,10 @@ class WorkflowMixin(WindowBase):
         history.setRowCount(len(runs))
         for row, run in enumerate(runs):
             counters = run.get("counters") or {}
+            stopped = {"cancelled": "cancelada", "interrupted": "interrompida"}.get(str(run.get("status")))
             values = (
                 self._format_when(str(run.get("executed_at", ""))),
-                f"{run.get('duration_seconds') or 0}s",
+                f"{run.get('duration_seconds') or 0}s" + (f" ({translate_text(stopped)})" if stopped else ""),
                 counters.get("new", 0),
                 counters.get("updated", 0),
                 counters.get("unchanged", 0),

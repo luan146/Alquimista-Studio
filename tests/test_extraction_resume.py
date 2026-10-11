@@ -13,7 +13,7 @@ from alquimista.models import KnowledgeDocument, ProjectConfig, SourceConfig
 from alquimista.runtime import CancellationToken
 from alquimista.services import ExtractionService, SourceRuntime
 from alquimista.services import extraction as extraction_module
-from alquimista.storage import FAILURES_NAME, MANIFEST_NAME, ManifestStore
+from alquimista.storage import FAILURES_NAME, MANIFEST_NAME, ManifestStore, load_history
 
 IDS = [f"doc-{n}" for n in range(1, 7)]
 
@@ -67,11 +67,13 @@ def test_cancel_keeps_finished_documents_and_next_run_resumes(tmp_path: Path) ->
 
     assert set(_manifest_paths(tmp_path)) == {"doc-1", "doc-2", "doc-3"}
     assert len(list((tmp_path / "base").rglob("*.md"))) == 3
+    assert load_history(tmp_path / "base")[0]["status"] == "cancelled"
 
     _service(tmp_path, _Connector()).run()
 
     assert set(_manifest_paths(tmp_path)) == set(IDS)
     assert len(list((tmp_path / "base").rglob("*.md"))) == 6
+    assert load_history(tmp_path / "base")[0]["status"] == "completed"
 
 
 def test_crash_keeps_documents_up_to_the_last_checkpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -137,6 +139,7 @@ def test_expired_token_stops_the_run_and_keeps_finished_documents(tmp_path: Path
     assert "doc-6" not in connector.calls
     assert set(_manifest_paths(tmp_path)) == {"doc-1", "doc-2"}
     assert json.loads((tmp_path / "base" / FAILURES_NAME).read_text(encoding="utf-8")) == {}
+    assert load_history(tmp_path / "base")[0]["status"] == "interrupted"
 
     _service(tmp_path, _Connector()).run()  # after logging in again
     assert set(_manifest_paths(tmp_path)) == set(IDS)

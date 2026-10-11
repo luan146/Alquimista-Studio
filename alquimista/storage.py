@@ -24,8 +24,10 @@ PACKAGE_INDEX_NAME = "indice_pacotes_alquimista.json"
 HISTORY_NAME = "historico_execucoes_alquimista.jsonl"
 
 
-def append_history(output_dir: Path, report: dict[str, Any]) -> None:
+def append_history(output_dir: Path, report: dict[str, Any], *, status: str = "completed") -> None:
+    """``status``: completed, cancelled or interrupted (e.g. token expired mid-run)."""
     entry = {
+        "status": status,
         "executed_at": report.get("executed_at"),
         "duration_seconds": report.get("duration_seconds"),
         "pages_selected": report.get("pages_selected"),
