@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QPoint, QSettings, Qt
 from PySide6.QtWidgets import QApplication, QComboBox, QPushButton, QStackedWidget, QWidget
 
 from alquimista.models import SourceConfig
@@ -211,3 +211,31 @@ def test_space_key_marks_the_current_card(window: MainWindow, qtbot: Any) -> Non
     assert view.currentItem().data(Qt.ItemDataRole.UserRole) == "A"  # refresh keeps the keyboard position
     qtbot.keyClick(view, Qt.Key.Key_Space)
     assert not window.project.selected_keys_for(source.id)
+
+
+def test_output_switch_and_tabs_stay_in_sync(window: MainWindow) -> None:
+    window._show_page("consolidation")
+    assert window.format_switch.value() == 1
+    window.format_switch.buttons()[0].click()
+    assert window.format_tabs.currentIndex() == 0
+    assert window.format_tabs.tabBar().isHidden()
+
+
+def test_markdown_options_are_switch_rows_that_toggle_on_click(window: MainWindow, qtbot: Any) -> None:
+    check = window.md_controls["include_title"]
+    assert check.property("switch") is True
+    row = check.parentWidget()
+    before = check.isChecked()
+    window._show_page("markdown")
+    window.show()
+    QApplication.processEvents()
+    qtbot.mouseClick(row, Qt.MouseButton.LeftButton, pos=row.rect().topLeft() + QPoint(8, 8))
+    assert check.isChecked() is not before
+
+
+def test_preview_opens_in_visual_mode_and_presets_mark_the_active_card(window: MainWindow) -> None:
+    assert window.preview_mode.currentData() == "reading"
+    window.preview_mode_pills.buttons()[1].click()
+    assert window.preview_mode.currentData() == "code"
+    window.preset_cards["rag"].click()
+    assert window.preset_cards["rag"].isChecked() and not window.preset_cards["minimum"].isChecked()
