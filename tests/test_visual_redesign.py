@@ -9,7 +9,7 @@ import pytest
 from PySide6.QtCore import QPoint, QSettings, Qt
 from PySide6.QtWidgets import QApplication, QComboBox, QPushButton, QStackedWidget, QWidget
 
-from alquimista.models import SourceConfig
+from alquimista.models import MarkdownOptions, SourceConfig
 from alquimista.ui.components import AlchemistIconAtlas, SegmentedControl, chip
 from alquimista.ui.i18n import LanguageManager
 from alquimista.ui.icons import (
@@ -239,3 +239,22 @@ def test_preview_opens_in_visual_mode_and_presets_mark_the_active_card(window: M
     assert window.preview_mode.currentData() == "code"
     window.preset_cards["rag"].click()
     assert window.preset_cards["rag"].isChecked() and not window.preset_cards["minimum"].isChecked()
+
+
+def _checked_presets(window: MainWindow) -> list[str]:
+    return [name for name, card in window.preset_cards.items() if card.isChecked()]
+
+
+def test_preset_card_follows_the_loaded_project_options(window: MainWindow) -> None:
+    assert _checked_presets(window) == ["recommended"]
+    window.project.markdown = MarkdownOptions.preset("rag")
+    window._load_markdown_controls()
+    assert _checked_presets(window) == ["rag"]
+
+
+def test_preset_card_clears_when_a_switch_is_flipped(window: MainWindow) -> None:
+    window.preset_cards["minimum"].click()
+    assert _checked_presets(window) == ["minimum"]
+    check = window.md_controls["include_title"]
+    check.setChecked(not check.isChecked())
+    assert _checked_presets(window) == []

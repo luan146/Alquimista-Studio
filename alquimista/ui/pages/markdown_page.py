@@ -90,7 +90,6 @@ def build_markdown_page(window: Any) -> QWidget:
         preset_group.addButton(preset)
         window.preset_cards[name] = preset
         preset_row.addWidget(preset)
-    window.preset_cards["recommended"].setChecked(True)  # the defaults are the recommended preset
     layout.addLayout(preset_row)
 
     splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -104,23 +103,22 @@ def build_markdown_page(window: Any) -> QWidget:
 
     options_card, options_card_layout = card()
     options_card_layout.setContentsMargins(16, 16, 16, 16)
-    options_heading = QHBoxLayout()
-    heading_text = QVBoxLayout()
     options_title = QLabel("O que incluir no arquivo")
     options_title.setObjectName("sectionTitle")
     options_subtitle = QLabel("Marque as opções para compor o conteúdo do Markdown.")
     options_subtitle.setObjectName("subtitle")
     options_subtitle.setWordWrap(True)
-    heading_text.addWidget(options_title)
-    heading_text.addWidget(options_subtitle)
-    options_heading.addLayout(heading_text, 1)
+    options_card_layout.addWidget(options_title)
+    options_card_layout.addWidget(options_subtitle)
     expand_all = button("Expandir todos", lambda: window._set_markdown_sections(True))
     expand_all.setObjectName("markdownTextButton")
     collapse_all = button("Recolher todos", lambda: window._set_markdown_sections(False))
     collapse_all.setObjectName("markdownTextButton")
-    options_heading.addWidget(expand_all)
-    options_heading.addWidget(collapse_all)
-    options_card_layout.addLayout(options_heading)
+    sections_row = QHBoxLayout()  # own row: beside the title it overflowed narrow windows
+    sections_row.addStretch()
+    sections_row.addWidget(expand_all)
+    sections_row.addWidget(collapse_all)
+    options_card_layout.addLayout(sections_row)
 
     window.md_controls = {}
     window.markdown_sections = []

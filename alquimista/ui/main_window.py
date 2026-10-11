@@ -38,6 +38,7 @@ from ..connectors import default_registry
 from ..logging_utils import configure_logging, default_log_path
 from ..models import (
     AuthMode,
+    MarkdownOptions,
     ProjectConfig,
     default_project,
 )
@@ -816,6 +817,7 @@ class MainWindow(
     def _load_markdown_controls(self) -> None:
         if hasattr(self, "preview_controller"):
             self.preview_controller.load_markdown_controls(self.project.markdown)
+            self._refresh_preset_cards()
             self._update_preview()
 
     def _sync_markdown_controls(self) -> None:
@@ -831,9 +833,25 @@ class MainWindow(
             self.project.markdown = self.preview_controller.apply_preset(
                 name, on_dirty=self.mark_dirty
             )
+            self._refresh_preset_cards()
             self._update_preview()
 
+    def _refresh_preset_cards(self) -> None:
+        """Mark the preset card whose options equal the current switches; none when customized."""
+        cards = getattr(self, "preset_cards", None)
+        if not cards or not hasattr(self, "preview_controller"):
+            return
+        current = self.preview_controller.sync_markdown_controls(self.project.markdown).model_dump()
+        group = next(iter(cards.values())).group()
+        if group is not None:
+            group.setExclusive(False)  # an exclusive group cannot be left with nothing checked
+        for name, preset_card in cards.items():
+            preset_card.setChecked(current == MarkdownOptions.preset(name).model_dump())
+        if group is not None:
+            group.setExclusive(True)
+
     def _schedule_preview(self, *_args: Any) -> None:
+        self._refresh_preset_cards()
         if hasattr(self, "preview_controller"):
             self.preview_controller.schedule_preview(on_dirty=self.mark_dirty)
 
