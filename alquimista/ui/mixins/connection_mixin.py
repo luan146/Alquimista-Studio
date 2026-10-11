@@ -93,6 +93,7 @@ class ConnectionMixin(WindowBase):
                 with QSignalBlocker(self.auth_mode):
                     self.auth_mode.setCurrentIndex(self.auth_mode.findData(source.auth_mode.value))
                 self._show_auth_fields(source.auth_mode.value, source)
+        self._refresh_accounts()
 
     def _show_auth_fields(self, mode: str, source: SourceConfig | None) -> None:
         basic = mode == AuthMode.BASIC.value
@@ -116,6 +117,31 @@ class ConnectionMixin(WindowBase):
         if hasattr(self, "auth_mode_pills"):
             # Callers change auth_mode under QSignalBlocker, which bypasses the pills' binding.
             self.auth_mode_pills.set_value(self.auth_mode.currentData())
+        if source is not None and descriptor is not None:
+            self._refresh_login_button(mode, descriptor)
+
+    def _refresh_login_button(self, mode: str, descriptor: Any) -> None:
+        """Text and icon of the sign-in button for the mode chosen in the pills."""
+        if not hasattr(self, "login_button"):
+            return
+        bearer_only = descriptor.form.bearer_only
+        if bearer_only:
+            mode = AuthMode.BEARER.value
+        if mode == AuthMode.PUBLIC.value:
+            text = translate_text("Testar acesso público")
+        elif bearer_only:
+            text = translate_text("Informar token do {name}").format(name=descriptor.display_name)
+        else:
+            text = translate_text("Entrar no {name}").format(name=descriptor.display_name)
+        self.login_button.setText(text)
+        self.login_button.setToolTip(
+            translate_text("Validar o acesso à fonte usando {name}.").format(name=descriptor.display_name)
+        )
+        icon_name = {
+            AuthMode.PUBLIC.value: "publico", AuthMode.BROWSER.value: "navegador",
+            AuthMode.BASIC.value: "usuario", AuthMode.BEARER.value: "token",
+        }.get(mode, "chave")
+        self.login_button.setIcon(svg_icon(icon_name, 22))
 
 
 
@@ -247,16 +273,19 @@ class ConnectionMixin(WindowBase):
             != QMessageBox.StandardButton.Yes
         ):
             return
-        delete_session(source)
+        # The remembered token goes first: a failure deleting the browser session/cache must not keep it.
         delete_secret(source.id)
         self.secrets.pop(source.id)
-        self.connected_sources.discard(source.id)
-        self.connection_states[source.id] = translate_text("○ Você saiu — escolha um modo de acesso")
-        current = self.source_by_combo(self.connection_source)
-        if current is not None and current.id == source.id:
-            self.auth_secret.clear()
-            self._connection_source_changed()
-        self._refresh_workflow_state()
+        try:
+            delete_session(source)
+        finally:
+            self.connected_sources.discard(source.id)
+            self.connection_states[source.id] = translate_text("○ Você saiu — escolha um modo de acesso")
+            current = self.source_by_combo(self.connection_source)
+            if current is not None and current.id == source.id:
+                self.auth_secret.clear()
+                self._connection_source_changed()
+            self._refresh_workflow_state()
 
     def _account_identity(self, source: SourceConfig) -> tuple[str, str]:
         if source.source_type == "local_files":
@@ -291,7 +320,12 @@ class ConnectionMixin(WindowBase):
         if not hasattr(self, "account_card"):
             return
         source = self.source_by_combo(self.connection_source)
-        connected = source is not None and source.id in self.connected_sources
+        connected = (
+            source is not None
+            and source.id in self.connected_sources
+            and source.auth_mode != AuthMode.PUBLIC
+            and source.source_type != "local_files"
+        )
         self.account_card.setVisible(connected)
         self.login_button.setVisible(not connected)
         if source is not None and connected:
@@ -383,34 +417,9 @@ class ConnectionMixin(WindowBase):
             self.connection_state.setText(
                 translate_text("Modo autenticado selecionado — não conectado")
             )
-        if hasattr(self, "login_button"):
-            if source.auth_mode == AuthMode.PUBLIC:
-                self.login_button.setText(translate_text("Testar acesso público"))
-            elif bearer_only:
-                self.login_button.setText(
-                    translate_text("Informar token do {name}").format(
-                        name=descriptor.display_name
-                    )
-                )
-            else:
-                self.login_button.setText(
-                    translate_text("Entrar no {name}").format(
-                        name=descriptor.display_name
-                    )
-                )
-            self.login_button.setToolTip(
-                translate_text("Validar o acesso à fonte usando {name}.").format(
-                    name=descriptor.display_name
-                )
-            )
-            icon_name = {
-                AuthMode.PUBLIC: "publico", AuthMode.BROWSER: "navegador",
-                AuthMode.BASIC: "usuario", AuthMode.BEARER: "token",
-            }.get(source.auth_mode, "chave")
-            self.login_button.setIcon(svg_icon("token" if bearer_only else icon_name, 22))
+        # Login button text/icon and the account card were refreshed by _auth_mode_changed above.
         if hasattr(self, "auth_mode_pills"):
             self.auth_mode_pills.sync_enabled_from(self.auth_mode)
-        self._refresh_accounts()
 
     def enter_confluence(self) -> None:
         """Dispatch the action according to the currently selected auth mode."""

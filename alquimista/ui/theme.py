@@ -72,6 +72,8 @@ def stylesheet(c: dict[str, str]) -> str:
     QPushButton[danger="true"]:hover {{ background: {c["danger_soft"]}; border-color: {c["danger_soft"]}; }}
     QPushButton[ghost="true"] {{ background: transparent; border-color: transparent; color: {c["muted"]}; }}
     QPushButton[ghost="true"]:hover {{ background: {c["surface_alt"]}; color: {c["text"]}; }}
+    QPushButton[ghost="true"][danger="true"] {{ color: {c["danger"]}; }}
+    QPushButton[ghost="true"][danger="true"]:hover {{ background: {c["danger_soft"]}; color: {c["danger"]}; }}
     QPushButton:disabled {{ color: {c["muted"]}; background: {c["surface_alt"]}; border-color: {c["border"]}; }}
     QPushButton#googleButton {{ border-radius: 22px; padding: 10px 18px; font-size: 10.5pt; font-weight: 600; }}
     QPushButton#googleButton:hover {{ border-color: {c["muted"]}; }}

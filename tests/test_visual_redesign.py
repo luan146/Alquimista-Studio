@@ -448,3 +448,80 @@ def test_segmented_control_drops_icons_before_clipping_text(qapp) -> None:
     control.resize(control.sizeHint().width() + 200, 40)
     qapp.processEvents()
     assert not any(b.icon().isNull() for b in control.buttons())
+
+
+def _public_source(window: MainWindow) -> SourceConfig:
+    source = SourceConfig(id="docs", name="Docs", source_type="confluence_rest",
+                          base_url="https://docs.example.com", auth_mode=AuthMode.PUBLIC)
+    window.project.sources = [source]
+    window._refresh_source_widgets()
+    window._show_page("sources")
+    return source
+
+
+def test_login_button_follows_the_chosen_pill(window: MainWindow) -> None:
+    from alquimista.ui.icons import svg_icon
+
+    def image(icon: Any) -> Any:
+        return icon.pixmap(22).toImage()
+
+    _public_source(window)
+    assert window.login_button.text() == "Testar acesso público"
+    assert image(window.login_button.icon()) == image(svg_icon("publico", 22))
+    window.auth_mode_pills.buttons()[1].click()  # Navegador
+    assert window.auth_mode.currentData() == AuthMode.BROWSER.value
+    assert window.login_button.text().startswith("Entrar no")
+    assert image(window.login_button.icon()) == image(svg_icon("navegador", 22))
+
+
+def test_public_source_keeps_the_test_button_after_connecting(window: MainWindow) -> None:
+    source = _public_source(window)
+    window.connected_sources.add(source.id)
+    window._refresh_accounts()
+    assert window.login_button.isVisibleTo(window) and not window.account_card.isVisibleTo(window)
+
+
+def test_sign_out_removes_token_even_if_session_cleanup_fails(window: MainWindow, monkeypatch: pytest.MonkeyPatch,
+                                                              tmp_path: Path) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    from alquimista import session_store
+    from alquimista.ui.mixins import connection_mixin
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = _token_source(window)
+    session_store.save_secret(source.id, "segredo-falso")
+    window.secrets.set(source.id, "segredo-falso")
+    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Yes)
+
+    def broken(_source: Any) -> bool:
+        raise OSError("cache travado")
+
+    monkeypatch.setattr(connection_mixin, "delete_session", broken)
+    with pytest.raises(OSError):
+        window._sign_out(source.id)
+    assert session_store.load_secret(source.id) == ""
+    assert window.secrets.get(source.id, "") == ""
+
+
+def test_sign_out_answered_no_keeps_everything(window: MainWindow, monkeypatch: pytest.MonkeyPatch,
+                                               tmp_path: Path) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    from alquimista import session_store
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = _token_source(window)
+    session_store.save_secret(source.id, "segredo-falso")
+    window.secrets.set(source.id, "segredo-falso")
+    window.connected_sources.add(source.id)
+    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.No)
+    window._sign_out(source.id)
+    assert session_store.load_secret(source.id) == "segredo-falso"
+    assert window.secrets.get(source.id, "") == "segredo-falso"
+    assert source.id in window.connected_sources
+
+
+def test_ghost_danger_button_is_red(qapp) -> None:
+    for colors in (LIGHT, DARK):
+        sheet = stylesheet(colors)
+        assert f'QPushButton[ghost="true"][danger="true"] {{ color: {colors["danger"]}; }}' in sheet
+        assert sheet.index('[ghost="true"][danger="true"]') > sheet.index('QPushButton[ghost="true"] {')
