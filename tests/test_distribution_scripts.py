@@ -61,3 +61,15 @@ def test_windows_distributions_ship_tesseract_next_to_the_executable() -> None:
     assert '"/DTesseractDir=$tesseractStage"' in script
     assert r'DestDir: "{app}\tesseract"' in installer and "#ifdef TesseractDir" in installer
     assert workflow.index("choco install tesseract") < workflow.index("Run pytest")
+
+
+def test_linux_distributions_ship_tesseract_and_an_installer() -> None:
+    script = (ROOT / "tools" / "build" / "gerar_portable_linux.sh").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
+
+    # alquimista/image_text.py looks for <executable folder>/tesseract/tesseract and its lib/ folder.
+    assert 'bundle_tesseract "$PACKAGE_DIR/tesseract"' in script and 'mkdir -p "$dest/lib"' in script
+    assert "Depends: tesseract-ocr, tesseract-ocr-por, tesseract-ocr-spa" in script
+    assert 'dpkg-deb --root-owner-group --build "$DEB_ROOT" "$DEB"' in script
+    assert workflow.index("tools/build/gerar_portable_linux.sh") < workflow.index("tools/build/testar_pacotes_linux.sh")
+    assert "needs: [test, linux-distribution]" in workflow and "gh release create" in workflow
