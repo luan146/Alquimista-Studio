@@ -33,6 +33,17 @@ _QUERY = (
     # A missing task leaves $? false even with SilentlyContinue; that is not an error here.
     "exit 0"
 )
+# Windows toast through the WinRT API of Windows PowerShell 5.1; no extra package needed.
+_NOTIFY = (
+    "$ErrorActionPreference='Stop';"
+    "$m=[Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime];"
+    "$x=$m::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02);"
+    "$t=$x.GetElementsByTagName('text');"
+    "$t.Item(0).AppendChild($x.CreateTextNode($env:ALQ_TITLE))|Out-Null;"
+    "$t.Item(1).AppendChild($x.CreateTextNode($env:ALQ_TEXT))|Out-Null;"
+    "$app='{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe';"
+    "$m::CreateToastNotifier($app).Show([Windows.UI.Notifications.ToastNotification]::new($x))"
+)
 
 
 def task_name(project_path: Path) -> str:
@@ -85,6 +96,14 @@ def schedule_daily(project_path: Path, at: str) -> None:
 
 def remove_schedule(project_path: Path) -> None:
     _powershell(_REMOVE, {"ALQ_NAME": task_name(project_path)})
+
+
+def notify(title: str, text: str) -> None:
+    """Show a Windows notification; best effort, a failure never stops the sync."""
+    try:
+        _powershell(_NOTIFY, {"ALQ_TITLE": title, "ALQ_TEXT": text})
+    except (AlquimistaError, OSError):
+        pass
 
 
 def scheduled_time(project_path: Path) -> str | None:

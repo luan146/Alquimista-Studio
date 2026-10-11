@@ -8,6 +8,16 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 @pytest.fixture(autouse=True)
+def silence_windows_notifications(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
+    """Unattended-sync tests must not pop real Windows notifications."""
+    from alquimista import scheduler
+
+    shown: list[tuple[str, str]] = []
+    monkeypatch.setattr(scheduler, "notify", lambda title, text: shown.append((title, text)))
+    return shown
+
+
+@pytest.fixture(autouse=True)
 def reset_ui_language_preference() -> None:
     """Keep direct MainWindow tests deterministic regardless of user settings."""
     from alquimista.ui.i18n import create_settings

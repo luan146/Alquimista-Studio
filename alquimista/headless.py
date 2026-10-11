@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from . import scheduler
 from .runtime import CancellationToken
 from .services.sync import IncrementalSyncService, SyncOptions, SyncScope, add_to_selection
 from .storage import load_project, save_project
@@ -33,8 +34,18 @@ def sync_project(project_path: Path, log: Callable[[str], None]) -> int:
     except Exception as exc:
         # Typically an expired browser session or token: the user must log in again.
         log(f"[Agendado] Sincronização de {project_path} não executada: {exc}")
+        scheduler.notify(
+            f"ALQuimista · {project_path.stem}",
+            f"A sincronização não foi feita: {exc}. Abra o ALQuimista e conecte a fonte de novo.",
+        )
         return EXIT_ERROR
     for failure in report.failures:
         log(f"[Agendado] Falha: {failure}")
     log(f"[Agendado] Concluída em {report.duration_seconds}s com {len(report.failures)} falha(s).")
+    summary = report.summary
+    if summary["new"] or summary["updated"] or summary["removed"] or report.failures:
+        text = f"{summary['new']} novo(s), {summary['updated']} alterado(s), {summary['removed']} removido(s)"
+        if report.failures:
+            text += f", {len(report.failures)} falha(s)"
+        scheduler.notify(f"ALQuimista · {project.project_name}", text + ". O resumo está na pasta sincronizacoes.")
     return EXIT_WITH_FAILURES if report.failures else EXIT_OK

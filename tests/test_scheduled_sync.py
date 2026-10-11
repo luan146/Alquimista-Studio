@@ -12,6 +12,7 @@ from alquimista.connectors.local_files import LocalFilesConnector
 from alquimista.errors import AlquimistaError
 from alquimista.headless import EXIT_ERROR, EXIT_OK, sync_project
 from alquimista.models import ExtractionOptions, KnowledgeSelection, ProjectConfig, SourceConfig
+from alquimista.scheduler import notify as real_notify
 from alquimista.storage import load_project, save_project
 from alquimista.ui.controllers import RuntimeSecrets
 
@@ -153,3 +154,39 @@ def test_sync_command_selects_new_files_of_a_whole_folder(tmp_path: Path, fake_d
 
     assert list((tmp_path / "base").rglob("novo*.md"))
     assert len(load_project(project_path).selected_keys_for("local")) == 2
+
+
+def test_sync_command_notifies_changes_and_stays_quiet_otherwise(
+    tmp_path: Path, fake_dpapi: None, silence_windows_notifications: list[tuple[str, str]]
+) -> None:
+    project_path = _local_project(tmp_path)
+
+    assert sync_project(project_path, lambda _message: None) == EXIT_OK
+    assert len(silence_windows_notifications) == 1
+    assert "1 novo" in silence_windows_notifications[0][1]
+
+    assert sync_project(project_path, lambda _message: None) == EXIT_OK
+    assert len(silence_windows_notifications) == 1
+
+
+def test_sync_command_notifies_when_it_cannot_run(
+    tmp_path: Path, silence_windows_notifications: list[tuple[str, str]]
+) -> None:
+    assert sync_project(tmp_path / "nao-existe.json", lambda _message: None) == EXIT_ERROR
+    assert "não foi feita" in silence_windows_notifications[0][1]
+
+
+def test_notify_hands_title_and_text_to_powershell(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, str]] = []
+    monkeypatch.setattr(scheduler, "_powershell", lambda _script, env: calls.append(env) or "")
+    real_notify("Título", "Texto")
+
+    assert calls == [{"ALQ_TITLE": "Título", "ALQ_TEXT": "Texto"}]
+
+
+def test_notify_never_breaks_the_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(_script: str, _env: dict[str, str]) -> str:
+        raise AlquimistaError("sem notificações")
+
+    monkeypatch.setattr(scheduler, "_powershell", refuse)
+    real_notify("Título", "Texto")
