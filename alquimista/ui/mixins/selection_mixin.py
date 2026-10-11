@@ -5,13 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QSignalBlocker, Qt
-from PySide6.QtWidgets import QMenu, QPushButton, QTableWidgetItem, QTreeWidgetItem
+from PySide6.QtWidgets import QListWidgetItem, QMenu, QTreeWidgetItem
 
 from ...models import SourceConfig
 from ...selection import SelectionStore
 from ..components import SortableTreeItem, VisibilityBadgeDelegate, timestamp_sort_value
 from ..i18n import translate_text
-from ..tree_models import display_timestamp, ordered_pages, page_parent_id, parent_ids_in_list
+from ..space_cards import SpaceCardDelegate
+from ..tree_models import display_timestamp, ordered_pages, page_parent_id, parent_ids_in_list, relative_timestamp
 from . import WindowBase
 
 
@@ -29,7 +30,7 @@ class SelectionMixin(WindowBase):
     selection_source: Any
     selection_search: Any
     selection_filter: Any
-    selection_spaces_table: Any
+    selection_spaces: Any
     selection_total: Any
     _preview_real_page: Any
     selection_count: Any
@@ -70,90 +71,60 @@ class SelectionMixin(WindowBase):
         return self.source_by_combo(self.selection_source)
 
     def _refresh_selection_home(self) -> None:
-        """Spaces of the selected source as a compact table with a whole-space checkbox."""
+        """Spaces of the selected source as painted cards with a whole-space pill."""
         if not hasattr(self, "selection_home_layout"):
             return
         source = self._selection_source()
         containers = self._selection_containers(source) if source else []
-        table = self.selection_spaces_table
-        self._refreshing_spaces = True
-        try:
-            table.setRowCount(0)
-            if not containers or source is None:
-                self.selection_home_empty.setVisible(True)
-                self.selection_space_search.setVisible(False)
-                table.setVisible(False)
-                self.selection_total.setVisible(False)
-                return
-            self.selection_home_empty.setVisible(False)
-            self.selection_space_search.setVisible(True)
-            table.setVisible(True)
-            data = self.trees.get(source.id, {})
-            table.setRowCount(len(containers))
-            total_selected = 0
-            spaces_with_selection = 0
-            for row, container in enumerate(containers):
-                container_id = str(container["id"])
-                pages = int(container.get("pages") or 0)
-                selected = int(container.get("selected") or 0)
-                total_selected += selected
-                spaces_with_selection += bool(selected)
-                whole = QTableWidgetItem()
-                whole.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
-                whole.setData(Qt.ItemDataRole.UserRole, container_id)
-                whole.setCheckState(
-                    Qt.CheckState.Checked
-                    if pages and selected >= pages
-                    else Qt.CheckState.PartiallyChecked
-                    if selected
-                    else Qt.CheckState.Unchecked
-                )
-                table.setItem(row, 0, whole)
-                name = QTableWidgetItem(str(container["name"]))
-                name.setData(Qt.ItemDataRole.UserRole, container_id)
-                table.setItem(row, 1, name)
-                loaded = bool(container.get("loaded"))
-                table.setItem(row, 2, QTableWidgetItem(str(pages) if loaded or pages else "—"))
-                table.setItem(row, 3, QTableWidgetItem(str(selected)))
-                visibility, _kind = self._container_visibility(source, data, container)
-                table.setItem(row, 4, QTableWidgetItem(str(visibility or "")))
-                open_button = QPushButton(translate_text("Abrir →"))
-                open_button.setToolTip(translate_text("Escolher páginas deste espaço"))
-                open_button.clicked.connect(
-                    lambda _checked=False, cid=container_id: self._open_selection_container(cid)
-                )
-                table.setCellWidget(row, 5, open_button)
-            self.selection_total.setVisible(True)
-            self.selection_total.setText(
-                translate_text("{pages} páginas selecionadas em {spaces} de {total} espaços desta fonte.").format(
-                    pages=total_selected, spaces=spaces_with_selection, total=len(containers)
-                )
+        view = self.selection_spaces
+        view.clear()
+        if not containers or source is None:
+            self.selection_home_empty.setVisible(True)
+            self.selection_space_search.setVisible(False)
+            view.setVisible(False)
+            self.selection_total.setVisible(False)
+            return
+        self.selection_home_empty.setVisible(False)
+        self.selection_space_search.setVisible(True)
+        view.setVisible(True)
+        data = self.trees.get(source.id, {})
+        total_selected = 0
+        spaces_with_selection = 0
+        for container in containers:
+            container_id = str(container["id"])
+            name = str(container["name"])
+            pages = int(container.get("pages") or 0)
+            selected = int(container.get("selected") or 0)
+            total_selected += selected
+            spaces_with_selection += bool(selected)
+            visibility, _kind = self._container_visibility(source, data, container)
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, container_id)
+            item.setData(SpaceCardDelegate.NAME_ROLE, name)
+            item.setData(SpaceCardDelegate.PAGES_ROLE, pages)
+            item.setData(SpaceCardDelegate.SELECTED_ROLE, selected)
+            item.setData(SpaceCardDelegate.LOADED_ROLE, bool(container.get("loaded")) or bool(pages))
+            item.setData(Qt.ItemDataRole.AccessibleTextRole, f"{name}: {selected}/{pages}")
+            item.setToolTip(f"{name}\n{visibility}" if visibility else name)
+            item.setSizeHint(SpaceCardDelegate.SIZE)
+            view.addItem(item)
+        self.selection_total.setVisible(True)
+        self.selection_total.setText(
+            translate_text("{pages} páginas selecionadas em {spaces} de {total} espaços desta fonte.").format(
+                pages=total_selected, spaces=spaces_with_selection, total=len(containers)
             )
-        finally:
-            self._refreshing_spaces = False
+        )
         self._filter_selection_space_cards()
 
     def _filter_selection_space_cards(self, text: str | None = None) -> None:
         if not hasattr(self, "selection_space_search"):
             return
-        query = (
-            text if text is not None else self.selection_space_search.text()
-        ).strip().casefold()
-        table = self.selection_spaces_table
-        for row in range(table.rowCount()):
-            name = table.item(row, 1)
-            table.setRowHidden(row, bool(query) and query not in (name.text() if name else "").casefold())
-
-    def _open_space_row(self, row: int) -> None:
-        item = self.selection_spaces_table.item(row, 1)
-        if item is not None:
-            self._open_selection_container(str(item.data(Qt.ItemDataRole.UserRole)))
-
-    def _space_check_changed(self, item: QTableWidgetItem) -> None:
-        if getattr(self, "_refreshing_spaces", False) or item.column() != 0:
-            return
-        container_id = str(item.data(Qt.ItemDataRole.UserRole))
-        self._mark_whole_space(container_id, item.checkState() != Qt.CheckState.Unchecked)
+        query = (text if text is not None else self.selection_space_search.text()).strip().casefold()
+        view = self.selection_spaces
+        for row in range(view.count()):
+            item = view.item(row)
+            name = str(item.data(SpaceCardDelegate.NAME_ROLE) or "")
+            item.setHidden(bool(query) and query not in name.casefold())
 
     def _mark_whole_space(self, container_id: str, selected: bool) -> None:
         """Select or clear every page of a space, loading it first when needed."""
@@ -238,7 +209,7 @@ class SelectionMixin(WindowBase):
             (item for item in self._selection_containers(source) if item["id"] == container_id),
             {"name": container_id},
         )
-        self.selection_space_title.setText(f"🗂️  {container['name']}")
+        self.selection_space_title.setText(str(container["name"]))
         self.selection_stack.setCurrentIndex(1)
         self._update_load_context()
         self.selection_search.clear()
@@ -435,10 +406,11 @@ class SelectionMixin(WindowBase):
                     title,
                     page_id,
                     path,
-                    display_timestamp(str(version.get("when") or "")),
+                    relative_timestamp(str(version.get("when") or "")),
                     state_text,
                 ]
             )
+            item.setToolTip(3, display_timestamp(str(version.get("when") or "")))
             sort_values = [
                 title.casefold(),
                 int(page_id) if page_id.isdigit() else page_id,

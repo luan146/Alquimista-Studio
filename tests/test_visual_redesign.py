@@ -1,9 +1,17 @@
 """Novo visual: ícones SVG, tema, peças novas e telas remontadas."""
 from __future__ import annotations
 
-from PySide6.QtWidgets import QApplication, QComboBox, QStackedWidget, QWidget
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
+import pytest
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtWidgets import QApplication, QComboBox, QPushButton, QStackedWidget, QWidget
+
+from alquimista.models import SourceConfig
 from alquimista.ui.components import AlchemistIconAtlas, SegmentedControl, chip
+from alquimista.ui.i18n import LanguageManager
 from alquimista.ui.icons import (
     AUTH_ICONS,
     CONTROL_ICONS,
@@ -13,7 +21,10 @@ from alquimista.ui.icons import (
     icon_path,
     svg_pixmap,
 )
+from alquimista.ui.main_window import MainWindow
+from alquimista.ui.space_cards import SpaceCardDelegate
 from alquimista.ui.theme import DARK, LIGHT, apply_theme, current_colors, stylesheet
+from alquimista.ui.tree_models import relative_timestamp
 
 
 def test_every_mapped_icon_has_an_svg_that_renders(qapp) -> None:
@@ -75,3 +86,109 @@ def test_both_themes_build_a_stylesheet_with_existing_control_images(qapp) -> No
 def test_chip_kind_is_a_style_property(qapp) -> None:
     label = chip("Inteiro", "accent")
     assert label.objectName() == "chip" and label.property("kind") == "accent"
+
+
+@pytest.fixture
+def window(qtbot: Any, tmp_path: Path) -> MainWindow:
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    manager = LanguageManager(QApplication.instance(), settings)
+    manager.set_language("pt-BR", persist=False)
+    created = MainWindow(language_manager=manager)
+    yield created
+    created.dirty = False
+
+
+def _spaces(window: MainWindow, count: int = 2) -> SourceConfig:
+    source = SourceConfig(id="wiki", name="Wiki", source_type="confluence_rest", base_url="https://wiki.example.com",
+                          space_key="A", connector_options={"source_url": "https://wiki.example.com/spaces/A"})
+    window.project.sources = [source]
+    window._refresh_source_widgets()
+    pages = [{"id": f"a{n}", "title": f"Página {n}", "_container_id": "A", "ancestors": []} for n in range(3)]
+    containers = [{"id": "A", "name": "Suporte"}, {"id": "B", "name": "Produto"}]
+    containers += [{"id": f"X{n}", "name": f"Espaço {n}"} for n in range(count - 2)]
+    window.trees[source.id] = {"root": {"id": "all", "title": "Espaços"}, "containers": containers,
+                               "pages_by_container": {"A": pages}, "pages": pages}
+    window._show_page("selection")
+    window._refresh_selection_home()
+    return source
+
+
+def _card_center(window: MainWindow, container_id: str, *, pill: bool) -> Any:
+    view = window.selection_spaces
+    item = next(view.item(row) for row in range(view.count())
+                if view.item(row).data(Qt.ItemDataRole.UserRole) == container_id)
+    rect = view.visualItemRect(item)
+    return (SpaceCardDelegate.pill_rect(rect) if pill else rect.adjusted(10, 40, -10, -10)).center()
+
+
+def test_relative_dates() -> None:
+    now = datetime(2026, 10, 10, 12, tzinfo=timezone.utc)
+    assert relative_timestamp("2026-10-10T08:00:00Z", now) == "hoje"
+    assert relative_timestamp("2026-10-09T08:00:00Z", now) == "ontem"
+    assert relative_timestamp("2026-10-07T08:00:00Z", now) == "há 3 dias"
+    assert relative_timestamp("2026-08-01T08:00:00Z", now) == "há 2 meses"
+    assert relative_timestamp("2024-01-01T08:00:00Z", now) == "há 2 anos"
+    assert relative_timestamp("", now) == "" and relative_timestamp("ontem?", now) == "ontem?"
+
+
+def test_whole_pill_click_marks_the_space(window: MainWindow, qtbot: Any) -> None:
+    source = _spaces(window)
+    window.show()
+    QApplication.processEvents()
+    qtbot.mouseClick(window.selection_spaces.viewport(), Qt.MouseButton.LeftButton,
+                     pos=_card_center(window, "A", pill=True))
+    assert len(window.project.selected_keys_for(source.id)) == 3
+    assert window.selection_stack.currentIndex() == 0  # pill marks, it does not open
+
+
+def test_whole_pill_click_marks_unloaded_space(window: MainWindow, qtbot: Any,
+                                               monkeypatch: pytest.MonkeyPatch) -> None:
+    source = _spaces(window)
+
+    def fake_load(src: SourceConfig, container_id: str, *, on_loaded: Any = None, **_kwargs: Any) -> None:
+        loaded = [{"id": "b1", "title": "Planos", "_container_id": "B", "ancestors": []}]
+        window.trees[src.id]["pages_by_container"][container_id] = loaded
+        window.trees[src.id]["pages"] = window.trees[src.id]["pages"] + loaded
+        on_loaded()
+
+    monkeypatch.setattr(window, "_load_container_for_source", fake_load)
+    window.show()
+    QApplication.processEvents()
+    qtbot.mouseClick(window.selection_spaces.viewport(), Qt.MouseButton.LeftButton,
+                     pos=_card_center(window, "B", pill=True))
+    assert window.project.selected_keys_for(source.id) == {"wiki:B:b1"}
+
+
+def test_clicking_the_card_body_opens_the_space(window: MainWindow, qtbot: Any) -> None:
+    _spaces(window)
+    window.show()
+    QApplication.processEvents()
+    qtbot.mouseClick(window.selection_spaces.viewport(), Qt.MouseButton.LeftButton,
+                     pos=_card_center(window, "A", pill=False))
+    assert window.selection_stack.currentIndex() == 1
+    assert window.selection_space_title.text() == "Suporte"
+
+
+def test_space_search_hides_cards_without_widgets(window: MainWindow) -> None:
+    _spaces(window, count=300)
+    assert window.selection_spaces.count() == 300
+    assert not window.selection_spaces.findChildren(QPushButton)  # cards are painted, not widgets
+    window.selection_space_search.setText("produto")
+    visible = [window.selection_spaces.item(r).data(Qt.ItemDataRole.UserRole)
+               for r in range(window.selection_spaces.count()) if not window.selection_spaces.item(r).isHidden()]
+    assert visible == ["B"]
+
+
+def test_space_card_colors_follow_theme(window: MainWindow) -> None:
+    from alquimista.ui.space_cards import tile_colors
+    apply_theme(QApplication.instance(), "light")
+    light = tile_colors("Suporte")
+    apply_theme(QApplication.instance(), "dark")
+    dark = tile_colors("Suporte")
+    apply_theme(QApplication.instance(), "light")
+    assert light != dark and tile_colors("Suporte") == light  # stable per name, per theme
+
+
+def test_selection_filter_pills_drive_the_hidden_combo(window: MainWindow) -> None:
+    window.selection_filter_pills.buttons()[1].click()
+    assert window.selection_filter.currentData() == "selected"

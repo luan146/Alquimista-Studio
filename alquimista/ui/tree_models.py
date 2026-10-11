@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from ..models import AuthMode, SourceConfig
+from .i18n import translate_text
 
 
 def display_timestamp(raw: str) -> str:
@@ -24,6 +25,29 @@ def display_timestamp(raw: str) -> str:
     if moment.tzinfo is not None:
         moment = moment.astimezone()
     return moment.strftime("%d/%m/%Y %H:%M")
+
+
+def relative_timestamp(raw: str, now: datetime | None = None) -> str:
+    """'há 3 dias' style text for the tree; the exact date goes in the tooltip (display_timestamp)."""
+    if not raw:
+        return ""
+    try:
+        moment = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return raw
+    if moment.tzinfo is None:
+        moment = moment.astimezone()
+    now = now or datetime.now(moment.tzinfo)
+    days = (now.astimezone(moment.tzinfo).date() - moment.date()).days
+    if days <= 0:
+        return translate_text("hoje")
+    if days == 1:
+        return translate_text("ontem")
+    if days < 31:
+        return translate_text("há {n} dias").format(n=days)
+    if days < 365:
+        return translate_text("há {n} meses").format(n=days // 30)
+    return translate_text("há {n} anos").format(n=days // 365)
 
 
 def page_container_id(source: SourceConfig, page: dict[str, Any]) -> str:

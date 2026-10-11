@@ -48,20 +48,14 @@ def _two_spaces(window: MainWindow) -> SourceConfig:
     return source
 
 
-def _space_row(window: MainWindow, container_id: str) -> int:
-    table = window.selection_spaces_table
-    return next(row for row in range(table.rowCount()) if table.item(row, 1).data(Qt.ItemDataRole.UserRole) == container_id)
-
-
 def test_whole_space_checkbox_selects_and_clears_every_page(window: MainWindow) -> None:
     source = _two_spaces(window)
-    table = window.selection_spaces_table
 
-    table.item(_space_row(window, "A"), 0).setCheckState(Qt.CheckState.Checked)
+    window._mark_whole_space("A", True)
     assert len(window.project.selected_keys_for(source.id)) == 3
     assert "3 páginas selecionadas em 1 de 2 espaços" in window.selection_total.text()
 
-    table.item(_space_row(window, "A"), 0).setCheckState(Qt.CheckState.Unchecked)
+    window._mark_whole_space("A", False)
     assert not window.project.selected_keys_for(source.id)
 
 
@@ -75,7 +69,7 @@ def test_whole_space_loads_an_unopened_space_first(window: MainWindow, monkeypat
         on_loaded()
 
     monkeypatch.setattr(window, "_load_container_for_source", fake_load)
-    window.selection_spaces_table.item(_space_row(window, "B"), 0).setCheckState(Qt.CheckState.Checked)
+    window._mark_whole_space("B", True)
 
     assert window.project.selected_keys_for(source.id) == {"wiki:B:b1"}
 

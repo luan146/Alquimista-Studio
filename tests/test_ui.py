@@ -499,8 +499,8 @@ def test_selection_browses_containers_without_losing_previous_choices(qtbot) -> 
     window.trees[source.id] = data
     window._populate_selection_tree(source, data)
 
-    table = window.selection_spaces_table
-    spaces = {table.item(row, 1).data(Qt.ItemDataRole.UserRole) for row in range(table.rowCount())}
+    view = window.selection_spaces
+    spaces = {view.item(row).data(Qt.ItemDataRole.UserRole) for row in range(view.count())}
     assert spaces == {"space-a", "space-b"}
 
     window._open_selection_container("space-a")
@@ -581,10 +581,10 @@ def test_space_search_filters_page_and_selection_cards(qtbot) -> None:
 
     window._refresh_selection_home()
     window.selection_space_search.setText("shopping")
-    table = window.selection_spaces_table
-    rows = {table.item(row, 1).data(Qt.ItemDataRole.UserRole): row for row in range(table.rowCount())}
-    assert table.isRowHidden(rows["manual"])
-    assert not table.isRowHidden(rows["shopping"])
+    view = window.selection_spaces
+    rows = {view.item(row).data(Qt.ItemDataRole.UserRole): view.item(row) for row in range(view.count())}
+    assert rows["manual"].isHidden()
+    assert not rows["shopping"].isHidden()
     window.dirty = False
 
 
