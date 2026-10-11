@@ -72,5 +72,8 @@ desktop.ini
 *.swp
 *.swo
 
-# Análises internas (não vão para o GitHub)
+# Análises, planos e ferramentas de IA (ficam só no computador)
 docs/analises/
+docs/superpowers/
+.superpowers/
+.pytest_tmp/

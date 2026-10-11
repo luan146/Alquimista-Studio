@@ -2,7 +2,7 @@
 
 Guia de referência rápida para agentes de IA e desenvolvedores. Fonte da verdade é **sempre o código atual**; este mapa indica **onde começar** a investigação.
 
-**Última reconstrução:** 2026-10-10 — métricas recalculadas e guia por tela restaurado. Estado das análises técnicas: [`docs/analises/ESTADO_ATUAL.md`](docs/analises/ESTADO_ATUAL.md).
+**Última reconstrução:** 2026-10-10 — métricas recalculadas e guia por tela restaurado.
 
 ---
 
