@@ -6,6 +6,10 @@ cd /d "%ROOT_DIR%"
 set "PYTHON_CMD="
 where py >nul 2>&1
 if not errorlevel 1 set "PYTHON_CMD=py -3"
+rem Prefere o 3.12 (o mesmo do GitHub) quando estiver instalado.
+rem Confere a saida: o "py" novo devolve sucesso mesmo sem o 3.12.
+if defined PYTHON_CMD py -3.12 -c "print('versao-3.12')" 2>nul | find "versao-3.12" >nul
+if defined PYTHON_CMD if not errorlevel 1 set "PYTHON_CMD=py -3.12"
 if not defined PYTHON_CMD (
     where python >nul 2>&1
     if not errorlevel 1 set "PYTHON_CMD=python"
@@ -17,9 +21,9 @@ if not defined PYTHON_CMD (
     exit /b 1
 )
 
-%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3,12) else 1)"
+%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.version_info[:2] >= (3,12) else 1)"
 if errorlevel 1 (
-    echo [ERRO] Use Python 3.12.
+    echo [ERRO] Use Python 3.12 ou mais novo.
     pause
     exit /b 1
 )
@@ -33,6 +37,8 @@ if not exist "%ROOT_DIR%\.venv\Scripts\python.exe" (
 echo Instalando o ALQuimista Studio...
 "%ROOT_DIR%\.venv\Scripts\python.exe" -m pip install -c "%ROOT_DIR%\config\constraints.txt" -r "%ROOT_DIR%\config\requirements.txt"
 if errorlevel 1 goto :erro
+rem abrir_completo.bat reinstala quando config\requirements.txt mudar.
+copy /y "%ROOT_DIR%\config\requirements.txt" "%ROOT_DIR%\.venv\requirements-instaladas.txt" >nul
 
 if /I "%~1"=="--with-browser" call "%~dp0instalar_navegador.bat"
 if errorlevel 1 goto :erro
@@ -41,7 +47,7 @@ echo.
 echo Instalacao concluida.
 echo Use abrir_completo.bat para iniciar o ALQuimista diretamente pelo Python.
 echo Para login pelo navegador, execute tools\install\instalar_navegador.bat.
-pause
+if /I not "%~1"=="--sem-pausa" pause
 exit /b 0
 
 :erro
