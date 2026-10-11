@@ -31,6 +31,10 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 [Files]
 Source: "{#AppExeSource}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\distribuicao\LEIA-ME-PORTATIL.txt"; DestDir: "{app}"; Flags: ignoreversion
+#ifdef TesseractDir
+; Reads the text inside images (alquimista/image_text.py looks for {app}\tesseract).
+Source: "{#TesseractDir}\*"; DestDir: "{app}\tesseract"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 
 [Dirs]
 Name: "{userappdata}\ALQuimista Studio"

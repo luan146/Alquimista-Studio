@@ -24,6 +24,15 @@ jobs:
       - name: Compile Python sources
         shell: pwsh
         run: python -m compileall -q alquimista tests
+      # Before pytest so the real OCR test runs; the build then bundles this installation.
+      - name: Install Tesseract with Portuguese and Spanish data
+        shell: pwsh
+        run: |
+          choco install tesseract --no-progress -y
+          $tessdata = Join-Path $env:ProgramFiles "Tesseract-OCR\tessdata"
+          foreach ($language in "por", "spa") {
+            Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/$language.traineddata" -OutFile (Join-Path $tessdata "$language.traineddata")
+          }
       - name: Run pytest
         shell: pwsh
         env:
