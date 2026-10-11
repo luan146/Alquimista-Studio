@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .images import ImageReader, images_as_text
 from .metadata import knowledge_document_metadata
 from .normalization import format_updated_at, normalize_markdown, sha256_text
 
@@ -23,8 +24,10 @@ class PreparedKnowledgeDocument:
 class KnowledgeDocumentRenderer:
     """Platform-neutral Markdown renderer for normalized documents."""
 
-    def __init__(self, options: MarkdownOptions) -> None:
+    def __init__(self, options: MarkdownOptions, image_reader: ImageReader | None = None) -> None:
         self.options = options
+        # Reads the text inside an image (OCR) when images become text; None keeps the description only.
+        self.image_reader = image_reader
 
     def prepare(
         self,
@@ -38,6 +41,8 @@ class KnowledgeDocumentRenderer:
         if metadata_overrides:
             metadata.update(metadata_overrides)
         content = normalize_markdown(document.content)
+        if self.options.images_as_text:
+            content = images_as_text(content, self.image_reader)
         content_hash = sha256_text(self.hash_input(metadata, content))
         return PreparedKnowledgeDocument(
             metadata=metadata,

@@ -95,6 +95,11 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
     "Separar por fonte": {"en": "Separate by source", "es": "Separar por fuente"},
     "Testar": {"en": "Test", "es": "Probar"},
     "Texto alternativo": {"en": "Alternative text", "es": "Texto alternativo"},
+    "Imagens como texto (para IA)": {"en": "Images as text (for AI)", "es": "Imágenes como texto (para IA)"},
+    "Troca cada imagem por uma descrição e pelo texto lido nela; IA não abre imagens que exigem login.": {
+        "en": "Replaces each image with a description and the text read in it; AI tools cannot open images that require sign-in.",
+        "es": "Sustituye cada imagen por una descripción y el texto leído en ella; la IA no abre imágenes que requieren inicio de sesión.",
+    },
     "Tipo": {"en": "Type", "es": "Tipo"},
     "Voltar": {"en": "Back", "es": "Volver"},
     "arquivos": {"en": "files", "es": "archivos"},

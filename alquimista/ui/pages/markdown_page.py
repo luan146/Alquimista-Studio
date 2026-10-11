@@ -161,6 +161,11 @@ def build_markdown_page(window: Any) -> QWidget:
         [
             ("include_images", "Imagens", "Preserva referências visuais."),
             ("include_image_alt_text", "Texto alternativo", "Melhora acessibilidade e contexto."),
+            (
+                "images_as_text",
+                "Imagens como texto (para IA)",
+                "Troca cada imagem por uma descrição e pelo texto lido nela; IA não abre imagens que exigem login.",
+            ),
             ("include_attachments", "Anexos", "Converte anexos em links."),
             ("include_videos", "Vídeos", "Preserva referências de vídeo."),
             ("include_links", "Links", "Mantém links clicáveis."),

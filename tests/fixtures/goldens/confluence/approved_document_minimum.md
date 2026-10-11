@@ -10,7 +10,7 @@ Conteúdo UTF-8: ação, integração e informação.
 
 [Abrir configuração](https://example.test/pages/viewpage.action?title=Configura%C3%A7%C3%A3o)[Baixar guia](https://example.test/download/attachments/page-42/guia.pdf)
 
-![Diagrama](https://example.test/download/attachments/page-42/diagrama.png)
+[Imagem: Diagrama]
 
 | Campo | Valor |
 | --- | --- |

@@ -7,7 +7,7 @@ path: "Manual > Integrações > Página de integração"
 updated_at: "12/08/2026 15:00"
 author: "Equipe ALQuimista"
 labels: ["p0", "confluence"]
-content_hash: "6b7bdf607963d2100831bf12ecc7adf1db0045feda4c424adb43fc274290073f"
+content_hash: "27ef4d06e914d142797a2dcca9003f9f9d34882ce799849be9cb7e9b70c447b1"
 collected_at: "2026-08-12T12:00:00-03:00"
 status: "new"
 ---
@@ -21,7 +21,7 @@ status: "new"
 **Última atualização:** 12/08/2026 15:00
 **Autor:** Equipe ALQuimista
 **Rótulos:** p0, confluence
-**SHA-256:** `6b7bdf607963d2100831bf12ecc7adf1db0045feda4c424adb43fc274290073f`
+**SHA-256:** `27ef4d06e914d142797a2dcca9003f9f9d34882ce799849be9cb7e9b70c447b1`
 **Data da coleta:** 2026-08-12T12:00:00-03:00
 **Status:** new
 
@@ -35,7 +35,7 @@ Conteúdo UTF-8: ação, integração e informação.
 
 [Abrir configuração](https://example.test/pages/viewpage.action?title=Configura%C3%A7%C3%A3o)[Baixar guia](https://example.test/download/attachments/page-42/guia.pdf)
 
-![Diagrama](https://example.test/download/attachments/page-42/diagrama.png)
+[Imagem: Diagrama]
 
 | Campo | Valor |
 | --- | --- |

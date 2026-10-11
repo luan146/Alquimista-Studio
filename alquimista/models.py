@@ -285,10 +285,13 @@ class MarkdownOptions(Model):
     absolute_links: bool = True
     separators: bool = True
     auto_demote_headings: bool = False
+    # Images become "[Imagem: ...]" text: AI tools cannot open authenticated image URLs.
+    images_as_text: bool = True
     hash_scope: Literal["content", "title_content", "stable_metadata"] = "title_content"
 
     def signature(self) -> str:
-        return stable_json_hash(self.model_dump())
+        # Left out while off, so projects saved before the option keep their format hash.
+        return stable_json_hash(self.model_dump(exclude=set() if self.images_as_text else {"images_as_text"}))
 
     @classmethod
     def preset(cls, name: str) -> "MarkdownOptions":
@@ -506,6 +509,10 @@ class ProjectConfig(Model):
             extraction.setdefault("max_requests_per_second", 4.0)
             extraction.setdefault("proxy_mode", "system")
             extraction.setdefault("proxy_url", "")
+        # Projects saved before "images as text" existed keep their image links.
+        markdown = migrated.get("markdown")
+        if isinstance(markdown, dict) and "images_as_text" not in markdown:
+            migrated["markdown"] = {**markdown, "images_as_text": False}
         return cls.model_validate(migrated)
 
 
