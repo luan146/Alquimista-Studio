@@ -319,3 +319,56 @@ def test_activity_filter_shows_only_errors(window: MainWindow) -> None:
     assert "Página B" in text and "Página A" not in text
     window.log_filter.buttons()[0].click()
     assert "Página A" in window.log_text.toPlainText()
+
+
+def _failed_run(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "critical", lambda *_a, **_k: None)
+    window.operation_controller.thread_pool.start = lambda worker: None  # type: ignore[method-assign]
+    window._start_worker(lambda *_a: {}, window._operation_done)
+
+
+def test_failure_detail_keeps_its_line_breaks(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    _failed_run(window, monkeypatch)
+    detail = 'Traceback (most recent call last):\n  File "x.py", line 1\nRuntimeError: Erro 500'
+    window.operation_controller.worker_failed(RuntimeError("Erro 500"), detail)
+    lines = window.log_text.toPlainText().splitlines()
+    assert any(line.strip().startswith('File "x.py"') for line in lines)
+    assert any(line.strip() == "RuntimeError: Erro 500" for line in lines)
+
+
+def test_run_button_is_visible_without_scrolling_on_a_small_window(window: MainWindow, qapp: Any) -> None:
+    window.resize(1050, 700)
+    window.show()
+    window._show_page("extraction")
+    for _ in range(5):
+        qapp.processEvents()
+    visible = window.execute_button.visibleRegion().boundingRect()
+    assert visible.height() == window.execute_button.height()
+
+
+def test_cancelled_run_is_not_counted_as_failure(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from alquimista.errors import ExtractionCancelledError
+    _failed_run(window, monkeypatch)
+    window.operation_controller.token.cancel()  # type: ignore[union-attr]
+    window.operation_controller.worker_failed(
+        ExtractionCancelledError("Operação cancelada pelo usuário."), "Traceback (most recent call last):\n  boom"
+    )
+    assert window.run_failed_chip.text() == "0 falhas"
+    assert window.run_failed_chip.property("kind") == "neutral"
+
+
+def test_other_jobs_do_not_touch_a_finished_run(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    _failed_run(window, monkeypatch)
+    controller = window.operation_controller
+    controller.on_progress(3, 18, "Página 3")
+    controller.worker_failed(RuntimeError("Erro 500"), "")
+    controller.worker_finished()
+    before = window.log_text.toPlainText()
+    window._start_worker(lambda *_a: {}, lambda _result: None)  # e.g. a tree load
+    controller.on_progress(1, 5, "Espaço")
+    window._append_log("Carregando árvore")
+    controller.worker_finished()
+    assert window.execute_stack.currentIndex() == 1
+    assert window.run_count.text() == "3 de 18" and "15" in window.run_left_chip.text()
+    assert window.log_text.toPlainText() == before

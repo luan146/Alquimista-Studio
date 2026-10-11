@@ -38,9 +38,15 @@ _MARKS = {"error": ("✕", "danger"), "warning": ("!", "warning"), "info": ("•
 def append_rendered(window: Any, level: str, line: str) -> None:
     """Add one activity line with its colored mark and keep the view at the bottom."""
     mark, color = _MARKS[level]
+    first, *rest = line.split("\n")
     window.log_text.append(
-        f'<span style="color:{current_colors()[color]}; font-weight:700">{mark}</span> {html.escape(line)}'
+        f'<span style="color:{current_colors()[color]}; font-weight:700">{mark}</span> {html.escape(first)}'
     )
+    # Multi-line entries (a traceback) keep one row per line and their indentation.
+    for extra in rest:
+        text = extra.lstrip(" ")
+        indent = "&nbsp;" * (2 + len(extra) - len(text))
+        window.log_text.append(f"<span>{indent}{html.escape(text)}</span>")  # tag: read as rich text
     bar = window.log_text.verticalScrollBar()
     bar.setValue(bar.maximum())
 
@@ -121,28 +127,6 @@ def build_review_page(window: Any) -> QWidget:
 
     run_side = QVBoxLayout()
     run_side.setSpacing(16)
-    output, output_layout = card()
-    output_layout.addWidget(section_title("Pasta de saída"))
-    window.output_dir = QLineEdit()
-    window.output_dir.setAccessibleName("Pasta onde os arquivos serão salvos")
-    window.output_dir.setPlaceholderText("Escolha uma pasta no computador")
-    window.output_dir.textChanged.connect(window._update_output_preview)
-    # Not primary: the only main action on this screen is "Executar agora".
-    window.output_controls = ResponsiveOutputControls(
-        window.output_dir,
-        [button("Escolher pasta", window.choose_output), button("Abrir pasta", window.open_output)],
-    )
-    output_layout.addWidget(window.output_controls)
-    window.output_path_status = QLabel()
-    window.output_path_status.setObjectName("subtitle")
-    window.output_path_status.setWordWrap(True)
-    output_layout.addWidget(window.output_path_status)
-    window.output_structure = QLabel()
-    window.output_structure.setObjectName("outputStructure")
-    window.output_structure.setWordWrap(True)
-    output_layout.addWidget(window.output_structure)
-    run_side.addWidget(output)
-
     operation, operation_layout = card()
     operation_layout.addWidget(section_title("Operação"))
     window.execution_mode = QComboBox()
@@ -176,6 +160,28 @@ def build_review_page(window: Any) -> QWidget:
     note.setWordWrap(True)
     operation_layout.addWidget(note)
     run_side.addWidget(operation)
+    output, output_layout = card()
+    output_layout.addWidget(section_title("Pasta de saída"))
+    window.output_dir = QLineEdit()
+    window.output_dir.setAccessibleName("Pasta onde os arquivos serão salvos")
+    window.output_dir.setPlaceholderText("Escolha uma pasta no computador")
+    window.output_dir.textChanged.connect(window._update_output_preview)
+    # Not primary: the only main action on this screen is "Executar agora".
+    window.output_controls = ResponsiveOutputControls(
+        window.output_dir,
+        [button("Escolher pasta", window.choose_output), button("Abrir pasta", window.open_output)],
+    )
+    output_layout.addWidget(window.output_controls)
+    window.output_path_status = QLabel()
+    window.output_path_status.setObjectName("subtitle")
+    window.output_path_status.setWordWrap(True)
+    output_layout.addWidget(window.output_path_status)
+    window.output_structure = QLabel()
+    window.output_structure.setObjectName("outputStructure")
+    window.output_structure.setWordWrap(True)
+    output_layout.addWidget(window.output_structure)
+    run_side.addWidget(output)
+
     run_side.addStretch()
     side = QWidget()
     side.setLayout(run_side)

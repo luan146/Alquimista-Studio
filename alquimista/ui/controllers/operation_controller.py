@@ -178,6 +178,7 @@ class WorkerOperationController:
 
             window._log_entries = []
             window.run_failures = 0
+            window._run_active = True
             window.run_count.setText(translate_text("{done} de {total}").format(done=0, total=0))
             window.run_done_chip.setText(_count(0, "{n} pronta", "{n} prontas"))
             window.run_failed_chip.setText(_count(0, "{n} falha", "{n} falhas"))
@@ -203,7 +204,7 @@ class WorkerOperationController:
         window = self.window
         percent = int(done * 100 / total) if total else 0
         window.progress.setValue(percent)
-        if hasattr(window, "run_count") and not getattr(window, "_tree_loading", False):
+        if getattr(window, "_run_active", False):
             window.run_count.setText(translate_text("{done} de {total}").format(done=done, total=total))
             window.run_done_chip.setText(_count(done, "{n} pronta", "{n} prontas"))
             window.run_left_chip.setText(_count(max(0, total - done), "{n} restante", "{n} restantes"))
@@ -233,13 +234,16 @@ class WorkerOperationController:
                     if status is not None:
                         status.setText(window._tree_loading_message)
 
-    def append_log(self, message: str) -> None:
+    def append_log(self, message: str, level: str | None = None) -> None:
         window = self.window
         window.technical_logger.info(message)
         entries = getattr(window, "_log_entries", None)
         if entries is None or not hasattr(window, "log_text"):
             return
-        level = log_level(message)
+        # A finished run stays on screen with its log; other jobs (tree loads, tests) stay out of it.
+        if window.execute_stack.currentIndex() == 1 and not getattr(window, "_run_active", False):
+            return
+        level = level or log_level(message)
         line = f"[{time.strftime('%H:%M:%S')}] {message}"
         entries.append((level, line))
         # The traceback that follows a failure is part of it, not a second one.
@@ -257,11 +261,14 @@ class WorkerOperationController:
     def worker_failed(self, error: Exception | str, detail: str) -> None:
         window = self.window
         message = str(error)
-        self.append_log(f"{translate_text('FALHA')}: {message}")
-        if detail.strip():
-            self.append_log(f"{translate_text('Detalhes técnicos')}:\n{detail.rstrip()}")
         lowered = f"{message}\n{detail}".casefold()
         cancelled = bool(self.token and self.token.cancelled) or "cancel" in lowered
+        if cancelled:  # not a failure: no red mark and no count in the failures chip
+            self.append_log(f"{translate_text('Cancelado')}: {message}", "warning")
+        else:
+            self.append_log(f"{translate_text('FALHA')}: {message}")
+        if detail.strip():
+            self.append_log(f"{translate_text('Detalhes técnicos')}:\n{detail.rstrip()}")
         self._set_state("CANCELLED" if cancelled else "FAILED")
         if cancelled:
             if getattr(window, "_tree_loading", False):
@@ -324,6 +331,7 @@ class WorkerOperationController:
         if getattr(window, "_tree_loading", False):
             window._set_tree_loading(False)
         window.cancel_button.setEnabled(False)
+        window._run_active = False
         if hasattr(window, "run_back_button"):
             window.run_back_button.setEnabled(True)
         window._refresh_dashboard()

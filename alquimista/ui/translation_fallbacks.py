@@ -957,6 +957,7 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
     "0 falhas": {"en": "0 failures", "es": "0 fallos"},
     "0 restantes": {"en": "0 left", "es": "0 restantes"},
     "Atividade": {"en": "Activity", "es": "Actividad"},
+    "Cancelado": {"en": "Cancelled", "es": "Cancelado"},
     "Registro copiado.": {"en": "Log copied.", "es": "Registro copiado."},
     "Se você cancelar ou fechar o programa, o que já foi extraído fica salvo e a próxima execução continua do resto.": {"en": "If you cancel or close the program, what was already extracted is kept and the next run continues from there.", "es": "Si cancela o cierra el programa, lo ya extraído se conserva y la próxima ejecución continúa desde ahí."},
 }
