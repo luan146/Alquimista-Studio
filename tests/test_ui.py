@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from alquimista.models import AuthMode
 from alquimista.ui.components import SourceCard, VisibilityBadgeDelegate
 from alquimista.ui.main_window import MainWindow
+from alquimista.ui.theme import current_colors
 from alquimista.ui.tree_models import ordered_pages
 
 
@@ -64,15 +65,17 @@ def test_three_modes_open(qtbot, mode: str) -> None:
         ("sanity_api", "sanity_api"),
     ],
 )
-def test_dashboard_source_cards_open_sources_page(
-    qtbot, source_type: str, expected_platform: str
+def test_catalog_cards_open_sources_page(
+    qtbot, monkeypatch, source_type: str, expected_platform: str
 ) -> None:
     window = MainWindow("complete")
     qtbot.addWidget(window)
+    # The local-files card opens a folder picker; the user cancels it here.
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args, **kwargs: "")
 
     cards = {
         card.source_type: card
-        for card in window.pages["dashboard"].findChildren(SourceCard)
+        for card in window.add_source_dialog.findChildren(SourceCard)
     }
     assert set(cards) == {
         "confluence_rest",
@@ -428,7 +431,7 @@ def test_visibility_badge_delegate_clips_cell_and_does_not_duplicate_title(
         for y in range(option.rect.top(), option.rect.bottom() + 1)
     )
     assert any(
-        image.pixelColor(x, y) == QColor("#103B38")
+        image.pixelColor(x, y) == QColor(current_colors()["success_soft"])
         for x in range(option.rect.left(), option.rect.right() + 1)
         for y in range(option.rect.top(), option.rect.bottom() + 1)
     )
@@ -497,11 +500,9 @@ def test_selection_browses_containers_without_losing_previous_choices(qtbot) -> 
     window.trees[source.id] = data
     window._populate_selection_tree(source, data)
 
-    cards = {
-        card.source_type: card
-        for card in window.pages["selection"].findChildren(SourceCard)
-    }
-    assert set(cards) == {"space-a", "space-b"}
+    view = window.selection_spaces
+    spaces = {view.item(row).data(Qt.ItemDataRole.UserRole) for row in range(view.count())}
+    assert spaces == {"space-a", "space-b"}
 
     window._open_selection_container("space-a")
     assert window.selection_stack.currentIndex() == 1
@@ -581,8 +582,10 @@ def test_space_search_filters_page_and_selection_cards(qtbot) -> None:
 
     window._refresh_selection_home()
     window.selection_space_search.setText("shopping")
-    assert window._selection_container_cards["manual"].isHidden()
-    assert not window._selection_container_cards["shopping"].isHidden()
+    view = window.selection_spaces
+    rows = {view.item(row).data(Qt.ItemDataRole.UserRole): view.item(row) for row in range(view.count())}
+    assert rows["manual"].isHidden()
+    assert not rows["shopping"].isHidden()
     window.dirty = False
 
 
@@ -1004,4 +1007,25 @@ def test_consolidation_preview_is_dispatched_to_worker(
 
     assert callable(captured["function"])
     assert callable(captured["done"])
+    window.dirty = False
+
+
+def test_invalid_auth_choice_returns_to_last_valid_mode(qtbot, monkeypatch) -> None:
+    window = MainWindow("complete")
+    qtbot.addWidget(window)
+    warnings: list[str] = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda _parent, title, _text: warnings.append(title))
+    source = window.source_by_combo(window.connection_source)
+    index = window.project.sources.index(source)
+    # Credentials over plain HTTP are rejected by SourceConfig validation.
+    window.project.sources[index] = source.model_copy(
+        update={"base_url": "http://wiki.example.com", "auth_mode": AuthMode.PUBLIC}
+    )
+
+    window.auth_mode.setCurrentIndex(window.auth_mode.findData(AuthMode.BASIC.value))
+
+    assert warnings
+    assert window.auth_mode.currentData() == AuthMode.PUBLIC.value
+    assert window.auth_user.isHidden() and window.auth_secret.isHidden()
+    assert window.project.sources[index].auth_mode == AuthMode.PUBLIC
     window.dirty = False

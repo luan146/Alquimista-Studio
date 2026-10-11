@@ -71,6 +71,8 @@ Your exported content remains portable instead of being locked to a specific AI 
 
 ## 🧭 How it works
 
+In the interface these stages appear as **Home + 5 steps** in the sidebar (Sources, Selection, Output, Run, Results), each marked ✓ when done, with a **Next** button at the bottom. **Home** shows the project status, the next step and recent projects; the last project reopens on startup. Shortcuts: Ctrl+N/O/S (new, open, save), Ctrl+1…5 (steps), F5 (run). Drop a URL, file or folder on the window to add a source; in Selection, check **Whole** to take an entire space and double-click a page to see its real Markdown. To try it without credentials: **Settings → Open sample project**.
+
 ### 1. 📚 Add a knowledge source
 
 Paste a URL and let ALQuimista identify the platform and prepare the source configuration.
@@ -200,6 +202,19 @@ Large files are bounded by the processor registry, and optional format dependenc
 
 The synchronization service can operate at selection, source, or project scope. It builds a plan from the remote inventory and the existing manifest, classifying items as **new, updated, unchanged, removed, failed, or preserved after an error**. Only changed documents are downloaded, remote removals are handled safely, attachments can be compared, and the operation writes a structured `sync_report.json` report. Consolidation can run automatically after a successful synchronization.
 
+**Scheduled synchronization (Windows):** in **Settings → Scheduled project synchronization**, pick a time and click **Schedule**; the Task Scheduler then runs `"ALQuimista Studio.exe" --sync "<project.json>"` every day without opening the window. Sources with a token need **Remember on this computer**; sources with browser login use the saved session (log in again when it expires). Results go to `sync_report.json` and the technical log.
+
+**Only what you selected:** new pages in the source join only when they sit under a selected page or in a space marked **Whole**, and they show up selected. Every synchronization with changes writes a readable summary to `sincronizacoes/YYYY-MM-DD_HHMMSS.md` (**See what changed** button), and the scheduled synchronization shows a Windows notification when something changes, fails, or access expires.
+
+### 🧠 AI-ready output
+
+NotebookLM and Claude/ChatGPT projects cannot open images or links that require sign-in. In new projects, by default:
+
+- each image becomes `[Imagem: description — texto na imagem: …]`, with the text read by **Tesseract**, bundled with every package (the Linux `.deb` installs it as a dependency);
+- in consolidated packages, a link to another extracted page becomes `text (ver «Title» em package.md)`.
+
+The options live in **Output → Markdown** (*Images as text*, *Read the text inside images*) and **Output → Packages** (*Links between pages become references*). Existing projects keep their previous output.
+
 ---
 
 ## 📄 What does ALQuimista generate?
@@ -244,14 +259,16 @@ Download → install or extract → open ALQuimista Studio.
 | Platform | Package |
 |---|---|
 | 🪟 Windows | [Installer `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-installer-0.9.5.exe) · [Portable ZIP `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-portable-0.9.5.zip) |
-| 🐧 Linux | [Portable tar.gz](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-portable-0.9.5.tar.gz) |
+| 🐧 Linux | [Installer .deb `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-installer-0.9.5.deb) · [Portable tar.gz `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-portable-0.9.5.tar.gz) |
 
 ➡️ [View all releases](https://github.com/luan146/Alquimista-Studio/releases)
 
 The Windows Installer creates shortcuts and keeps preferences in the user
 profile. The Portable package can be extracted and launched without
-installation. On Linux, extract the tarball and run the included
-`ALQuimista Studio` executable.
+installation. On Linux (Ubuntu, Debian and derivatives), install the `.deb`
+with `sudo apt install ./ALQuimista-Studio-linux-installer-*.deb`, or extract
+the tarball and run the included `ALQuimista Studio` executable. No package
+needs Python.
 
 ### 2. For developers: run from source
 
@@ -306,7 +323,7 @@ For browser authentication support:
 
 ALQuimista is designed to avoid storing sensitive authentication data inside project files.
 
-- 🔑 API passwords and tokens remain in runtime memory and are not serialized into the project.
+- 🔑 API passwords and tokens remain in runtime memory and are not serialized into the project. With **Remember on this computer**, the token is stored outside the project, protected by Windows DPAPI.
 - 🌐 Browser sessions are stored separately from project files and can be deleted by the user.
 - 🛡️ On Windows, persisted browser session data is protected with Windows DPAPI.
 - 🧹 Discovery cache stores metadata only — not document content or credentials.

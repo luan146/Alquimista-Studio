@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -19,6 +20,39 @@ MANIFEST_INDEX_NAME = "indice_manifesto_alquimista.sqlite3"
 FAILURES_NAME = "falhas_alquimista.json"
 REPORT_NAME = "relatorio_execucao_alquimista.json"
 PACKAGE_INDEX_NAME = "indice_pacotes_alquimista.json"
+# One JSON line per extraction run (manual, sync or scheduled), newest last.
+HISTORY_NAME = "historico_execucoes_alquimista.jsonl"
+
+
+def append_history(output_dir: Path, report: dict[str, Any], *, status: str = "completed") -> None:
+    """``status``: completed, cancelled or interrupted (e.g. token expired mid-run)."""
+    entry = {
+        "status": status,
+        "executed_at": report.get("executed_at"),
+        "duration_seconds": report.get("duration_seconds"),
+        "pages_selected": report.get("pages_selected"),
+        "counters": report.get("counters", {}),
+        "failures": report.get("failures", 0),
+    }
+    with (output_dir / HISTORY_NAME).open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def load_history(output_dir: Path, limit: int = 50) -> list[dict[str, Any]]:
+    """Most recent runs first; unreadable lines are skipped."""
+    try:
+        lines = (output_dir / HISTORY_NAME).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    runs: list[dict[str, Any]] = []
+    for line in reversed(lines[-limit:]):
+        try:
+            item = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(item, dict):
+            runs.append(item)
+    return runs
 
 
 def confined_path(base: Path, relative: str | Path) -> Path:
@@ -57,12 +91,30 @@ def atomic_write_json(path: Path, data: Any, *, backup: bool = False) -> None:
     )
 
 
+def _remove_stale_transactions(base: Path, max_age_seconds: float = 86400) -> None:
+    """Delete transaction folders left by a killed process.
+
+    Folders with backups are kept: a crash mid-commit can leave the only copy of
+    an original file there. Recent folders may belong to another running process
+    (e.g. a scheduled sync on the same output folder).
+    """
+    cutoff = time.time() - max_age_seconds
+    for folder in base.glob(".alquimista-txn-*"):
+        try:
+            touched = max(path.stat().st_mtime for path in (folder, folder / "staged") if path.exists())
+            if touched < cutoff and not any((folder / "backups").glob("*")):
+                shutil.rmtree(folder, ignore_errors=True)
+        except OSError:
+            continue
+
+
 class FileTransaction:
     """Stage related file changes and roll back a failed in-process commit."""
 
     def __init__(self, base: Path) -> None:
         self.base = base.resolve()
         self.base.mkdir(parents=True, exist_ok=True)
+        _remove_stale_transactions(self.base)
         self.directory = Path(
             tempfile.mkdtemp(prefix=".alquimista-txn-", dir=self.base)
         )

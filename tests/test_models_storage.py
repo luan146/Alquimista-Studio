@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
 
 import pytest
@@ -76,6 +78,29 @@ def test_file_transaction_publishes_writes_and_deletions_together(tmp_path: Path
     assert updated.read_text(encoding="utf-8") == "new"
     assert (tmp_path / "created.txt").read_text(encoding="utf-8") == "created"
     assert not deleted.exists()
+
+
+def test_new_transaction_removes_old_leftovers_but_keeps_backups(tmp_path: Path) -> None:
+    # A killed process leaves its transaction folder behind; folders holding
+    # backups may be the only copy of an original file and stay for recovery.
+    def leftover(name: str, subdir: str, *, days_old: float) -> Path:
+        folder = tmp_path / f".alquimista-txn-{name}"
+        (folder / subdir).mkdir(parents=True)
+        (folder / subdir / "x.tmp").write_text("x", encoding="utf-8")
+        old = time.time() - days_old * 86400
+        for path in (folder / subdir, folder):
+            os.utime(path, (old, old))
+        return folder
+
+    stale = leftover("stale", "staged", days_old=2)
+    with_backup = leftover("backup", "backups", days_old=2)
+    recent = leftover("recent", "staged", days_old=0)  # e.g. a scheduled sync running now
+
+    FileTransaction(tmp_path).close()
+
+    assert not stale.exists()
+    assert with_backup.exists()
+    assert recent.exists()
 
 
 def test_file_transaction_rolls_back_when_commit_fails(

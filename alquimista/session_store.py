@@ -24,13 +24,13 @@ def session_directory() -> Path:
     return Path.home() / ".local" / "share" / "alquimista-studio" / "sessions"
 
 
-def session_path(source_id: str) -> Path:
+def session_path(source_id: str, kind: str = "session") -> Path:
     try:
         safe_id = validate_source_identifier(source_id)
     except ValueError as exc:
         raise AuthenticationError("O identificador da fonte é inseguro.") from exc
     directory = session_directory().resolve()
-    candidate = (directory / f"{safe_id}.session.json").resolve()
+    candidate = (directory / f"{safe_id}.{kind}.json").resolve()
     if candidate.parent != directory:
         raise AuthenticationError("O caminho da sessão sai da pasta permitida.")
     return candidate
@@ -83,17 +83,21 @@ def _crypt_unprotect(data: bytes) -> bytes:
 
 
 def save_session(source_id: str, state: dict[str, Any]) -> Path:
-    path = session_path(source_id)
+    return _write_protected(session_path(source_id), state)
+
+
+def _write_protected(path: Path, state: dict[str, Any]) -> Path:
     raw = json.dumps(state, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     protection = "dpapi-current-user" if sys.platform == "win32" else "file-permissions"
     try:
         protected = _crypt_protect(raw)
-    except OSError:
-        # Some test and managed Windows environments expose win32 without a
-        # usable crypt32 provider. Keep the atomic session contract and rely
-        # on the restrictive file mode in that fallback case.
-        protected = raw
-        protection = "file-permissions"
+    except OSError as exc:
+        # On Windows chmod cannot restrict readers, so storing cookies or tokens
+        # without DPAPI would leave them in plain text. Refuse instead of downgrading.
+        raise AuthenticationError(
+            "Não foi possível proteger os dados de acesso com a criptografia do Windows; "
+            "nada foi salvo."
+        ) from exc
     document = {
         "format": _FORMAT,
         "version": 1,
@@ -145,3 +149,29 @@ def delete_session_file(source_id: str) -> bool:
         return False
     path.unlink(missing_ok=True)
     return True
+
+
+def save_secret(source_id: str, secret: str) -> Path:
+    """Remember an API token for unattended runs, protected like the browser session."""
+    return _write_protected(session_path(source_id, "secret"), {"secret": secret})
+
+
+def load_secret(source_id: str) -> str:
+    """Return the remembered token, or "" when none was saved."""
+    path = session_path(source_id, "secret")
+    if not path.exists():
+        return ""
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        protected = base64.b64decode(document["payload"], validate=True)
+        if document.get("protection") != "file-permissions":
+            protected = _crypt_unprotect(protected)
+        return str(json.loads(protected.decode("utf-8"))["secret"])
+    except Exception as exc:
+        raise AuthenticationError(
+            "O token salvo está inválido ou pertence a outro usuário do Windows. Informe-o novamente."
+        ) from exc
+
+
+def delete_secret(source_id: str) -> None:
+    session_path(source_id, "secret").unlink(missing_ok=True)

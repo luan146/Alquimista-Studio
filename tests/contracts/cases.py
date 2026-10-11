@@ -236,7 +236,8 @@ class _NotionClient:
                         "id": "b1",
                         "type": "paragraph",
                         "paragraph": {"rich_text": [{"plain_text": "Conteúdo estável."}]},
-                    }
+                    },
+                    {"id": "sub-1", "type": "child_page", "child_page": {"title": "Anexo"}},
                 ],
                 "has_more": False,
             }
@@ -416,20 +417,22 @@ class _SharePointClient:
                 "value": [
                     {
                         "id": "item-1",
-                        "name": "Contrato SharePoint",
+                        "name": "Contrato SharePoint.md",
+                        "file": {"mimeType": "text/markdown"},
                         "webUrl": "https://sp.test/item-1",
                         "lastModifiedDateTime": "2026-01-02T03:04:05Z",
                     }
                 ]
             }
-        if path == "/drive/items/item-1":
+        if path == "/sites/site-1/drive/items/item-1":
             return {
                 "id": "item-1",
-                "name": "Contrato SharePoint",
+                "name": "Contrato SharePoint.md",
+                "file": {"mimeType": "text/markdown"},
                 "webUrl": "https://sp.test/item-1",
                 "lastModifiedDateTime": "2026-01-02T03:04:05Z",
             }
-        if path == "/drive/items/item-1/children":
+        if path == "/sites/site-1/drive/items/item-1/children":
             return {"value": []}
         raise AssertionError(f"endpoint SharePoint GET inesperado: {path}")
 
@@ -441,7 +444,7 @@ class _SharePointClient:
         headers: dict[str, str] | None = None,
     ) -> bytes:
         del params, headers
-        if "/drive/items/item-1/content" in path:
+        if path == "/sites/site-1/drive/items/item-1/content":
             return b"# Contrato SharePoint\n\nConteudo estavel."
         raise AssertionError(f"endpoint SharePoint download inesperado: {path}")
 
@@ -1451,13 +1454,13 @@ CASES: tuple[ConnectorContractCase, ...] = (
         normalize_payload=lambda: {
             "id": "page-1",
             "title": "Contrato Notion",
-            "markdown": "Conteúdo estável.",
+            "markdown": "Conteúdo estável.\n\n📄 [Anexo](https://www.notion.so/sub1)",
             "last_edited_time": "2026-01-02T03:04:05Z",
             "url": "https://notion.test/page-1",
             "_container_id": "notion_workspace",
         },
         expected_container_ids=("notion_workspace", "db-1"),
-        expected_child_ids=("b1",),
+        expected_child_ids=("sub-1",),
         optional_capabilities=frozenset(
             {"list_root_documents", "list_document_children", "search_documents"}
         ),

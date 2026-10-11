@@ -19,14 +19,18 @@ from ...client import ConfluenceClient
 from ...confluence_url import parse_confluence_url
 from ...models import AuthMode, SourceConfig, now_iso
 from ...runtime import CancellationToken
+from ...session_store import delete_secret
 from ...source_detection import DetectedSource, detect_source_url
+from ..components import AlchemistIconAtlas
+from ..controllers.source_controller import source_by_combo as resolve_source_by_combo
+from ..controllers.source_controller import source_by_index as resolve_source_by_index
 from ..i18n import translate_text
-from ..source_controller import source_by_combo as resolve_source_by_combo
-from ..source_controller import source_by_index as resolve_source_by_index
+from ..pages.sources_page import STATE_KIND_ROLE
 from ..workers import Worker
+from . import WindowBase
 
 
-class SourceMixin:
+class SourceMixin(WindowBase):
     """Source list, source form, and source profile behavior."""
 
     # Attributes provided by MainWindow.__init__/build_*_page. Declared as
@@ -35,6 +39,7 @@ class SourceMixin:
     # (Any) for widgets/helpers created externally, matching the pattern in
     # TreeMixin.
     project: Any
+    sync_source: Any
     view_state: Any
     connector_registry: Any
     secrets: Any
@@ -76,6 +81,10 @@ class SourceMixin:
     _page_render_limits: dict[tuple[str, str], int]
     _selection_render_limits: dict[tuple[str, str], int]
     _connection_source_changed: Any
+    _source_connection_badge: Any
+    _source_connection_state: Any
+    sources_empty: Any
+    connection_card: Any
     _selection_source_changed: Any
     _tree_source_changed: Any
 
@@ -176,19 +185,30 @@ class SourceMixin:
             self.source_table.setItem(table_row, 0, checkbox)
 
             original_url = str(source.connector_options.get("source_url") or source.base_url)
-            self.source_table.setItem(table_row, 1, QTableWidgetItem(original_url))
-            self.source_table.setItem(table_row, 2, QTableWidgetItem(source.name))
+            name_item = QTableWidgetItem(source.name)
+            name_item.setToolTip(original_url)
+            self.source_table.setItem(table_row, 1, name_item)
+            url_item = QTableWidgetItem(original_url)
+            url_item.setToolTip(original_url)
+            self.source_table.setItem(table_row, 2, url_item)
             try:
                 descriptor = self.connector_registry.get(source.source_type)
-                api_label = f"{descriptor.display_name} · {descriptor.integration_name}"
+                platform = QTableWidgetItem(descriptor.display_name)
+                platform.setToolTip(f"{descriptor.display_name} · {descriptor.integration_name}")
+                name_item.setIcon(AlchemistIconAtlas.connector_icon(descriptor.card.icon, 20))
+                name_item.setToolTip(f"{descriptor.display_name} · {original_url}")
             except ValueError:
-                api_label = translate_text(
-                    "{source_type} · Conector não registrado"
-                ).format(source_type=source.source_type)
-            self.source_table.setItem(table_row, 3, QTableWidgetItem(api_label))
-            added_at = self._source_added_at.get(source.id, now_iso())
-            self._source_added_at.setdefault(source.id, added_at)
-            self.source_table.setItem(table_row, 4, QTableWidgetItem(added_at))
+                platform = QTableWidgetItem(
+                    translate_text("{source_type} · Conector não registrado").format(
+                        source_type=source.source_type
+                    )
+                )
+            self.source_table.setItem(table_row, 3, platform)
+            self._source_added_at.setdefault(source.id, now_iso())
+            state_text, state_kind = self._source_connection_state(source)
+            state_item = QTableWidgetItem(state_text)
+            state_item.setData(STATE_KIND_ROLE, state_kind)
+            self.source_table.setItem(table_row, 4, state_item)
 
             menu = QPushButton("⋮")
             menu.setToolTip(translate_text("Opções da fonte (sincronizar, editar, remover)"))
@@ -220,16 +240,9 @@ class SourceMixin:
         self.source_count_label.setText(
             translate_text("{count} itens").format(count=len(visible_rows))
         )
-        self.sources_empty_label.setVisible(not visible_rows)
-
-    def sync_source(self, source_id: str) -> None:
-        from ..controllers.execution_controller import sync_source as ctrl_sync_source
-        ctrl_sync_source(self, source_id)
-
-    def sync_project(self) -> None:
-        from ..controllers.execution_controller import sync_project as ctrl_sync_project
-        ctrl_sync_project(self)
-
+        self.source_table.setVisible(bool(visible_rows))
+        self.sources_empty.setVisible(not visible_rows)
+        self.connection_card.setVisible(bool(visible_rows))
 
     def _source_table_row_changed(self, row: int) -> None:
         if row < 0 or row >= len(getattr(self, "_visible_source_rows", [])):
@@ -237,6 +250,9 @@ class SourceMixin:
         project_row = self._visible_source_rows[row]
         if self.sources_list.currentRow() != project_row:
             self.sources_list.setCurrentRow(project_row)
+        # The connection panel beside the list follows the selected row.
+        if self.connection_source.currentIndex() != project_row:
+            self.connection_source.setCurrentIndex(project_row)
 
 
     def _selected_source_rows(self) -> list[int]:
@@ -329,7 +345,8 @@ class SourceMixin:
         )
 
 
-    def _commit_source_from_form(self) -> None:
+    def _commit_source_from_form(self) -> bool:
+        """Add or update the source typed in the form; True when it was saved."""
         raw_url = self.source_url_input.text().strip()
         if not raw_url:
             QMessageBox.warning(
@@ -337,7 +354,7 @@ class SourceMixin:
                 translate_text("URL obrigatória"),
                 translate_text("Cole a URL da fonte antes de adicionar."),
             )
-            return
+            return False
         try:
             detected = detect_source_url(raw_url, self.connector_registry)
             row = self._editing_source_row
@@ -375,8 +392,10 @@ class SourceMixin:
             self._reset_source_form()
             self.mark_dirty()
             self.statusBar().showMessage(message, 3500)
+            return True
         except ValueError as exc:
             QMessageBox.warning(self, translate_text("URL não reconhecida"), str(exc))
+            return False
 
 
     def _edit_source_row(self, table_row: int) -> None:
@@ -859,6 +878,7 @@ class SourceMixin:
         """Drop runtime state that is not portable across connector types."""
         self.secrets.pop(source.id, None)
         delete_session(source)
+        delete_secret(source.id)
         self.trees.pop(source.id, None)
         self.connected_sources.discard(source.id)
         self.connection_states.pop(source.id, None)
@@ -888,8 +908,8 @@ class SourceMixin:
             "",
             translate_text(
                 "Todos os Documentos Suportados (*.pdf *.docx *.xlsx *.pptx *.epub *.html *.txt *.md);;"
-                "PDF (*.pdf);;Word (*.docx *.rtf *.odt);;Excel / Planilhas (*.xlsx *.xls *.csv *.tsv);;"
-                "PowerPoint (*.pptx *.odp);;E-books (*.epub);;HTML (*.html *.htm);;Texto / Markdown (*.txt *.md *.mdx);;"
+                "PDF (*.pdf);;Word (*.docx *.rtf);;Excel / Planilhas (*.xlsx *.xlsm *.csv *.tsv);;"
+                "PowerPoint (*.pptx);;E-books (*.epub);;HTML (*.html *.htm);;Texto / Markdown (*.txt *.md *.mdx);;"
                 "Imagens (*.png *.jpg *.jpeg *.webp);;Todos os Arquivos (*.*)"
             ),
         )

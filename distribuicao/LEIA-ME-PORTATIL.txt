@@ -1,4 +1,4 @@
-ALQUIMISTA STUDIO 0.9.5 - PORTABLE / PORTATIL
+ALQUIMISTA STUDIO - PORTABLE / PORTATIL
 
 Como iniciar / How to start / Como iniciar
 ------------------------------------------
@@ -23,6 +23,10 @@ Observacoes / Notes / Notas
 - O acesso publico e as conexoes por API funcionam diretamente pelo aplicativo.
 - O login interativo pelo navegador pode exigir o Google Chrome instalado.
   O navegador Chromium nao e incluido neste primeiro pacote portatil.
+- A pasta "tesseract" contem o Tesseract OCR (licenca Apache 2.0,
+  https://github.com/tesseract-ocr/tesseract), usado para ler o texto
+  dentro das imagens, no Windows e no Linux. Nao e preciso instalar
+  Python nem Tesseract.
 - Nunca compartilhe a pasta de sessoes ou arquivos de projeto que contenham
   informacoes sensiveis.
 

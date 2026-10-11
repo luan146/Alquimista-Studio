@@ -5,10 +5,11 @@ import time
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlsplit
 
 import requests
 
+from . import __version__
 from .errors import (
     ApiConnectionError,
     ApiRateLimitError,
@@ -30,6 +31,11 @@ def session_directory() -> Path:
 
 def session_path(source_id: str) -> Path:
     return _session_path(source_id)
+
+
+def _no_auth(request: requests.PreparedRequest) -> requests.PreparedRequest:
+    """Request-level auth that overrides ``session.auth`` with no credentials."""
+    return request
 
 
 class ConfluenceClient:
@@ -54,7 +60,9 @@ class ConfluenceClient:
         self.session = session or requests.Session()
         self._sleep = sleep
         self._random = random_value
-        self.rate_limiter = RateLimiter(options.max_requests_per_second, self.token)
+        self.rate_limiter = RateLimiter(
+            options.max_requests_per_second, self.token, min_interval=options.request_delay_ms / 1000
+        )
         self._configure_session()
 
     @property
@@ -77,7 +85,7 @@ class ConfluenceClient:
         self.session.headers.update(
             {
                 "Accept": "application/json, text/html;q=0.8",
-                "User-Agent": "ALQuimista-Studio/0.9.5 (+desktop-confluence-exporter)",
+                "User-Agent": f"ALQuimista-Studio/{__version__} (+desktop-confluence-exporter)",
             }
         )
         if self.options.proxy_mode == "direct":
@@ -140,8 +148,17 @@ class ConfluenceClient:
         *,
         params: dict[str, Any] | None = None,
         expect_json: bool = True,
+        binary: bool = False,
     ) -> Any:
         url = self._request_url(path)
+        # Credentials go only to the configured origin; absolute links returned by
+        # the API to another host (or to plain HTTP) are fetched anonymously.
+        # Browser-session cookies are already scoped by domain in the cookie jar.
+        anonymous: dict[str, Any] = (
+            {"headers": {"Authorization": None}, "auth": _no_auth}
+            if urlsplit(url)[:2] != urlsplit(self.base_url)[:2]
+            else {}
+        )
         query = "" if not params else f" params={params!r}"
         self.log(f"[Confluence] GET {url}{query}")
         last_error: Exception | None = None
@@ -157,6 +174,7 @@ class ConfluenceClient:
                         self.options.connect_timeout_seconds,
                         self.options.timeout_seconds,
                     ),
+                    **anonymous,
                 )
                 self.log(
                     f"[Confluence] resposta HTTP {response.status_code} "
@@ -190,9 +208,12 @@ class ConfluenceClient:
                         f"Tentativa {attempt} falhou com HTTP {response.status_code} em {url}; "
                         f"nova tentativa em {delay:.1f}s."
                     )
+                    self.rate_limiter.pause(delay)
                     self.token.wait(delay)
                     continue
                 response.raise_for_status()
+                if binary:
+                    return response.content
                 if not expect_json:
                     return response.text
                 try:
@@ -513,6 +534,10 @@ class ConfluenceClient:
                 f"A página raiz “{title}” não foi encontrada no espaço."
             )
         return exact
+
+    def download(self, path: str) -> bytes:
+        """Binary resource (image, attachment); credentials only reach the configured origin."""
+        return bytes(self._request(path, binary=True))
 
     def fetch_page(
         self, page_id: str, *, include_body: bool, include_labels: bool = False

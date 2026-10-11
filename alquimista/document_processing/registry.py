@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..errors import StorageError
+from ..errors import DocumentProcessingError, StorageError
 from ..models import KnowledgeDocument
 from .base import DocumentProcessor
 from .ebook import EbookProcessor
@@ -68,8 +68,7 @@ class DocumentProcessorRegistry:
 
         processor = self.get_processor(file_path=path)
         if processor is None:
-            # Fallback to TextProcessor if nothing matched
-            processor = TextProcessor()
+            raise _unsupported(path.name)
 
         return processor.process_file(path, metadata=metadata, options=options)
 
@@ -90,7 +89,7 @@ class DocumentProcessorRegistry:
 
         processor = self.get_processor(file_path=filename, mime_type=mime_type, file_bytes=content_bytes)
         if processor is None:
-            processor = TextProcessor()
+            raise _unsupported(filename or mime_type)
 
         return processor.process_bytes(
             content_bytes,
@@ -99,6 +98,10 @@ class DocumentProcessorRegistry:
             metadata=metadata,
             options=options,
         )
+
+
+def _unsupported(name: str) -> DocumentProcessingError:
+    return DocumentProcessingError(f"Formato de arquivo não suportado: {name}")
 
 
 def default_processor_registry() -> DocumentProcessorRegistry:

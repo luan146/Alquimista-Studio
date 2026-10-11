@@ -206,3 +206,18 @@ def test_service_checks_cancellation_before_adapter_call() -> None:
         service.list_containers(token=token)
 
     assert adapter.calls == []
+
+
+def test_reopening_deletes_only_rows_expired_beyond_stale_retention(tmp_path: Path) -> None:
+    path = tmp_path / "browser.sqlite3"
+    now = [100.0]
+    cache = BrowserCache(path, clock=lambda: now[0])
+    cache.put_containers("recent", [SpaceMetadata("recent", "space", "A")], ttl_seconds=10)
+    now[0] = 50.0
+    cache.put_containers("old", [SpaceMetadata("old", "space", "B")], ttl_seconds=10)
+
+    now[0] = 60.0 + BrowserCache.STALE_RETENTION_SECONDS + 1  # "old" expired more than 30 days ago
+    reopened = BrowserCache(path, clock=lambda: now[0])
+
+    assert reopened.get_containers("old", allow_stale=True) is None
+    assert reopened.get_containers("recent", allow_stale=True) is not None

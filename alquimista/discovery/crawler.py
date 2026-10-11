@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.robotparser import RobotFileParser
 
 import requests
 from bs4 import BeautifulSoup
@@ -35,6 +36,7 @@ class WebCrawler:
         self.max_depth = max_depth
         self.max_pages = max_pages
         self.respect_robots = respect_robots
+        self._robots: dict[str, RobotFileParser] = {}
         self.rate_limiter = RateLimiter(self.options.max_requests_per_second, self.token)
         self.session = requests.Session()
         self.session.trust_env = False
@@ -54,6 +56,30 @@ class WebCrawler:
     def _is_url_in_scope(self, url: str) -> bool:
         return is_url_in_scope(url, self.allowed_domains)
 
+    def _robots_allows(self, url: str) -> bool:
+        if not self.respect_robots:
+            return True
+        parts = urlsplit(url)
+        origin = f"{parts.scheme}://{parts.netloc}"
+        parser = self._robots.get(origin)
+        if parser is None:
+            parser = RobotFileParser()
+            try:
+                response = self.session.get(
+                    f"{origin}/robots.txt",
+                    timeout=(self.options.connect_timeout_seconds, self.options.timeout_seconds),
+                )
+                if response.status_code in (401, 403):
+                    parser.parse(["User-agent: *", "Disallow: /"])
+                elif response.status_code == 200:
+                    parser.parse(response.text.splitlines())
+                else:
+                    parser.parse([])
+            except requests.RequestException:
+                parser.parse([])
+            self._robots[origin] = parser
+        return parser.can_fetch(DEFAULT_USER_AGENT, url)
+
     def crawl(self) -> list[DiscoveredResource]:
         visited: set[str] = set()
         queue: deque[tuple[str, int, str | None]] = deque([(self.base_url, 0, None)])
@@ -68,7 +94,7 @@ class WebCrawler:
                 continue
             visited.add(clean_url)
 
-            if depth > self.max_depth:
+            if depth > self.max_depth or not self._robots_allows(clean_url):
                 continue
 
             try:
@@ -78,7 +104,7 @@ class WebCrawler:
                     timeout=(self.options.connect_timeout_seconds, self.options.timeout_seconds),
                     allow_redirects=True,
                 )
-                if response.status_code != 200:
+                if response.status_code != 200 or not self._is_url_in_scope(response.url):
                     continue
 
                 content_type = response.headers.get("Content-Type", "").lower()
@@ -94,8 +120,8 @@ class WebCrawler:
                     title = str(og_title["content"]).strip()
                 elif soup.title and soup.title.string:
                     title = str(soup.title.string).strip()
-                elif soup.find("h1"):
-                    title = soup.find("h1").get_text(" ", strip=True)
+                elif (heading := soup.find("h1")) is not None:
+                    title = heading.get_text(" ", strip=True)
                 title = title or clean_url
 
                 canonical_tag = soup.find("link", rel="canonical")
@@ -121,7 +147,7 @@ class WebCrawler:
 
                 if depth < self.max_depth:
                     for link in soup.find_all("a", href=True):
-                        href = link["href"].strip()
+                        href = str(link["href"]).strip()
                         if href.startswith(("#", "javascript:", "mailto:", "tel:")):
                             continue
                         abs_url = urljoin(clean_url, href)

@@ -1,0 +1,666 @@
+"""Novo visual: ícones SVG, tema, peças novas e telas remontadas."""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import pytest
+from PySide6.QtCore import QPoint, QSettings, Qt
+from PySide6.QtWidgets import QApplication, QComboBox, QPushButton, QStackedWidget, QWidget
+
+from alquimista.models import AuthMode, MarkdownOptions, SourceConfig
+from alquimista.ui.components import AlchemistIconAtlas, SegmentedControl, chip
+from alquimista.ui.controllers.operation_controller import log_level
+from alquimista.ui.i18n import LanguageManager
+from alquimista.ui.icons import (
+    AUTH_ICONS,
+    CONTROL_ICONS,
+    EMOJI_ICONS,
+    ICON_DIR,
+    SYSTEM_ICONS,
+    icon_path,
+    svg_pixmap,
+)
+from alquimista.ui.main_window import MainWindow
+from alquimista.ui.mixins.connection_mixin import initials
+from alquimista.ui.space_cards import SpaceCardDelegate
+from alquimista.ui.theme import DARK, LIGHT, apply_theme, current_colors, stylesheet
+from alquimista.ui.tree_models import relative_timestamp
+
+
+def test_every_mapped_icon_has_an_svg_that_renders(qapp) -> None:
+    names = {*SYSTEM_ICONS, *AUTH_ICONS, *EMOJI_ICONS.values(), "pagina_restrita", *CONTROL_ICONS}
+    for name in names:
+        assert icon_path(name).exists(), name
+        assert not svg_pixmap(name, 24).isNull(), name
+
+
+def test_old_atlas_indices_now_draw_the_svg_icons(qapp) -> None:
+    assert AlchemistIconAtlas.pixmap(11, 32).cacheKey() == svg_pixmap("pasta", 32).cacheKey()
+    assert AlchemistIconAtlas.auth_pixmap(7, 24).cacheKey() == svg_pixmap("sair", 24).cacheKey()
+    assert not AlchemistIconAtlas.connector_icon(0, 24).isNull()  # plataformas continuam no atlas
+
+
+def test_segmented_control_drives_and_follows_its_combo(qapp) -> None:
+    combo = QComboBox()
+    for label, value in (("Claro", "light"), ("Escuro", "dark")):
+        combo.addItem(label, value)
+    control = SegmentedControl([("Claro", "light"), ("Escuro", "dark")]).bind_combo(combo)
+    assert control.value() == "light"
+    control.buttons()[1].click()
+    assert combo.currentData() == "dark"
+    combo.setCurrentIndex(0)
+    assert control.buttons()[0].isChecked()
+
+
+def test_segmented_control_hides_options_disabled_in_the_combo(qapp) -> None:
+    combo = QComboBox()
+    combo.addItem("A", "a")
+    combo.addItem("B", "b")
+    combo.model().item(1).setEnabled(False)
+    control = SegmentedControl([("A", "a"), ("B", "b")]).bind_combo(combo)
+    control.sync_enabled_from(combo)
+    assert control.buttons()[1].isHidden()
+
+
+def test_segmented_control_switches_a_stack(qapp) -> None:
+    stack = QStackedWidget()
+    stack.addWidget(QWidget())
+    stack.addWidget(QWidget())
+    control = SegmentedControl([("Um", 0), ("Dois", 1)], vertical=True).bind_stack(stack)
+    control.buttons()[1].click()
+    assert stack.currentIndex() == 1
+
+
+def test_both_themes_build_a_stylesheet_with_existing_control_images(qapp) -> None:
+    for colors in (LIGHT, DARK):
+        sheet = stylesheet(colors)
+        assert colors["primary"] in sheet
+        for name in ("controle_check_on", "controle_switch_on", "controle_seta_baixo", "controle_seta_cima"):
+            assert (ICON_DIR / f"{name}.svg").as_posix() in sheet
+    apply_theme(QApplication.instance(), "dark")
+    assert current_colors() is DARK
+    apply_theme(QApplication.instance(), "light")
+    assert current_colors() is LIGHT
+
+
+def test_chip_kind_is_a_style_property(qapp) -> None:
+    label = chip("Inteiro", "accent")
+    assert label.objectName() == "chip" and label.property("kind") == "accent"
+
+
+@pytest.fixture
+def window(qtbot: Any, tmp_path: Path) -> MainWindow:
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    manager = LanguageManager(QApplication.instance(), settings)
+    manager.set_language("pt-BR", persist=False)
+    created = MainWindow(language_manager=manager)
+    yield created
+    created.dirty = False
+
+
+def _spaces(window: MainWindow, count: int = 2) -> SourceConfig:
+    source = SourceConfig(id="wiki", name="Wiki", source_type="confluence_rest", base_url="https://wiki.example.com",
+                          space_key="A", connector_options={"source_url": "https://wiki.example.com/spaces/A"})
+    window.project.sources = [source]
+    window._refresh_source_widgets()
+    pages = [{"id": f"a{n}", "title": f"Página {n}", "_container_id": "A", "ancestors": []} for n in range(3)]
+    containers = [{"id": "A", "name": "Suporte"}, {"id": "B", "name": "Produto"}]
+    containers += [{"id": f"X{n}", "name": f"Espaço {n}"} for n in range(count - 2)]
+    window.trees[source.id] = {"root": {"id": "all", "title": "Espaços"}, "containers": containers,
+                               "pages_by_container": {"A": pages}, "pages": pages}
+    window._show_page("selection")
+    window._refresh_selection_home()
+    return source
+
+
+def _card_center(window: MainWindow, container_id: str, *, pill: bool) -> Any:
+    view = window.selection_spaces
+    item = next(view.item(row) for row in range(view.count())
+                if view.item(row).data(Qt.ItemDataRole.UserRole) == container_id)
+    rect = view.visualItemRect(item)
+    return (SpaceCardDelegate.pill_rect(rect) if pill else rect.adjusted(10, 40, -10, -10)).center()
+
+
+def test_relative_dates() -> None:
+    now = datetime(2026, 10, 10, 12, tzinfo=timezone.utc)  # noon UTC on both sides: same local day anywhere
+    assert relative_timestamp("2026-10-10T12:00:00Z", now) == "hoje"
+    assert relative_timestamp("2026-10-09T12:00:00Z", now) == "ontem"
+    assert relative_timestamp("2026-10-07T12:00:00Z", now) == "há 3 dias"
+    assert relative_timestamp("2026-09-01T12:00:00Z", now) == "há 1 mês"
+    assert relative_timestamp("2026-08-01T12:00:00Z", now) == "há 2 meses"
+    assert relative_timestamp("2025-09-05T12:00:00Z", now) == "há 1 ano"
+    assert relative_timestamp("2024-01-01T12:00:00Z", now) == "há 2 anos"
+    assert relative_timestamp("", now) == "" and relative_timestamp("ontem?", now) == "ontem?"
+
+
+def test_whole_pill_click_marks_the_space(window: MainWindow, qtbot: Any) -> None:
+    source = _spaces(window)
+    window.show()
+    QApplication.processEvents()
+    qtbot.mouseClick(window.selection_spaces.viewport(), Qt.MouseButton.LeftButton,
+                     pos=_card_center(window, "A", pill=True))
+    assert len(window.project.selected_keys_for(source.id)) == 3
+    assert window.selection_stack.currentIndex() == 0  # pill marks, it does not open
+
+
+def test_whole_pill_click_marks_unloaded_space(window: MainWindow, qtbot: Any,
+                                               monkeypatch: pytest.MonkeyPatch) -> None:
+    source = _spaces(window)
+
+    def fake_load(src: SourceConfig, container_id: str, *, on_loaded: Any = None, **_kwargs: Any) -> None:
+        loaded = [{"id": "b1", "title": "Planos", "_container_id": "B", "ancestors": []}]
+        window.trees[src.id]["pages_by_container"][container_id] = loaded
+        window.trees[src.id]["pages"] = window.trees[src.id]["pages"] + loaded
+        on_loaded()
+
+    monkeypatch.setattr(window, "_load_container_for_source", fake_load)
+    window.show()
+    QApplication.processEvents()
+    qtbot.mouseClick(window.selection_spaces.viewport(), Qt.MouseButton.LeftButton,
+                     pos=_card_center(window, "B", pill=True))
+    assert window.project.selected_keys_for(source.id) == {"wiki:B:b1"}
+
+
+def test_clicking_the_card_body_opens_the_space(window: MainWindow, qtbot: Any) -> None:
+    _spaces(window)
+    window.show()
+    QApplication.processEvents()
+    qtbot.mouseClick(window.selection_spaces.viewport(), Qt.MouseButton.LeftButton,
+                     pos=_card_center(window, "A", pill=False))
+    assert window.selection_stack.currentIndex() == 1
+    assert window.selection_space_title.text() == "Suporte"
+
+
+def test_space_search_hides_cards_without_widgets(window: MainWindow) -> None:
+    _spaces(window, count=300)
+    assert window.selection_spaces.count() == 300
+    assert not window.selection_spaces.findChildren(QPushButton)  # cards are painted, not widgets
+    window.selection_space_search.setText("produto")
+    visible = [window.selection_spaces.item(r).data(Qt.ItemDataRole.UserRole)
+               for r in range(window.selection_spaces.count()) if not window.selection_spaces.item(r).isHidden()]
+    assert visible == ["B"]
+
+
+def test_space_card_colors_follow_theme(window: MainWindow) -> None:
+    from alquimista.ui.space_cards import tile_colors
+    apply_theme(QApplication.instance(), "light")
+    light = tile_colors("Suporte")
+    apply_theme(QApplication.instance(), "dark")
+    dark = tile_colors("Suporte")
+    apply_theme(QApplication.instance(), "light")
+    assert light != dark and tile_colors("Suporte") == light  # stable per name, per theme
+
+
+def test_selection_filter_pills_drive_the_hidden_combo(window: MainWindow) -> None:
+    window.selection_filter_pills.buttons()[1].click()
+    assert window.selection_filter.currentData() == "selected"
+
+
+def test_relative_dates_count_days_on_the_local_clock() -> None:
+    late = datetime(2026, 10, 9, 22, 30).astimezone()  # 22:30 local yesterday, whatever the zone
+    now = datetime(2026, 10, 10, 9, 0).astimezone()
+    assert relative_timestamp(late.astimezone(timezone.utc).isoformat(), now) == "ontem"
+
+
+def test_space_key_marks_the_current_card(window: MainWindow, qtbot: Any) -> None:
+    source = _spaces(window)
+    view = window.selection_spaces
+    view.setCurrentRow(next(r for r in range(view.count()) if view.item(r).data(Qt.ItemDataRole.UserRole) == "A"))
+    qtbot.keyClick(view, Qt.Key.Key_Space)
+    assert len(window.project.selected_keys_for(source.id)) == 3
+    assert view.currentItem().data(Qt.ItemDataRole.UserRole) == "A"  # refresh keeps the keyboard position
+    qtbot.keyClick(view, Qt.Key.Key_Space)
+    assert not window.project.selected_keys_for(source.id)
+
+
+def test_output_switch_and_tabs_stay_in_sync(window: MainWindow) -> None:
+    window._show_page("consolidation")
+    assert window.format_switch.value() == 1
+    window.format_switch.buttons()[0].click()
+    assert window.format_tabs.currentIndex() == 0
+    assert window.format_tabs.tabBar().isHidden()
+
+
+def test_markdown_options_are_switch_rows_that_toggle_on_click(window: MainWindow, qtbot: Any) -> None:
+    check = window.md_controls["include_title"]
+    assert check.property("switch") is True
+    row = check.parentWidget()
+    before = check.isChecked()
+    window._show_page("markdown")
+    window.show()
+    QApplication.processEvents()
+    qtbot.mouseClick(row, Qt.MouseButton.LeftButton, pos=row.rect().topLeft() + QPoint(8, 8))
+    assert check.isChecked() is not before
+
+
+def test_preview_opens_in_visual_mode_and_presets_mark_the_active_card(window: MainWindow) -> None:
+    assert window.preview_mode.currentData() == "reading"
+    window.preview_mode_pills.buttons()[1].click()
+    assert window.preview_mode.currentData() == "code"
+    window.preset_cards["rag"].click()
+    assert window.preset_cards["rag"].isChecked() and not window.preset_cards["minimum"].isChecked()
+
+
+def _checked_presets(window: MainWindow) -> list[str]:
+    return [name for name, card in window.preset_cards.items() if card.isChecked()]
+
+
+def test_preset_card_follows_the_loaded_project_options(window: MainWindow) -> None:
+    assert _checked_presets(window) == ["recommended"]
+    window.project.markdown = MarkdownOptions.preset("rag")
+    window._load_markdown_controls()
+    assert _checked_presets(window) == ["rag"]
+
+
+def test_preset_card_clears_when_a_switch_is_flipped(window: MainWindow) -> None:
+    window.preset_cards["minimum"].click()
+    assert _checked_presets(window) == ["minimum"]
+    check = window.md_controls["include_title"]
+    check.setChecked(not check.isChecked())
+    assert _checked_presets(window) == []
+
+
+def test_settings_menu_switches_sections_and_theme_tiles_save_the_theme(window: MainWindow) -> None:
+    window._show_page("settings")
+    window.settings_menu.buttons()[2].click()
+    assert window.settings_stack.currentWidget().isAncestorOf(window.timeout_spin)
+    window.theme_tiles.buttons()[1].click()  # Escuro
+    assert window._theme_preference() == "dark"
+    window.ui_scale_pills.buttons()[-1].click()
+    assert window._ui_scale_preference() == 1.5
+
+
+def test_log_levels() -> None:
+    assert log_level("FALHA: timeout") == "error"
+    assert log_level("Aviso: imagem grande") == "warning"
+    assert log_level("Wiki [1/3] Página") == "info"
+    assert log_level("Wiki [2/3] Como resolver o erro 500") == "info"
+
+
+def test_monitor_shows_while_running_and_returns_on_success(window: MainWindow) -> None:
+    window._show_page("extraction")
+    started: list[Any] = []
+    window.operation_controller.thread_pool.start = lambda worker: started.append(worker)  # type: ignore[method-assign]
+    window._start_worker(lambda *_a: {}, window._operation_done)
+    assert window.execute_stack.currentIndex() == 1
+    window.operation_controller.on_progress(12, 18, "Página 12")
+    assert window.run_count.text() == "12 de 18" and "6" in window.run_left_chip.text()
+    assert window.progress_label.text().startswith("Página 12") and "12/18" not in window.progress_label.text()
+    window.operation_controller.worker_finished()
+    window._operation_done({})
+    assert window.execute_stack.currentIndex() == 0
+
+
+def test_monitor_stays_after_failure(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "critical", lambda *_a, **_k: None)
+    window.operation_controller.thread_pool.start = lambda worker: None  # type: ignore[method-assign]
+    window._start_worker(lambda *_a: {}, window._operation_done)
+    window.operation_controller.worker_failed(RuntimeError("Erro 500"), "")
+    window.operation_controller.worker_finished()
+    assert window.execute_stack.currentIndex() == 1
+    assert "1" in window.run_failed_chip.text() and window.run_back_button.isEnabled()
+
+
+def test_failure_with_traceback_counts_once(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "critical", lambda *_a, **_k: None)
+    window.operation_controller.thread_pool.start = lambda worker: None  # type: ignore[method-assign]
+    window._start_worker(lambda *_a: {}, window._operation_done)
+    window.operation_controller.worker_failed(RuntimeError("Erro 500"), "Traceback (most recent call last):\n  boom")
+    assert window.run_failed_chip.text() == "1 falha"
+
+
+def test_activity_filter_shows_only_errors(window: MainWindow) -> None:
+    window._append_log("Wiki [1/2] Página A")
+    window._append_log("FALHA: Página B")
+    window.log_filter.buttons()[1].click()
+    text = window.log_text.toPlainText()
+    assert "Página B" in text and "Página A" not in text
+    window.log_filter.buttons()[0].click()
+    assert "Página A" in window.log_text.toPlainText()
+
+
+def _failed_run(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "critical", lambda *_a, **_k: None)
+    window.operation_controller.thread_pool.start = lambda worker: None  # type: ignore[method-assign]
+    window._start_worker(lambda *_a: {}, window._operation_done)
+
+
+def test_failure_detail_keeps_its_line_breaks(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    _failed_run(window, monkeypatch)
+    detail = 'Traceback (most recent call last):\n  File "x.py", line 1\nRuntimeError: Erro 500'
+    window.operation_controller.worker_failed(RuntimeError("Erro 500"), detail)
+    lines = window.log_text.toPlainText().splitlines()
+    assert any(line.strip().startswith('File "x.py"') for line in lines)
+    assert any(line.strip() == "RuntimeError: Erro 500" for line in lines)
+
+
+def test_run_button_is_visible_without_scrolling_on_a_small_window(window: MainWindow, qapp: Any) -> None:
+    window.resize(1050, 700)
+    window.show()
+    window._show_page("extraction")
+    for _ in range(5):
+        qapp.processEvents()
+    visible = window.execute_button.visibleRegion().boundingRect()
+    assert visible.height() == window.execute_button.height()
+
+
+def test_cancelled_run_is_not_counted_as_failure(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from alquimista.errors import ExtractionCancelledError
+    _failed_run(window, monkeypatch)
+    window.operation_controller.token.cancel()  # type: ignore[union-attr]
+    window.operation_controller.worker_failed(
+        ExtractionCancelledError("Operação cancelada pelo usuário."), "Traceback (most recent call last):\n  boom"
+    )
+    assert window.run_failed_chip.text() == "0 falhas"
+    assert window.run_failed_chip.property("kind") == "neutral"
+
+
+def test_other_jobs_do_not_touch_a_finished_run(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    _failed_run(window, monkeypatch)
+    controller = window.operation_controller
+    controller.on_progress(3, 18, "Página 3")
+    controller.worker_failed(RuntimeError("Erro 500"), "")
+    controller.worker_finished()
+    before = window.log_text.toPlainText()
+    window._start_worker(lambda *_a: {}, lambda _result: None)  # e.g. a tree load
+    controller.on_progress(1, 5, "Espaço")
+    window._append_log("Carregando árvore")
+    controller.worker_finished()
+    assert window.execute_stack.currentIndex() == 1
+    assert window.run_count.text() == "3 de 18" and "15" in window.run_left_chip.text()
+    assert window.log_text.toPlainText() == before
+
+
+def test_initials() -> None:
+    assert initials("luan@empresa.com") == "LU"
+    assert initials("Wiki de Suporte") == "WS"
+    assert initials("") == "?"
+
+
+def _token_source(window: MainWindow) -> SourceConfig:
+    source = SourceConfig(id="notion", name="Notion RH", source_type="notion_api", base_url="https://api.notion.com",
+                          auth_mode=AuthMode.BEARER, remember_secret=True)
+    window.project.sources = [source]
+    window._refresh_source_widgets()
+    return source
+
+
+def test_bearer_only_source_shows_only_the_token_pill(window: MainWindow) -> None:
+    _token_source(window)
+    window._show_page("sources")
+    visible = [b.text() for b in window.auth_mode_pills.buttons() if b.isVisibleTo(window)]
+    checked = [b.text() for b in window.auth_mode_pills.buttons() if b.isChecked()]
+    assert visible == ["Token pessoal"] and checked == ["Token pessoal"]
+    assert window.auth_mode_pills.value() == window.auth_mode.currentData()
+
+
+def test_connected_account_card_replaces_the_login_button(window: MainWindow) -> None:
+    source = _token_source(window)
+    window._show_page("sources")
+    assert window.login_button.isVisibleTo(window) and not window.account_card.isVisibleTo(window)
+    window.connected_sources.add(source.id)
+    window._refresh_accounts()
+    assert window.account_card.isVisibleTo(window) and not window.login_button.isVisibleTo(window)
+    assert window.account_name.text() == "Token salvo"
+    assert window.account_avatar.text() == "NO"
+
+
+def test_accounts_list_shows_every_source(window: MainWindow) -> None:
+    _token_source(window)
+    window.project.sources.append(SourceConfig(id="docs", name="Docs", source_type="confluence_rest",
+                                               base_url="https://docs.example.com", auth_mode=AuthMode.PUBLIC))
+    window._refresh_source_widgets()
+    window._refresh_accounts()
+    rows = [window.accounts_list_layout.itemAt(i).widget() for i in range(window.accounts_list_layout.count())]
+    assert len([row for row in rows if row is not None]) == 2
+
+
+def test_sign_out_deletes_remembered_token(window: MainWindow, monkeypatch: pytest.MonkeyPatch,
+                                           tmp_path: Path) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    from alquimista import session_store
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = _token_source(window)
+    session_store.save_secret(source.id, "segredo-falso")
+    session_store.save_session(source.id, {"cookies": []})
+    assert session_store.session_path(source.id).exists()
+    window.secrets.set(source.id, "segredo-falso")
+    window.connected_sources.add(source.id)
+    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Yes)
+    window._sign_out(source.id)
+    assert session_store.load_secret(source.id) == ""
+    assert not session_store.session_path(source.id).exists()
+    assert window.secrets.get(source.id, "") == ""
+    assert source.id not in window.connected_sources
+
+
+def test_segmented_control_drops_icons_before_clipping_text(qapp) -> None:
+    from alquimista.ui.icons import svg_icon
+    holder = QWidget()  # a child (not a window) can be squeezed below its layout's minimum
+    control = SegmentedControl([(f"Opção longa {n}", n, svg_icon("token", 18)) for n in range(4)], parent=holder)
+    holder.show()
+    control.resize(control.sizeHint().width() - 20, 40)
+    qapp.processEvents()
+    assert all(b.icon().isNull() for b in control.buttons())
+    assert all(b.text().startswith("Opção longa") for b in control.buttons())
+    control.resize(control.sizeHint().width() + 200, 40)
+    qapp.processEvents()
+    assert not any(b.icon().isNull() for b in control.buttons())
+
+
+def _public_source(window: MainWindow) -> SourceConfig:
+    source = SourceConfig(id="docs", name="Docs", source_type="confluence_rest",
+                          base_url="https://docs.example.com", auth_mode=AuthMode.PUBLIC)
+    window.project.sources = [source]
+    window._refresh_source_widgets()
+    window._show_page("sources")
+    return source
+
+
+def test_login_button_follows_the_chosen_pill(window: MainWindow) -> None:
+    from alquimista.ui.icons import svg_icon
+
+    def image(icon: Any) -> Any:
+        return icon.pixmap(22).toImage()
+
+    _public_source(window)
+    assert window.login_button.text() == "Testar acesso público"
+    assert image(window.login_button.icon()) == image(svg_icon("publico", 22))
+    window.auth_mode_pills.buttons()[1].click()  # Navegador
+    assert window.auth_mode.currentData() == AuthMode.BROWSER.value
+    assert window.login_button.text().startswith("Entrar no")
+    assert image(window.login_button.icon()) == image(svg_icon("navegador", 22))
+
+
+def test_public_source_keeps_the_test_button_after_connecting(window: MainWindow) -> None:
+    source = _public_source(window)
+    window.connected_sources.add(source.id)
+    window._refresh_accounts()
+    assert window.login_button.isVisibleTo(window) and not window.account_card.isVisibleTo(window)
+
+
+def test_sign_out_removes_token_even_if_session_cleanup_fails(window: MainWindow, monkeypatch: pytest.MonkeyPatch,
+                                                              tmp_path: Path) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    from alquimista import session_store
+    from alquimista.ui.mixins import connection_mixin
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = _token_source(window)
+    session_store.save_secret(source.id, "segredo-falso")
+    window.secrets.set(source.id, "segredo-falso")
+    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Yes)
+
+    def broken(_source: Any) -> bool:
+        raise OSError("cache travado")
+
+    warnings: list[str] = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda _p, _t, text, *_a, **_k: warnings.append(text))
+    monkeypatch.setattr(connection_mixin, "delete_session", broken)
+    window.connected_sources.add(source.id)
+    window._sign_out(source.id)
+    assert session_store.load_secret(source.id) == ""
+    assert window.secrets.get(source.id, "") == ""
+    assert source.id not in window.connected_sources
+    assert len(warnings) == 1 and "cache travado" in warnings[0]
+
+
+def test_sign_out_answered_no_keeps_everything(window: MainWindow, monkeypatch: pytest.MonkeyPatch,
+                                               tmp_path: Path) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    from alquimista import session_store
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = _token_source(window)
+    session_store.save_secret(source.id, "segredo-falso")
+    window.secrets.set(source.id, "segredo-falso")
+    window.connected_sources.add(source.id)
+    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.No)
+    window._sign_out(source.id)
+    assert session_store.load_secret(source.id) == "segredo-falso"
+    assert window.secrets.get(source.id, "") == "segredo-falso"
+    assert source.id in window.connected_sources
+
+
+def test_ghost_danger_button_is_red(qapp) -> None:
+    for colors in (LIGHT, DARK):
+        sheet = stylesheet(colors)
+        assert f'QPushButton[ghost="true"][danger="true"] {{ color: {colors["danger"]}; }}' in sheet
+        assert sheet.index('[ghost="true"][danger="true"]') > sheet.index('QPushButton[ghost="true"] {')
+
+
+def test_tree_badge_colors_follow_theme(qapp) -> None:
+    apply_theme(QApplication.instance(), "dark")
+    assert current_colors()["danger_soft"] == DARK["danger_soft"]
+    apply_theme(QApplication.instance(), "light")
+    assert current_colors()["danger_soft"] == LIGHT["danger_soft"]
+
+
+def test_home_header_icon_and_selection_count_text(window: MainWindow) -> None:
+    assert AlchemistIconAtlas.page_index("🧭") == 0
+    window._update_selection_count()
+    assert not window.selection_count.text().startswith("…")
+
+
+def test_leftover_titles_use_section_title(window: MainWindow) -> None:
+    assert window.home_next_title.objectName() == "sectionTitle"
+    assert window.con_distribution_title.objectName() == "sectionTitle"
+    assert window.page_space_title.objectName() == "sectionTitle"
+
+
+
+def test_warnings_that_mention_errors_are_not_failures(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    sync_warning = "Aviso: Erro ao listar contêineres de Wiki: timeout"
+    retry = "Falha transitória de rede; nova tentativa em 1.0s."
+    assert log_level(sync_warning) == "warning"
+    assert log_level(retry) == "warning"
+    assert log_level("  warning: retrying") == "warning"
+    _failed_run(window, monkeypatch)
+    window._append_log(sync_warning)
+    window._append_log(retry)
+    assert window.run_failed_chip.text() == "0 falhas"
+
+
+def test_cancelled_run_logs_its_traceback_as_warning(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    _failed_run(window, monkeypatch)
+    window.operation_controller.token.cancel()  # type: ignore[union-attr]
+    window.operation_controller.worker_failed(
+        RuntimeError("Operação cancelada pelo usuário."), "Traceback (most recent call last):\n  RuntimeError: boom"
+    )
+    assert [level for level, _line in window._log_entries] == ["warning", "warning"]
+
+
+def test_failure_mentioning_cancel_is_still_a_failure(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    _failed_run(window, monkeypatch)
+    window.operation_controller.worker_failed(RuntimeError("Erro 500 ao cancelar a assinatura"), "")
+    assert window.run_failed_chip.text() == "1 falha"
+
+
+def test_sign_out_clears_memory_even_if_the_token_file_is_locked(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    from alquimista.ui.mixins import connection_mixin
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = _token_source(window)
+    window.secrets.set(source.id, "segredo-falso")
+    window.connected_sources.add(source.id)
+    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Yes)
+
+    def locked(_source_id: str) -> None:
+        raise PermissionError("arquivo travado")
+
+    warnings: list[str] = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda _p, _t, text, *_a, **_k: warnings.append(text))
+    monkeypatch.setattr(connection_mixin, "delete_secret", locked)
+    window._sign_out(source.id)
+    assert window.secrets.get(source.id, "") == ""
+    assert source.id not in window.connected_sources
+    assert len(warnings) == 1 and "arquivo travado" in warnings[0]
+
+
+def test_new_controls_show_keyboard_focus(qapp) -> None:
+    for colors in (LIGHT, DARK):
+        sheet = stylesheet(colors)
+        for selector in ('QPushButton[ghost="true"]:focus', "QFrame#segmented QPushButton:focus",
+                         'QFrame#segmented[tiles="true"] QToolButton:focus', 'QCheckBox[switch="true"]:focus'):
+            assert selector in sheet, selector
+            rule = sheet[sheet.index(selector):].split("}", 1)[0]
+            assert colors["primary"] in rule, selector
+
+
+def test_source_rows_show_platform_icon_and_connection_pill(window: MainWindow) -> None:
+    from alquimista.ui.pages.sources_page import STATE_KIND_ROLE, ConnectionPillDelegate
+    source = _token_source(window)
+    window._show_page("sources")
+    table = window.source_table
+    assert isinstance(table.itemDelegateForColumn(4), ConnectionPillDelegate)
+    assert not table.item(0, 1).icon().isNull()
+    assert table.item(0, 4).text() == "○ Sem token" and table.item(0, 4).data(STATE_KIND_ROLE) == "neutral"
+    window.connected_sources.add(source.id)
+    window._refresh_source_table()
+    assert table.item(0, 4).data(STATE_KIND_ROLE) == "success"
+
+
+@pytest.mark.parametrize("size", [(1366, 820), (1050, 700)])
+def test_source_table_fits_without_horizontal_scroll(window: MainWindow, qapp: Any, size: tuple[int, int]) -> None:
+    _token_source(window)
+    window.resize(*size)
+    window.show()
+    window._show_page("sources")
+    for _ in range(5):
+        qapp.processEvents()
+    table = window.source_table
+    assert table.horizontalScrollBar().maximum() == 0
+    right = table.columnViewportPosition(5) + table.columnWidth(5)
+    assert 0 < right <= table.viewport().width()
+
+
+def test_account_without_saved_access_says_so(window: MainWindow, monkeypatch: pytest.MonkeyPatch,
+                                              tmp_path: Path) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = _token_source(window)
+    assert window._account_identity(source)[1] == "Sem acesso salvo"
+    window.secrets.set(source.id, "segredo-falso")
+    assert window._account_identity(source)[1] == "Token salvo"
+
+
+def test_automatic_theme_follows_windows_live(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from PySide6.QtGui import QGuiApplication
+
+    from alquimista.ui.mixins import ux_mixin
+    applied: list[str] = []
+    monkeypatch.setattr(ux_mixin, "apply_theme", lambda _app, mode: applied.append(mode))
+    window.ui_settings.setValue("preferences/theme", "system")
+    QGuiApplication.styleHints().colorSchemeChanged.emit(Qt.ColorScheme.Dark)
+    assert applied == ["system"]
+    window.ui_settings.setValue("preferences/theme", "light")
+    window._system_theme_changed(Qt.ColorScheme.Dark)
+    assert applied == ["system"]

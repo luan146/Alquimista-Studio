@@ -180,11 +180,12 @@ class HelpScoutConnector(KnowledgeSourceConnector):
                         name=coll_name,
                         container_type="collection",
                         source_type=self.SOURCE_TYPE,
-                        is_accessible=True,
-                        is_public=bool(coll.get("visibility") == "public"),
-                        page_count=coll.get("articleCount") or 0,
                         description=coll_desc,
-                        metadata={"siteId": coll.get("siteId")},
+                        metadata={
+                            "siteId": coll.get("siteId"),
+                            "public": bool(coll.get("visibility") == "public"),
+                            "page_count": coll.get("articleCount") or 0,
+                        },
                     )
                     self._containers[coll_id] = container
                     containers.append(container)
@@ -195,37 +196,31 @@ class HelpScoutConnector(KnowledgeSourceConnector):
 
         except Exception as exc:
             self.log(f"Erro ao listar coleções Help Scout: {exc}")
+            raise
 
-        if not containers:
-            container = KnowledgeContainer(
-                id="col-1",
-                key="docs",
-                name="Docs",
-                container_type="collection",
-                source_type=self.SOURCE_TYPE,
-                is_accessible=True,
-                is_public=True,
-                page_count=0,
-                description="Coleção Geral",
-            )
-            self._containers["col-1"] = container
-            containers.append(container)
         return containers
 
     def list_documents(self, container_id: str) -> list[KnowledgeDocumentMetadata]:
         documents: list[KnowledgeDocumentMetadata] = []
 
         try:
-            endpoint = (
-                f"/collections/{container_id}/articles?page=1&pageSize=50"
+            base = (
+                f"/collections/{container_id}/articles"
                 if container_id and container_id != "default"
-                else "/articles?page=1&pageSize=50"
+                else "/articles"
             )
-
-            res = self.client.get(endpoint)
-            data = res.json() if hasattr(res, "json") else {}
-            art_wrapper = data.get("articles", {}) if isinstance(data, dict) else {}
-            items = art_wrapper.get("items", []) if isinstance(art_wrapper, dict) else []
+            items: list[dict[str, Any]] = []
+            page = 1
+            while True:
+                res = self.client.get(f"{base}?page={page}&pageSize=50")
+                data = res.json() if hasattr(res, "json") else {}
+                art_wrapper = data.get("articles", {}) if isinstance(data, dict) else {}
+                if not isinstance(art_wrapper, dict):
+                    break
+                items.extend(art_wrapper.get("items", []))
+                page += 1
+                if page > int(art_wrapper.get("pages", 1) or 1):
+                    break
 
             for art in items:
                 art_id = str(art.get("id", ""))
@@ -256,6 +251,7 @@ class HelpScoutConnector(KnowledgeSourceConnector):
 
         except Exception as exc:
             self.log(f"Erro ao listar artigos Help Scout: {exc}")
+            raise
 
         return documents
 

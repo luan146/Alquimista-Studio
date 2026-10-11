@@ -5,6 +5,7 @@ import io
 from pathlib import Path
 from typing import Any
 
+from ..errors import DocumentProcessingError
 from ..markdown import normalize_markdown
 from ..models import KnowledgeDocument
 from .base import DocumentProcessor
@@ -80,7 +81,7 @@ class ImageProcessor(DocumentProcessor):
                 ocr_text = ""
 
         except Exception as exc:
-            image_info["error"] = str(exc)
+            raise DocumentProcessingError(f"Não foi possível abrir a imagem {filename}: {exc}") from exc
 
         lines: list[str] = [
             f"![{title}]({doc_metadata.get('original_url') or doc_metadata.get('file_path') or filename})",

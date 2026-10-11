@@ -187,6 +187,7 @@ class IntercomConnector(KnowledgeSourceConnector):
                     )
             except Exception as exc:
                 self.log(f"Erro ao listar conversas do Intercom: {exc}")
+                raise
             return documents
 
         # Otherwise, Help Center Collection articles
@@ -223,6 +224,7 @@ class IntercomConnector(KnowledgeSourceConnector):
                 )
         except Exception as exc:
             self.log(f"Erro ao listar artigos do Intercom: {exc}")
+            raise
 
         return documents
 

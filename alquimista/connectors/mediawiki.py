@@ -150,6 +150,7 @@ class MediaWikiConnector(KnowledgeSourceConnector):
                     )
         except Exception as exc:
             self.log(f"Erro ao listar categorias do MediaWiki: {exc}")
+            raise
         return containers
 
     def list_documents(self, container_id: str) -> list[KnowledgeDocumentMetadata]:
@@ -182,6 +183,7 @@ class MediaWikiConnector(KnowledgeSourceConnector):
                 )
         except Exception as exc:
             self.log(f"Erro ao listar páginas do MediaWiki: {exc}")
+            raise
 
         return documents
 

@@ -5,6 +5,7 @@ import io
 from pathlib import Path
 from typing import Any
 
+from ..errors import DocumentProcessingError
 from ..markdown import normalize_markdown
 from ..models import KnowledgeDocument
 from .base import DocumentProcessor
@@ -130,7 +131,7 @@ class PdfProcessor(DocumentProcessor):
 
                 reader = pypdf.PdfReader(io.BytesIO(content_bytes))
                 page_count = len(reader.pages)
-                info = reader.metadata or {}
+                info: Any = reader.metadata or {}
                 pdf_meta = {
                     "title": str(info.get("/Title") or ""),
                     "author": str(info.get("/Author") or ""),
@@ -148,9 +149,9 @@ class PdfProcessor(DocumentProcessor):
                         else:
                             text_sections.append(extracted)
             except Exception as exc:
-                text_sections.append(f"*[Não foi possível extrair texto do PDF: {exc}]*")
+                raise DocumentProcessingError(f"Não foi possível extrair texto do PDF {filename}: {exc}") from exc
         except Exception as exc:
-            text_sections.append(f"*[Erro ao processar PDF: {exc}]*")
+            raise DocumentProcessingError(f"Erro ao processar PDF {filename}: {exc}") from exc
 
         markdown_body = "\n\n".join(text_sections).strip()
         full_content = normalize_markdown(markdown_body)

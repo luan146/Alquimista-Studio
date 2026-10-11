@@ -590,10 +590,6 @@ class TreeLoaderController:
 
     @staticmethod
     def browser_cache_path() -> Path:
-        import sys
-        mw = sys.modules.get("alquimista.ui.main_window")
-        if mw is not None and hasattr(mw, "session_directory"):
-            return mw.session_directory().parent / "browser_metadata.sqlite3"
         return session_directory().parent / "browser_metadata.sqlite3"
 
     @classmethod

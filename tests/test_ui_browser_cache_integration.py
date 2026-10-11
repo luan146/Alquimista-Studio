@@ -7,7 +7,7 @@ from pathlib import Path
 from alquimista.browser import DiscoveryPage, DocumentMetadata
 from alquimista.models import AuthMode, KnowledgeSource, default_project
 from alquimista.runtime import CancellationToken
-from alquimista.ui import main_window as main_window_module
+from alquimista.ui.controllers import tree_loader_controller
 from alquimista.ui.main_window import MainWindow
 
 
@@ -68,7 +68,7 @@ def test_ui_lazy_discovery_reuses_metadata_cache_without_secret_or_body(
     tmp_path: Path, monkeypatch
 ) -> None:
     session_dir = tmp_path / "sessions"
-    monkeypatch.setattr(main_window_module, "session_directory", lambda: session_dir)
+    monkeypatch.setattr(tree_loader_controller, "session_directory", lambda: session_dir)
     source = default_project().sources[0].model_copy(update={"auth_mode": AuthMode.BEARER})
     token = CancellationToken()
 

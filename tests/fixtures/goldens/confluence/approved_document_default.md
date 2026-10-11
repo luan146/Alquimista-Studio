@@ -4,7 +4,7 @@
 **Módulo:** Manual
 **Caminho:** Manual > Integrações > Página de integração
 **Última atualização:** 12/08/2026 15:00
-**SHA-256:** `6b7bdf607963d2100831bf12ecc7adf1db0045feda4c424adb43fc274290073f`
+**SHA-256:** `27ef4d06e914d142797a2dcca9003f9f9d34882ce799849be9cb7e9b70c447b1`
 
 ## Conteúdo técnico
 
@@ -16,7 +16,7 @@ Conteúdo UTF-8: ação, integração e informação.
 
 [Abrir configuração](https://example.test/pages/viewpage.action?title=Configura%C3%A7%C3%A3o)[Baixar guia](https://example.test/download/attachments/page-42/guia.pdf)
 
-![Diagrama](https://example.test/download/attachments/page-42/diagrama.png)
+[Imagem: Diagrama]
 
 | Campo | Valor |
 | --- | --- |

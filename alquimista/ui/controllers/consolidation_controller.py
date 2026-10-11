@@ -35,6 +35,7 @@ class ConsolidationController:
         depth_choice_combo: QComboBox | None = None,
         prefix_input: QLineEdit | None = None,
         hierarchy_checkbox: QCheckBox | None = None,
+        links_checkbox: QCheckBox | None = None,
         summary_label: QLabel | None = None,
         group_help_label: QLabel | None = None,
         depth_example_label: QLabel | None = None,
@@ -55,6 +56,7 @@ class ConsolidationController:
         self.depth_choice_combo = depth_choice_combo
         self.prefix_input = prefix_input
         self.hierarchy_checkbox = hierarchy_checkbox
+        self.links_checkbox = links_checkbox
         self.summary_label = summary_label
         self.group_help_label = group_help_label
         self.depth_example_label = depth_example_label
@@ -110,6 +112,8 @@ class ConsolidationController:
             self.hierarchy_checkbox.setChecked(
                 options.include_hierarchy_headings
             )
+        if self.links_checkbox is not None:
+            self.links_checkbox.setChecked(options.link_references)
         self.update_summary(sources, trees, last_preview)
 
     def sync_controls(
@@ -142,6 +146,8 @@ class ConsolidationController:
             current_options.include_hierarchy_headings = (
                 self.hierarchy_checkbox.isChecked()
             )
+        if self.links_checkbox is not None:
+            current_options.link_references = self.links_checkbox.isChecked()
         return current_options
 
     def depth_choice_changed(

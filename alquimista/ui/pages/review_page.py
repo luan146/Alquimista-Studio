@@ -1,238 +1,253 @@
 from __future__ import annotations
 
+import html
 from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
+    QApplication,
     QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QProgressBar,
+    QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from ..components import ResponsiveOutputControls, button, page_header
+from ..components import (
+    ResponsiveOutputControls,
+    SegmentedControl,
+    button,
+    card,
+    chip,
+    page_header,
+    section_title,
+)
+from ..i18n import translate_text
+from ..theme import current_colors
+
+_MARKS = {"error": ("✕", "danger"), "warning": ("!", "warning"), "info": ("•", "primary")}
+
+
+def append_rendered(window: Any, level: str, line: str) -> None:
+    """Add one activity line with its colored mark and keep the view at the bottom."""
+    mark, color = _MARKS[level]
+    first, *rest = line.split("\n")
+    window.log_text.append(
+        f'<span style="color:{current_colors()[color]}; font-weight:700">{mark}</span> {html.escape(first)}'
+    )
+    # Multi-line entries (a traceback) keep one row per line and their indentation.
+    for extra in rest:
+        text = extra.lstrip(" ")
+        indent = "&nbsp;" * (2 + len(extra) - len(text))
+        window.log_text.append(f"<span>{indent}{html.escape(text)}</span>")  # tag: read as rich text
+    bar = window.log_text.verticalScrollBar()
+    bar.setValue(bar.maximum())
+
+
+def render_log(window: Any) -> None:
+    """Rebuild the activity list from the stored lines, keeping only the chosen level."""
+    wanted = window.log_filter.value() or "all"
+    window.log_text.clear()
+    for level, line in window._log_entries:
+        if wanted in ("all", level):
+            append_rendered(window, level, line)
+
+
+def show_run_monitor(window: Any, visible: bool) -> None:
+    window.execute_stack.setCurrentIndex(1 if visible else 0)
+
+
+def _copy_log(window: Any) -> None:
+    QApplication.clipboard().setText("\n".join(line for _level, line in window._log_entries))
+    window.notify(translate_text("Registro copiado."), "success")
 
 
 def build_review_page(window: Any) -> QWidget:
     page, layout = page_header(
-        "Revisão final e pasta de saída",
-        "Revise suas escolhas, defina a pasta de saída e execute a operação.",
+        "Executar",
+        "Confira se está tudo pronto, escolha a pasta e execute.",
         "🚀",
     )
+    window._log_entries = []
+    window.execute_stack = QStackedWidget()
 
-    step_bar = QHBoxLayout()
-    step_bar.setSpacing(12)
-    for number, title, detail in [
-        ("1", "Revisão das escolhas", "Confira e edite suas configurações"),
-        ("2", "Pasta de saída", "Defina onde os arquivos serão salvos"),
-        ("3", "Confirmação e execução", "Revise os itens finais e execute a operação"),
-    ]:
-        badge = QLabel(number)
-        badge.setObjectName("consolidationStepNumber")
-        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        badge.setFixedSize(36, 36)
-        step_bar.addWidget(badge)
-        text = QVBoxLayout()
-        text.setSpacing(2)
-        title_label = QLabel(title)
-        title_label.setStyleSheet("font-weight: 700; font-size: 10.5pt;")
-        detail_label = QLabel(detail)
-        detail_label.setObjectName("subtitle")
-        text.addWidget(title_label)
-        text.addWidget(detail_label)
-        step_bar.addLayout(text, 1)
-        if number != "3":
-            line = QFrame()
-            line.setFrameShape(QFrame.Shape.HLine)
-            line.setObjectName("reviewStepLine")
-            step_bar.addWidget(line, 1)
-    layout.addLayout(step_bar)
-
-    columns = QHBoxLayout()
-    columns.setSpacing(14)
-
-    def step_card(number: str, title: str) -> tuple[QFrame, QVBoxLayout]:
-        frame = QFrame()
-        frame.setObjectName("reviewStepCard")
-        frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        frame_layout = QVBoxLayout(frame)
-        frame_layout.setContentsMargins(16, 16, 16, 16)
-        frame_layout.setSpacing(12)
-        header = QHBoxLayout()
-        badge = QLabel(number)
-        badge.setObjectName("consolidationStepNumber")
-        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        badge.setFixedSize(28, 28)
-        header.addWidget(badge)
-        heading = QLabel(title)
-        heading.setStyleSheet("font-size: 11pt; font-weight: 700;")
-        header.addWidget(heading)
-        header.addStretch()
-        frame_layout.addLayout(header)
-        return frame, frame_layout
-
-    choices, choices_layout = step_card("1", "Revisão das escolhas")
+    # 1. Preparar
+    prepare = QWidget()
+    columns = QHBoxLayout(prepare)
+    columns.setContentsMargins(0, 0, 0, 0)
+    columns.setSpacing(16)
+    checklist, checklist_layout = card()
+    checklist_layout.addWidget(section_title("Antes de executar"))
     window.review_values = {}
+    window.review_status_icons = {}
+    # Kept hidden: plain-text summary used by tests and by the copy of the review.
     window.review_summary = QLabel()
     window.review_summary.setVisible(False)
-
-    def review_row(icon: str, label: str, key: str, target: str) -> None:
+    for label, key, target in [
+        ("Fonte", "source", "sources"),
+        ("Modo de acesso", "connection", "connection"),
+        ("Seleção", "selection", "selection"),
+        ("Formato", "format", "markdown"),
+        ("Pacotes para IA", "consolidation", "consolidation"),
+    ]:
         row = QFrame()
-        row.setObjectName("reviewItem")
+        row.setObjectName("optionRow")
         row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(10, 8, 10, 8)
-        row_layout.setSpacing(10)
-        icon_label = QLabel(icon)
-        icon_label.setObjectName("reviewItemIcon")
-        icon_label.setStyleSheet("font-size: 13pt;")
-        row_layout.addWidget(icon_label)
+        row_layout.setContentsMargins(4, 8, 4, 8)
+        status = QLabel("○")
+        status.setObjectName("reviewStatusIcon")
+        status.setFixedWidth(18)
+        row_layout.addWidget(status)
         text = QVBoxLayout()
-        text.setSpacing(2)
+        text.setSpacing(0)
         title_label = QLabel(label)
-        title_label.setStyleSheet("font-weight: 700; font-size: 9.5pt;")
+        title_label.setObjectName("optionTitle")
         value = QLabel("Pendente")
-        value.setObjectName("reviewItemValue")
+        value.setObjectName("subtitle")
         value.setWordWrap(True)
         text.addWidget(title_label)
         text.addWidget(value)
         row_layout.addLayout(text, 1)
-        row_layout.addWidget(
-            button("Editar", lambda _checked=False, page_key=target: window._show_page(page_key))
-        )
+        edit = button("Editar", lambda _checked=False, page_key=target: window._show_page(page_key))
+        edit.setProperty("ghost", True)
+        row_layout.addWidget(edit)
         window.review_values[key] = value
-        choices_layout.addWidget(row)
+        window.review_status_icons[key] = status
+        checklist_layout.addWidget(row)
+    checklist_layout.addWidget(window.review_summary)
+    checklist_layout.addStretch()
+    columns.addWidget(checklist, 1)
 
-    review_row("📄", "Fonte", "source", "sources")
-    review_row("🔗", "Modo de acesso", "connection", "connection")
-    review_row("☑", "Seleção", "selection", "selection")
-    review_row("✍", "Formato", "format", "markdown")
-    review_row("📦", "Consolidação", "consolidation", "consolidation")
-    choices_note = QLabel(
-        "ⓘ  Deseja modificar alguma escolha? Use os botões ao lado para editar cada etapa."
-    )
-    choices_note.setObjectName("reviewInfo")
-    choices_note.setWordWrap(True)
-    choices_layout.addWidget(choices_note)
-    choices_layout.addWidget(window.review_summary)
-    columns.addWidget(choices, 1)
-
-    output, output_layout = step_card("2", "Pasta de saída")
-    output_layout.addWidget(QLabel("Onde deseja salvar os arquivos?"))
-    window.output_dir = QLineEdit()
-    window.output_dir.setAccessibleName("Pasta onde os arquivos serão salvos")
-    window.output_dir.setPlaceholderText("Escolha uma pasta no computador")
-    window.output_dir.textChanged.connect(window._update_output_preview)
-    window.output_controls = ResponsiveOutputControls(
-        window.output_dir,
-        [
-            button("Escolher pasta", window.choose_output, primary=True),
-            button("Abrir pasta", window.open_output),
-        ],
-    )
-    output_layout.addWidget(window.output_controls)
-    window.output_path_status = QLabel()
-    window.output_path_status.setWordWrap(True)
-    output_layout.addWidget(window.output_path_status)
-    window.output_subfolder = QCheckBox("Criar uma subpasta para esta execução")
-    window.output_subfolder.setChecked(True)
-    window.output_subfolder.toggled.connect(window._update_output_preview)
-    output_layout.addWidget(window.output_subfolder)
-    structure_title = QLabel("Estrutura prevista")
-    structure_title.setStyleSheet("font-weight: 700;")
-    output_layout.addWidget(structure_title)
-    window.output_structure = QLabel()
-    window.output_structure.setObjectName("outputStructure")
-    window.output_structure.setWordWrap(True)
-    output_layout.addWidget(window.output_structure)
-    output_note = QLabel(
-        "ⓘ  Os arquivos serão organizados conforme a estrutura acima na pasta selecionada."
-    )
-    output_note.setObjectName("reviewInfo")
-    output_note.setWordWrap(True)
-    output_layout.addWidget(output_note)
-    output_layout.addStretch()
-    columns.addWidget(output, 1)
-
-    execution, execution_layout = step_card("3", "Confirmação e execução")
-    execution_layout.addWidget(QLabel("Resumo da operação"))
-    operation_summary = QFrame()
-    operation_summary.setObjectName("reviewOperationSummary")
-    operation_summary_layout = QVBoxLayout(operation_summary)
-    operation_summary_layout.setContentsMargins(12, 8, 12, 8)
-    operation_summary_layout.setSpacing(6)
-    for key, title in [
-        ("source", "Fonte"),
-        ("connection", "Modo de acesso"),
-        ("selection", "Seleção"),
-        ("format", "Formato"),
-        ("consolidation", "Consolidação"),
-        ("output", "Pasta de saída"),
-    ]:
-        row = QHBoxLayout()
-        status = QLabel("✓")
-        status.setObjectName("reviewStatusIcon")
-        row.addWidget(status)
-        row.addWidget(QLabel(title), 1)
-        value = QLabel("—")
-        value.setObjectName("reviewOperationValue")
-        value.setWordWrap(True)
-        row.addWidget(value, 2)
-        operation_summary_layout.addLayout(row)
-        window.review_values.setdefault(f"operation_{key}", value)
-    execution_layout.addWidget(operation_summary)
-    operation_label = QLabel("Operação escolhida")
-    operation_label.setStyleSheet("font-weight: 700;")
-    execution_layout.addWidget(operation_label)
+    run_side = QVBoxLayout()
+    run_side.setSpacing(16)
+    operation, operation_layout = card()
+    operation_layout.addWidget(section_title("Operação"))
     window.execution_mode = QComboBox()
     window.execution_mode.setAccessibleName("Tipo de operação")
     window.execution_mode.addItem("Extrair e consolidar", "complete")
     window.execution_mode.addItem("Somente extrair páginas", "extract")
     window.execution_mode.addItem("Somente consolidar arquivos já extraídos", "consolidate")
     window.execution_mode.currentIndexChanged.connect(window._update_execution_mode_help)
-    execution_layout.addWidget(window.execution_mode)
+    window.execution_mode.currentIndexChanged.connect(lambda _index: window._refresh_execute_blocker())
+    operation_layout.addWidget(window.execution_mode)
     window.execution_mode_help = QLabel()
     window.execution_mode_help.setObjectName("subtitle")
     window.execution_mode_help.setWordWrap(True)
-    execution_layout.addWidget(window.execution_mode_help)
-    window.progress = QProgressBar()
-    window.progress.setRange(0, 100)
-    execution_layout.addWidget(window.progress)
+    operation_layout.addWidget(window.execution_mode_help)
+    window.execute_blocker = QLabel()
+    window.execute_blocker.setObjectName("reviewInfo")
+    window.execute_blocker.setWordWrap(True)
+    window.execute_blocker.setTextFormat(Qt.TextFormat.RichText)
+    window.execute_blocker.linkActivated.connect(window._show_page)
+    window.execute_blocker.setVisible(False)
+    operation_layout.addWidget(window.execute_blocker)
+    window.execute_button = button("🚀 Executar agora", window.execute_selected_operation, primary=True)
+    window.execute_button.setToolTip("Executar (F5)")
+    window.execute_button.setMinimumHeight(48)
+    operation_layout.addWidget(window.execute_button)
+    note = QLabel(
+        "Se você cancelar ou fechar o programa, o que já foi extraído fica salvo e a "
+        "próxima execução continua do resto."
+    )
+    note.setObjectName("subtitle")
+    note.setWordWrap(True)
+    operation_layout.addWidget(note)
+    run_side.addWidget(operation)
+    output, output_layout = card()
+    output_layout.addWidget(section_title("Pasta de saída"))
+    window.output_dir = QLineEdit()
+    window.output_dir.setAccessibleName("Pasta onde os arquivos serão salvos")
+    window.output_dir.setPlaceholderText("Escolha uma pasta no computador")
+    window.output_dir.textChanged.connect(window._update_output_preview)
+    # Not primary: the only main action on this screen is "Executar agora".
+    window.output_controls = ResponsiveOutputControls(
+        window.output_dir,
+        [button("Escolher pasta", window.choose_output), button("Abrir pasta", window.open_output)],
+    )
+    output_layout.addWidget(window.output_controls)
+    window.output_path_status = QLabel()
+    window.output_path_status.setObjectName("subtitle")
+    window.output_path_status.setWordWrap(True)
+    output_layout.addWidget(window.output_path_status)
+    window.output_structure = QLabel()
+    window.output_structure.setObjectName("outputStructure")
+    window.output_structure.setWordWrap(True)
+    output_layout.addWidget(window.output_structure)
+    run_side.addWidget(output)
+
+    run_side.addStretch()
+    side = QWidget()
+    side.setLayout(run_side)
+    side_scroll = QScrollArea()
+    side_scroll.setWidgetResizable(True)
+    side_scroll.setFrameShape(QFrame.Shape.NoFrame)
+    side_scroll.setWidget(side)
+    columns.addWidget(side_scroll, 1)
+    window.execute_stack.addWidget(prepare)
+
+    # 2. Acompanhar
+    monitor = QWidget()
+    monitor_layout = QVBoxLayout(monitor)
+    monitor_layout.setContentsMargins(0, 0, 0, 0)
+    monitor_layout.setSpacing(16)
+    status_card, status_layout = card()
+    headline = QHBoxLayout()
+    window.run_count = QLabel("0 de 0")
+    window.run_count.setObjectName("runCount")
+    headline.addWidget(window.run_count)
     window.progress_label = QLabel("Pronto para executar.")
     window.progress_label.setObjectName("subtitle")
-    execution_layout.addWidget(window.progress_label)
-    action_row = QHBoxLayout()
+    window.progress_label.setWordWrap(True)
+    headline.addWidget(window.progress_label, 1)
     window.cancel_button = button("⏹ Cancelar", window.cancel_operation, danger=True)
     window.cancel_button.setEnabled(False)
-    action_row.addWidget(window.cancel_button)
-    action_row.addWidget(
-        button("🚀 Executar operação escolhida", window.execute_selected_operation, primary=True)
-    )
-    execution_layout.addLayout(action_row)
+    headline.addWidget(window.cancel_button)
+    window.run_back_button = button("← Voltar à preparação", lambda: show_run_monitor(window, False))
+    window.run_back_button.setEnabled(False)
+    headline.addWidget(window.run_back_button)
+    status_layout.addLayout(headline)
+    window.progress = QProgressBar()
+    window.progress.setRange(0, 100)
+    window.progress.setTextVisible(False)
+    status_layout.addWidget(window.progress)
+    chips = QHBoxLayout()
+    window.run_done_chip = chip("0 prontas", "success")
+    window.run_failed_chip = chip("0 falhas", "neutral")
+    window.run_left_chip = chip("0 restantes", "neutral")
+    for item in (window.run_done_chip, window.run_failed_chip, window.run_left_chip):
+        chips.addWidget(item)
+    chips.addStretch()
+    status_layout.addLayout(chips)
+    monitor_layout.addWidget(status_card)
+
+    activity, activity_layout = card()
+    activity_head = QHBoxLayout()
+    activity_head.addWidget(section_title("Atividade"))
+    activity_head.addStretch()
+    window.log_filter = SegmentedControl([("Tudo", "all"), ("Erros", "error"), ("Avisos", "warning")])
+    window.log_filter.set_value("all")
+    window.log_filter.changed.connect(lambda _value: render_log(window))
+    activity_head.addWidget(window.log_filter)
+    window.log_copy_button = button("Copiar", lambda: _copy_log(window))
+    window.log_copy_button.setProperty("ghost", True)
+    window.log_copy_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+    activity_head.addWidget(window.log_copy_button)
+    activity_layout.addLayout(activity_head)
     window.log_text = QTextEdit()
     window.log_text.setObjectName("logTerminal")
     window.log_text.setReadOnly(True)
-    window.log_text.setVisible(False)
-    execution_layout.addWidget(window.log_text)
-    columns.addWidget(execution, 1)
-    layout.addLayout(columns, 1)
+    activity_layout.addWidget(window.log_text, 1)
+    monitor_layout.addWidget(activity, 1)
+    window.execute_stack.addWidget(monitor)
 
-    footer = QHBoxLayout()
-    footer_note = QLabel(
-        "ⓘ  Ao executar, não será possível desfazer a operação. Certifique-se de que as escolhas estão corretas."
-    )
-    footer_note.setObjectName("reviewInfo")
-    footer_note.setWordWrap(True)
-    footer.addWidget(footer_note, 1)
-    footer.addWidget(button("← Voltar para Consolidação", lambda: window._show_page("consolidation")))
-    layout.addLayout(footer)
+    layout.addWidget(window.execute_stack, 1)
     window._update_output_preview()
     window._update_execution_mode_help()
     return page
-

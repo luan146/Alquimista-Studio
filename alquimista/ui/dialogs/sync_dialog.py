@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import QObject, Qt, QThread, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QObject, Qt, QThread, QUrl, Signal
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -28,7 +29,11 @@ from ...services.sync import (
     SyncReport,
     SyncScope,
 )
-from ..components import button
+from ..components import button, chip
+from ..i18n import translate_text as tr
+from ..theme import current_colors
+
+RuntimesOrFactory = list[Any] | Callable[[CancellationToken], list[Any]]
 
 
 class _PlanWorker(QObject):
@@ -39,7 +44,7 @@ class _PlanWorker(QObject):
     def __init__(
         self,
         service: IncrementalSyncService,
-        runtimes: list[Any],
+        runtimes: RuntimesOrFactory,
         scope: SyncScope,
         target_source_id: str | None,
         token: CancellationToken,
@@ -55,10 +60,13 @@ class _PlanWorker(QObject):
         try:
             self.service.log = lambda msg: self.log_message.emit(str(msg))
             self.service.token = self.token
+            # Connecting to the sources may take a while (or fail on auth):
+            # it runs here, off the UI thread, together with the planning.
+            runtimes = self.runtimes(self.token) if callable(self.runtimes) else self.runtimes
             plan = self.service.plan_sync(
-                self.runtimes, scope=self.scope, target_source_id=self.target_source_id
+                runtimes, scope=self.scope, target_source_id=self.target_source_id
             )
-            self.finished.emit(plan)
+            self.finished.emit((plan, runtimes))
         except Exception as exc:
             self.failed.emit(str(exc))
 
@@ -106,7 +114,7 @@ class SyncPreviewDialog(QDialog):
         self,
         parent: QWidget | None,
         service: IncrementalSyncService,
-        runtimes: list[Any],
+        runtimes: RuntimesOrFactory,
         *,
         scope: SyncScope = SyncScope.SOURCE,
         target_source_id: str | None = None,
@@ -114,7 +122,8 @@ class SyncPreviewDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.service = service
-        self.runtimes = runtimes
+        self._runtimes_source = runtimes
+        self.runtimes: list[Any] = []  # filled once planning has prepared the sources
         self.scope = scope
         self.target_source_id = target_source_id
         self.source_name = source_name
@@ -123,9 +132,10 @@ class SyncPreviewDialog(QDialog):
         self.report: SyncReport | None = None
         self._thread: QThread | None = None
         self._worker: QObject | None = None
+        self._closing = False
 
         title_suffix = f" — {source_name}" if source_name else ""
-        self.setWindowTitle(f"Sincronização Incremental{title_suffix}")
+        self.setWindowTitle(f"{tr('Sincronização Incremental')}{title_suffix}")
         self.resize(780, 560)
         self.setMinimumSize(640, 440)
         self._setup_ui()
@@ -138,15 +148,11 @@ class SyncPreviewDialog(QDialog):
 
         # Header
         header_row = QHBoxLayout()
-        header_title = QLabel("Prévia de Mudanças")
-        header_title.setStyleSheet("font-size: 14pt; font-weight: 700;")
+        header_title = QLabel(tr("Prévia de Mudanças"))
+        header_title.setObjectName("pageTitle")
         header_row.addWidget(header_title)
         header_row.addStretch()
-        self.scope_badge = QLabel(f"Escopo: {self.scope.value.upper()}")
-        self.scope_badge.setStyleSheet(
-            "background: rgba(66, 184, 190, 0.15); color: #42B8BE; "
-            "padding: 4px 10px; border-radius: 4px; font-weight: 600;"
-        )
+        self.scope_badge = chip(tr("Escopo: {scope}").format(scope=self.scope.value.upper()), "accent")
         header_row.addWidget(self.scope_badge)
         main_layout.addLayout(header_row)
 
@@ -157,27 +163,24 @@ class SyncPreviewDialog(QDialog):
         def make_stat_card(label: str, color: str) -> tuple[QFrame, QLabel, QLabel]:
             frame = QFrame()
             frame.setObjectName("statCard")
-            frame.setStyleSheet(
-                f"QFrame#statCard {{ background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); "
-                f"border-radius: 8px; padding: 8px; }} QLabel {{ color: {color}; }}"
-            )
             vbox = QVBoxLayout(frame)
             vbox.setContentsMargins(10, 8, 10, 8)
             vbox.setSpacing(2)
             val = QLabel("—")
             val.setStyleSheet(f"font-size: 16pt; font-weight: 700; color: {color};")
             val.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl = QLabel(label)
-            lbl.setStyleSheet("font-size: 9pt; opacity: 0.8;")
+            lbl = QLabel(tr(label))
+            lbl.setObjectName("subtitle")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             vbox.addWidget(val)
             vbox.addWidget(lbl)
             return frame, val, lbl
 
-        card_new, self.val_new, _ = make_stat_card("Novos (+)", "#4CAF50")
-        card_upd, self.val_upd, _ = make_stat_card("Alterados (~)", "#FFC107")
-        card_rem, self.val_rem, _ = make_stat_card("Removidos (-)", "#F44336")
-        card_unc, self.val_unc, _ = make_stat_card("Inalterados (=)", "#9E9E9E")
+        colors = current_colors()
+        card_new, self.val_new, _ = make_stat_card("Novos (+)", colors["success"])
+        card_upd, self.val_upd, _ = make_stat_card("Alterados (~)", colors["warning"])
+        card_rem, self.val_rem, _ = make_stat_card("Removidos (-)", colors["danger"])
+        card_unc, self.val_unc, _ = make_stat_card("Inalterados (=)", colors["muted"])
 
         summary_row.addWidget(card_new)
         summary_row.addWidget(card_upd)
@@ -187,7 +190,7 @@ class SyncPreviewDialog(QDialog):
 
         # Table of items
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Status", "Documento", "Contêiner", "Detalhes"])
+        self.table.setHorizontalHeaderLabels([tr(h) for h in ("Status", "Documento", "Contêiner", "Detalhes")])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -201,9 +204,9 @@ class SyncPreviewDialog(QDialog):
 
         # Options
         options_row = QHBoxLayout()
-        self.chk_delete_files = QCheckBox("Excluir arquivos locais de documentos removidos na fonte")
+        self.chk_delete_files = QCheckBox(tr("Excluir arquivos locais de documentos removidos na fonte"))
         self.chk_delete_files.setChecked(True)
-        self.chk_consolidate = QCheckBox("Atualizar consolidação de pacotes ao concluir")
+        self.chk_consolidate = QCheckBox(tr("Atualizar consolidação de pacotes ao concluir"))
         self.chk_consolidate.setChecked(True)
         options_row.addWidget(self.chk_delete_files)
         options_row.addWidget(self.chk_consolidate)
@@ -211,8 +214,8 @@ class SyncPreviewDialog(QDialog):
         main_layout.addLayout(options_row)
 
         # Progress / Status
-        self.status_label = QLabel("Inspecionando estado remoto e calculando diferenças...")
-        self.status_label.setStyleSheet("font-size: 9.5pt; color: #BBB;")
+        self.status_label = QLabel(tr("Inspecionando estado remoto e calculando diferenças..."))
+        self.status_label.setObjectName("subtitle")
         main_layout.addWidget(self.status_label)
 
         self.progress_bar = QProgressBar()
@@ -222,19 +225,22 @@ class SyncPreviewDialog(QDialog):
 
         # Footer Buttons
         btn_row = QHBoxLayout()
-        self.cancel_button = button("Cancelar", self._on_cancel)
-        self.sync_button = button("🔄 Confirmar e Sincronizar", self._on_confirm_sync, primary=True)
+        self.cancel_button = button(tr("Cancelar"), self._on_cancel)
+        self.sync_button = button(tr("🔄 Confirmar e Sincronizar"), self._on_confirm_sync, primary=True)
         self.sync_button.setEnabled(False)
+        self.summary_button = button(tr("Ver o que mudou"), self._open_summary)
+        self.summary_button.setVisible(False)
 
         btn_row.addWidget(self.cancel_button)
         btn_row.addStretch()
+        btn_row.addWidget(self.summary_button)
         btn_row.addWidget(self.sync_button)
         main_layout.addLayout(btn_row)
 
     def _start_planning(self) -> None:
         self._thread = QThread(self)
         self._worker = _PlanWorker(
-            self.service, self.runtimes, self.scope, self.target_source_id, self.token
+            self.service, self._runtimes_source, self.scope, self.target_source_id, self.token
         )
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
@@ -246,8 +252,9 @@ class SyncPreviewDialog(QDialog):
     def _on_log(self, message: str) -> None:
         self.status_label.setText(message)
 
-    def _on_plan_finished(self, plan: SyncPlan) -> None:
+    def _on_plan_finished(self, result: tuple[SyncPlan, list[Any]]) -> None:
         self._cleanup_thread()
+        plan, self.runtimes = result
         self.plan = plan
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
@@ -260,22 +267,23 @@ class SyncPreviewDialog(QDialog):
         # Populate table
         self.table.setRowCount(len(plan.items))
         for row, item in enumerate(plan.items):
-            status_text = {
+            status_text = tr({
                 SyncItemAction.NEW: "+ Novo",
                 SyncItemAction.UPDATED: "~ Alterado",
                 SyncItemAction.REMOVED: "- Removido",
                 SyncItemAction.UNCHANGED: "= Inalterado",
                 SyncItemAction.FAILED: "✕ Erro",
-            }.get(item.action, item.action.value)
+            }.get(item.action, item.action.value))
 
             status_item = QTableWidgetItem(status_text)
+            colors = current_colors()
             color = {
-                SyncItemAction.NEW: "#4CAF50",
-                SyncItemAction.UPDATED: "#FFC107",
-                SyncItemAction.REMOVED: "#F44336",
-                SyncItemAction.UNCHANGED: "#9E9E9E",
-                SyncItemAction.FAILED: "#E91E63",
-            }.get(item.action, "#FFFFFF")
+                SyncItemAction.NEW: colors["success"],
+                SyncItemAction.UPDATED: colors["warning"],
+                SyncItemAction.REMOVED: colors["danger"],
+                SyncItemAction.UNCHANGED: colors["muted"],
+                SyncItemAction.FAILED: colors["danger"],
+            }.get(item.action, colors["text"])
             status_item.setForeground(QColor(color))
             self.table.setItem(row, 0, status_item)
             self.table.setItem(row, 1, QTableWidgetItem(item.title))
@@ -284,28 +292,29 @@ class SyncPreviewDialog(QDialog):
 
         if plan.has_changes:
             self.status_label.setText(
-                f"Pronto para sincronizar: {plan.new_count} novos, {plan.updated_count} alterados, "
-                f"{plan.removed_count} removidos."
+                tr("Pronto para sincronizar: {new} novos, {updated} alterados, {removed} removidos.").format(
+                    new=plan.new_count, updated=plan.updated_count, removed=plan.removed_count
+                )
             )
             self.sync_button.setEnabled(True)
         else:
-            self.status_label.setText("Tudo atualizado! Nenhuma alteração pendente na fonte remota.")
-            self.sync_button.setText("Sincronizado")
+            self.status_label.setText(tr("Tudo atualizado! Nenhuma alteração pendente na fonte remota."))
+            self.sync_button.setText(tr("Sincronizado"))
             self.sync_button.setEnabled(False)
 
     def _on_plan_failed(self, error: str) -> None:
         self._cleanup_thread()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.status_label.setText(f"Erro durante a verificação remota: {error}")
+        self.status_label.setText(tr("Erro durante a verificação remota: {error}").format(error=error))
         self.sync_button.setEnabled(False)
 
     def _on_confirm_sync(self) -> None:
         if not self.plan:
             return
         self.sync_button.setEnabled(False)
-        self.cancel_button.setText("Cancelar Execução")
-        self.status_label.setText("Aplicando sincronização...")
+        self.cancel_button.setText(tr("Cancelar Execução"))
+        self.status_label.setText(tr("Aplicando sincronização..."))
         self.progress_bar.setRange(0, 0)
 
         options = SyncOptions(
@@ -336,27 +345,47 @@ class SyncPreviewDialog(QDialog):
         self.report = report
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
-        self.status_label.setText(
-            f"Sincronização concluída com sucesso em {report.duration_seconds}s!"
-        )
-        self.cancel_button.setText("Concluir")
-        self.sync_button.setText("Concluído")
+        if report.failures:
+            self.status_label.setText(
+                tr(
+                    "Sincronização concluída com {count} falha(s) em {seconds}s. Veja o relatório de sincronização."
+                ).format(count=len(report.failures), seconds=report.duration_seconds)
+            )
+        else:
+            self.status_label.setText(
+                tr("Sincronização concluída com sucesso em {seconds}s!").format(seconds=report.duration_seconds)
+            )
+        self.cancel_button.setText(tr("Concluir"))
+        self.sync_button.setText(tr("Concluído"))
         self.sync_button.setEnabled(False)
+        self.summary_button.setVisible(report.summary_path is not None)
+
+    def _open_summary(self) -> None:
+        if self.report and self.report.summary_path:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.report.summary_path)))
 
     def _on_apply_failed(self, error: str) -> None:
         self._cleanup_thread()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.status_label.setText(f"Erro na execução da sincronização: {error}")
+        self.status_label.setText(tr("Erro na execução da sincronização: {error}").format(error=error))
         self.sync_button.setEnabled(True)
 
     def _on_cancel(self) -> None:
-        if self._thread and self._thread.isRunning():
-            self.token.cancel()
-            self.status_label.setText("Cancelando operação...")
-            self._thread.quit()
-            self._thread.wait(2000)
         self.reject()
+
+    def reject(self) -> None:
+        # Covers Cancel, Esc and the window close button. Destroying a running
+        # QThread aborts the process, so cancel cooperatively and close only
+        # once the worker has reported back (see _cleanup_thread).
+        if self._thread and self._thread.isRunning():
+            self._closing = True
+            self.token.cancel()
+            self.cancel_button.setEnabled(False)
+            self.sync_button.setEnabled(False)
+            self.status_label.setText(tr("Cancelando operação..."))
+            return
+        super().reject()
 
     def _cleanup_thread(self) -> None:
         if self._thread:
@@ -364,10 +393,8 @@ class SyncPreviewDialog(QDialog):
             self._thread.wait()
             self._thread = None
             self._worker = None
-
-    def closeEvent(self, event: Any) -> None:
-        self._on_cancel()
-        super().closeEvent(event)
+        if self._closing:
+            self.reject()
 
 
 __all__ = ["SyncPreviewDialog"]

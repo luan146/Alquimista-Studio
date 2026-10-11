@@ -161,6 +161,7 @@ class SalesforceConnector(KnowledgeSourceConnector):
                     )
             except Exception as exc:
                 self.log(f"Erro ao consultar Cases no Salesforce: {exc}")
+                raise
             return documents
 
         # Salesforce Knowledge
@@ -208,6 +209,7 @@ class SalesforceConnector(KnowledgeSourceConnector):
                     )
             except Exception as exc2:
                 self.log(f"Erro ao consultar Knowledge no Salesforce: {exc2}")
+                raise
 
         return documents
 

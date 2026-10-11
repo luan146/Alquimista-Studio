@@ -7,9 +7,50 @@ without constructing a window.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from ..models import AuthMode, SourceConfig
+
+
+def display_timestamp(raw: str) -> str:
+    """'2026-09-01T10:00:00Z' -> '01/09/2026 07:00' (local time); unparsable text is kept."""
+    if not raw:
+        return ""
+    try:
+        moment = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return raw
+    if moment.tzinfo is not None:
+        moment = moment.astimezone()
+    return moment.strftime("%d/%m/%Y %H:%M")
+
+
+def relative_timestamp(raw: str, now: datetime | None = None) -> str:
+    """'há 3 dias' style text for the tree; the exact date goes in the tooltip (display_timestamp).
+
+    Days are counted on the local clock, the same one the tooltip shows.
+    """
+    from .i18n import translate_text  # imported here so this module stays Qt-free at import
+
+    if not raw:
+        return ""
+    try:
+        moment = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone()
+    except ValueError:
+        return raw
+    days = ((now or datetime.now()).astimezone().date() - moment.date()).days
+    if days <= 0:
+        return translate_text("hoje")
+    if days == 1:
+        return translate_text("ontem")
+    if days < 31:
+        return translate_text("há {n} dias").format(n=days)
+    if days < 365:
+        months = days // 30
+        return translate_text("há 1 mês") if months == 1 else translate_text("há {n} meses").format(n=months)
+    years = days // 365
+    return translate_text("há 1 ano") if years == 1 else translate_text("há {n} anos").format(n=years)
 
 
 def page_container_id(source: SourceConfig, page: dict[str, Any]) -> str:
@@ -163,6 +204,7 @@ def tree_containers(source: SourceConfig, data: dict[str, Any]) -> list[dict[str
                     "name": name,
                     "description": metadata.get("description", ""),
                     "image_url": metadata.get("icon_url", ""),
+                    "page_count": int(metadata.get("page_count") or 0),
                     "metadata": metadata,
                 })
         return _deduplicate_containers(result)

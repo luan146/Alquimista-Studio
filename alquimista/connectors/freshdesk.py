@@ -183,11 +183,13 @@ class FreshdeskConnector(KnowledgeSourceConnector):
                         name=cat_name,
                         container_type="category",
                         source_type=self.SOURCE_TYPE,
-                        is_accessible=True,
-                        is_public=True,
-                        page_count=folder_count,
                         description=cat_desc,
-                        metadata={"category_id": cat_id, "folder_count": folder_count},
+                        metadata={
+                            "category_id": cat_id,
+                            "folder_count": folder_count,
+                            "public": True,
+                            "page_count": folder_count,
+                        },
                     )
                     self._containers[cat_id] = container
                     containers.append(container)
@@ -197,21 +199,8 @@ class FreshdeskConnector(KnowledgeSourceConnector):
 
         except Exception as exc:
             self.log(f"Erro ao listar categorias Freshdesk: {exc}")
+            raise
 
-        if not containers:
-            container = KnowledgeContainer(
-                id="1",
-                key="cat_1",
-                name="Geral",
-                container_type="category",
-                source_type=self.SOURCE_TYPE,
-                is_accessible=True,
-                is_public=True,
-                page_count=0,
-                description="Categoria Principal",
-            )
-            self._containers["1"] = container
-            containers.append(container)
         return containers
 
     def list_documents(self, container_id: str) -> list[KnowledgeDocumentMetadata]:
@@ -269,6 +258,7 @@ class FreshdeskConnector(KnowledgeSourceConnector):
 
         except Exception as exc:
             self.log(f"Erro ao listar artigos Freshdesk: {exc}")
+            raise
 
         return documents
 

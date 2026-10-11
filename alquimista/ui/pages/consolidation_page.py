@@ -62,8 +62,10 @@ def build_consolidation_page(window: Any) -> QWidget:
         window.con_group.addItem(label, value)
     window.con_pages = QSpinBox()
     window.con_pages.setRange(1, 10_000)
+    window.con_pages.setGroupSeparatorShown(True)
     window.con_chars = QSpinBox()
     window.con_chars.setRange(1_000, 100_000_000)
+    window.con_chars.setGroupSeparatorShown(True)
     window.con_depth = QSpinBox()
     window.con_depth.setRange(1, 10)
     window.con_depth.setToolTip(
@@ -82,6 +84,10 @@ def build_consolidation_page(window: Any) -> QWidget:
     window.con_hierarchy.setToolTip(
         "Inclui os níveis do caminho como títulos antes de cada documento."
     )
+    window.con_links = QCheckBox("Links entre páginas viram referências (para IA)")
+    window.con_links.setToolTip(
+        "Troca o link para outra página extraída por «Título» e o pacote onde ela está."
+    )
 
     def step_frame(number: str, title: str) -> tuple[QFrame, QVBoxLayout]:
         frame = QFrame()
@@ -96,7 +102,7 @@ def build_consolidation_page(window: Any) -> QWidget:
         badge.setFixedSize(26, 26)
         header.addWidget(badge)
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 11pt; font-weight: 700;")
+        title_label.setObjectName("sectionTitle")
         header.addWidget(title_label)
         header.addStretch()
         step_layout.addLayout(header)
@@ -132,6 +138,7 @@ def build_consolidation_page(window: Any) -> QWidget:
     identity_form = QFormLayout()
     identity_form.addRow("Prefixo", window.con_prefix)
     identity_form.addRow("Estrutura", window.con_hierarchy)
+    identity_form.addRow("Links", window.con_links)
     identity_layout.addLayout(identity_form)
     window.con_filename_preview = QLabel("Exemplo de arquivo: pacote-01.md")
     window.con_filename_preview.setObjectName("subtitle")
@@ -143,7 +150,7 @@ def build_consolidation_page(window: Any) -> QWidget:
     summary_layout = QVBoxLayout(summary)
     summary_layout.setContentsMargins(12, 10, 12, 10)
     summary_title = QLabel("ⓘ  Resumo das regras atuais")
-    summary_title.setStyleSheet("font-weight: 700;")
+    summary_title.setObjectName("sectionTitle")
     summary_layout.addWidget(summary_title)
     window.con_summary = QLabel()
     window.con_summary.setWordWrap(True)
@@ -174,7 +181,7 @@ def build_consolidation_page(window: Any) -> QWidget:
     preview_header = QHBoxLayout()
     preview_title_block = QVBoxLayout()
     preview_title = QLabel("◉  Prévia da distribuição")
-    preview_title.setStyleSheet("font-size: 13pt; font-weight: 700;")
+    preview_title.setObjectName("sectionTitle")
     preview_subtitle = QLabel("Estimativa baseada nas regras atuais.")
     preview_subtitle.setObjectName("subtitle")
     preview_title_block.addWidget(preview_title)
@@ -190,10 +197,10 @@ def build_consolidation_page(window: Any) -> QWidget:
     stats.setSpacing(8)
     for column, (key, title, suffix) in enumerate(
         [
-            ("packages", "Pacotes estimados", "arquivos"),
-            ("pages", "Páginas totais", "páginas"),
-            ("characters", "Caracteres totais", "caracteres"),
-            ("average", "Média por pacote", "páginas"),
+            ("packages", "Pacotes", "arquivos estimados"),
+            ("pages", "Páginas", "no total"),
+            ("characters", "Caracteres", "no total"),
+            ("average", "Média", "páginas por pacote"),
         ]
     ):
         metric = QFrame()
@@ -216,7 +223,7 @@ def build_consolidation_page(window: Any) -> QWidget:
     preview_layout.addLayout(stats)
 
     window.con_distribution_title = QLabel("Distribuição por grupo")
-    window.con_distribution_title.setStyleSheet("font-weight: 700;")
+    window.con_distribution_title.setObjectName("sectionTitle")
     preview_layout.addWidget(window.con_distribution_title)
     window.con_depth_preview = QLabel()
     window.con_depth_preview.setObjectName("subtitle")
@@ -264,6 +271,7 @@ def build_consolidation_page(window: Any) -> QWidget:
     window.con_chars.valueChanged.connect(window._update_consolidation_summary)
     window.con_depth.valueChanged.connect(window._update_consolidation_summary)
     window.con_hierarchy.toggled.connect(window._update_consolidation_summary)
+    window.con_links.toggled.connect(window._update_consolidation_summary)
     window.con_prefix.textChanged.connect(window._update_consolidation_summary)
     return page
 

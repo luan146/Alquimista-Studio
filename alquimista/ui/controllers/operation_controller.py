@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -16,11 +17,51 @@ from ...errors import (
     ResourceNotFoundError,
 )
 from ...runtime import CancellationToken
+from ..components import inform, set_chip_kind
 from ..i18n import translate_text
 from ..workers import Worker
 
 WorkerFunction = Callable[..., Any]
 DoneCallback = Callable[[Any], None]
+
+
+def log_level(message: str) -> str:
+    """Level of a log line for the activity filter; the services only send plain text."""
+    if re.search(r"\[\d+/\d+\]", message):
+        return "info"  # progress line: the page title may contain "erro"
+    lowered = message.strip().casefold()
+    # Warnings first: "Aviso: Erro ao listar…" and "Falha transitória…; nova tentativa" are not failures.
+    if lowered.startswith(("aviso", "warning")) or any(word in lowered for word in ("nova tentativa", "retry")):
+        return "warning"
+    if any(word in lowered for word in ("falha", "erro", "error", "failed", "traceback")):
+        return "error"
+    if any(word in lowered for word in ("aviso", "warning", "ignorad", "ignored", "não atualizado")):
+        return "warning"
+    return "info"
+
+
+def _count(n: int, one: str, many: str) -> str:
+    return translate_text(one if n == 1 else many).format(n=n)
+
+
+def _duration(seconds: float) -> str:
+    minutes, secs = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h{minutes:02d}"
+    return f"{minutes} min" if minutes else f"{secs}s"
+
+
+def progress_eta(done: int, total: int, elapsed: float) -> str:
+    """'3 min decorridos · 42/min · ~12 min restantes' once there is enough data."""
+    text = translate_text("{elapsed} decorridos").format(elapsed=_duration(elapsed))
+    if done < 3 or elapsed < 5 or not total or done >= total:
+        return text
+    rate = done / elapsed
+    remaining = (total - done) / rate
+    return translate_text("{elapsed} decorridos · {rate:.0f}/min · ~{remaining} restantes").format(
+        elapsed=_duration(elapsed), rate=rate * 60, remaining=_duration(remaining)
+    )
 
 
 def _connection_error_presentation(
@@ -120,7 +161,7 @@ class WorkerOperationController:
     def start(self, function: WorkerFunction, done: DoneCallback) -> None:
         window = self.window
         if self.worker is not None:
-            QMessageBox.information(
+            inform(
                 window,
                 translate_text("Operação em andamento"),
                 translate_text("Aguarde ou cancele a operação atual."),
@@ -134,6 +175,21 @@ class WorkerOperationController:
         window.started_at = time.monotonic()
         window.cancel_button.setEnabled(True)
         window.progress.setValue(0)
+        # Only real runs open the monitor; tree loads, connection tests and syncs use other callbacks.
+        if done == getattr(window, "_operation_done", None) and hasattr(window, "execute_stack"):
+            from ..pages.review_page import render_log, show_run_monitor
+
+            window._log_entries = []
+            window.run_failures = 0
+            window._run_active = True
+            window.run_count.setText(translate_text("{done} de {total}").format(done=0, total=0))
+            window.run_done_chip.setText(_count(0, "{n} pronta", "{n} prontas"))
+            window.run_failed_chip.setText(_count(0, "{n} falha", "{n} falhas"))
+            set_chip_kind(window.run_failed_chip, "neutral")
+            window.run_left_chip.setText(_count(0, "{n} restante", "{n} restantes"))
+            render_log(window)
+            window.run_back_button.setEnabled(False)
+            show_run_monitor(window, True)
         worker.signals.progress.connect(self.on_progress)
         worker.signals.log.connect(self.append_log)
         worker.signals.failed.connect(self.worker_failed)
@@ -141,6 +197,8 @@ class WorkerOperationController:
         worker.signals.finished.connect(self.worker_finished)
         self.thread_pool.start(worker)
         self._set_state("RUNNING")
+        if hasattr(window, "_refresh_execute_blocker"):
+            window._refresh_execute_blocker()
         window._refresh_dashboard()
         if hasattr(window, "_update_consolidation_action_availability"):
             window._update_consolidation_action_availability()
@@ -149,12 +207,20 @@ class WorkerOperationController:
         window = self.window
         percent = int(done * 100 / total) if total else 0
         window.progress.setValue(percent)
+        if getattr(window, "_run_active", False):
+            window.run_count.setText(translate_text("{done} de {total}").format(done=done, total=total))
+            window.run_done_chip.setText(_count(done, "{n} pronta", "{n} prontas"))
+            window.run_left_chip.setText(_count(max(0, total - done), "{n} restante", "{n} restantes"))
         elapsed = time.monotonic() - window.started_at
-        window.progress_label.setText(
-            translate_text("{done}/{total}  —  {item}  —  {elapsed:.1f}s decorridos").format(
-                done=done, total=total, item=item, elapsed=elapsed
+        eta = progress_eta(done, total, elapsed)
+        if getattr(window, "_run_active", False):
+            # O contador grande já mostra "done de total".
+            progress_text = f"{item}  —  {eta}" if item else eta
+        else:
+            progress_text = translate_text("{done}/{total}  —  {item}  —  {elapsed}").format(
+                done=done, total=total, item=item, elapsed=eta
             )
-        )
+        window.progress_label.setText(progress_text)
         if getattr(window, "_tree_loading", False) and hasattr(
             window, "tree_load_progress"
         ):
@@ -175,20 +241,46 @@ class WorkerOperationController:
                     if status is not None:
                         status.setText(window._tree_loading_message)
 
-    def append_log(self, message: str) -> None:
+    def append_log(self, message: str, level: str | None = None) -> None:
         window = self.window
         window.technical_logger.info(message)
-        if hasattr(window, "log_text"):
-            window.log_text.append(f"[{time.strftime('%H:%M:%S')}] {message}")
+        entries = getattr(window, "_log_entries", None)
+        if entries is None or not hasattr(window, "log_text"):
+            return
+        # A finished run stays on screen with its log; other jobs (tree loads, tests) stay out of it.
+        if window.execute_stack.currentIndex() == 1 and not getattr(window, "_run_active", False):
+            return
+        level = level or log_level(message)
+        line = f"[{time.strftime('%H:%M:%S')}] {message}"
+        entries.append((level, line))
+        # The traceback that follows a failure is part of it, not a second one.
+        is_detail = message.startswith(translate_text("Detalhes técnicos"))
+        if level == "error" and not is_detail and hasattr(window, "run_failed_chip"):
+            window.run_failures = getattr(window, "run_failures", 0) + 1
+            window.run_failed_chip.setText(_count(window.run_failures, "{n} falha", "{n} falhas"))
+            set_chip_kind(window.run_failed_chip, "danger")
+        wanted = window.log_filter.value() if hasattr(window, "log_filter") else "all"
+        if wanted in (None, "all", level):
+            from ..pages.review_page import append_rendered
+
+            append_rendered(window, level, line)
 
     def worker_failed(self, error: Exception | str, detail: str) -> None:
         window = self.window
         message = str(error)
-        self.append_log(f"{translate_text('FALHA')}: {message}")
+        # The token says whether the user cancelled; the text is only a guess when there is no token.
+        if self.token is not None:
+            cancelled = self.token.cancelled
+        else:
+            cancelled = "cancel" in f"{message}\n{detail}".casefold()
+        if cancelled:  # not a failure: no red mark and no count in the failures chip
+            self.append_log(f"{translate_text('Cancelado')}: {message}", "warning")
+        else:
+            self.append_log(f"{translate_text('FALHA')}: {message}")
         if detail.strip():
-            self.append_log(f"{translate_text('Detalhes técnicos')}:\n{detail.rstrip()}")
-        lowered = f"{message}\n{detail}".casefold()
-        cancelled = bool(self.token and self.token.cancelled) or "cancel" in lowered
+            self.append_log(
+                f"{translate_text('Detalhes técnicos')}:\n{detail.rstrip()}", "warning" if cancelled else None
+            )
         self._set_state("CANCELLED" if cancelled else "FAILED")
         if cancelled:
             if getattr(window, "_tree_loading", False):
@@ -223,6 +315,23 @@ class WorkerOperationController:
             QMessageBox.critical(window, title, f"{state}\n\n{message}")
             return
 
+        if hasattr(window, "_notify_finished") and not getattr(window, "_tree_loading", False):
+            window._notify_finished(translate_text("ALQuimista: operação não concluída"), message[:200])
+        if isinstance(error, AuthenticationError) or "401" in message:
+            # Expired session/token: offer the way out instead of only the error text.
+            hint = translate_text("Faça login ou informe o token novamente em Fontes.")
+            box = QMessageBox(
+                QMessageBox.Icon.Critical,
+                translate_text("Acesso expirado ou inválido"),
+                f"{hint}\n\n{message}",
+                parent=window,
+            )
+            go = box.addButton(translate_text("Ir para Fontes"), QMessageBox.ButtonRole.AcceptRole)
+            box.addButton(QMessageBox.StandardButton.Close)
+            box.exec()
+            if box.clickedButton() is go:
+                window._show_page("sources")
+            return
         QMessageBox.critical(window, translate_text("Operação não concluída"), message)
 
     def worker_finished(self) -> None:
@@ -234,7 +343,12 @@ class WorkerOperationController:
         if getattr(window, "_tree_loading", False):
             window._set_tree_loading(False)
         window.cancel_button.setEnabled(False)
+        window._run_active = False
+        if hasattr(window, "run_back_button"):
+            window.run_back_button.setEnabled(True)
         window._refresh_dashboard()
+        if hasattr(window, "_refresh_workflow_state"):
+            window._refresh_workflow_state()
         if hasattr(window, "_update_consolidation_action_availability"):
             window._update_consolidation_action_availability()
         self._set_state("IDLE")
@@ -270,4 +384,5 @@ __all__ = [
     "WorkerFunction",
     "WorkerOperationController",
     "_connection_error_presentation",
+    "log_level",
 ]

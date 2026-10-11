@@ -1,19 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from typing import Any
 
-from ...client import ConfluenceClient
 from ...connectors import ConnectorRegistry, KnowledgeSourceConnector, default_registry
-from ...errors import AlquimistaError
+from ...errors import AlquimistaError, AuthenticationError
 from ...models import (
     KnowledgeContainer,
     KnowledgeDocumentMetadata,
     ProjectConfig,
-    now_iso,
+    SourceConfig,
 )
 from ...runtime import CancellationToken
 from ...services import SelectedDocumentRef, SourceRuntime
+from ...session_store import load_secret
 
 
 class RuntimeSecrets:
@@ -37,6 +38,16 @@ class RuntimeSecrets:
     def clear(self) -> None:
         self._values.clear()
 
+    def load_remembered(self, sources: Iterable[SourceConfig], log: Callable[[str], None]) -> None:
+        """Fill in the tokens the user chose to remember on this computer."""
+        for source in sources:
+            if not source.remember_secret or self.get(source.id):
+                continue
+            try:
+                self.set(source.id, load_secret(source.id))
+            except AuthenticationError as exc:
+                log(f"{source.name}: {exc}")
+
 
 class RuntimeBuilder:
     """Build extraction inputs without coupling network work to Qt widgets."""
@@ -50,50 +61,6 @@ class RuntimeBuilder:
         self.trees = trees
         self.secrets = secrets
         self.registry = registry or default_registry()
-
-    def build(
-        self,
-        project: ProjectConfig,
-        token: CancellationToken,
-        log: Any,
-    ) -> list[SourceRuntime]:
-        import alquimista.ui.controllers as c_mod
-        confluence_client_cls = getattr(c_mod, "ConfluenceClient", ConfluenceClient)
-
-        runtimes: list[SourceRuntime] = []
-        for source in project.sources:
-            token.check()
-            if not source.enabled:
-                continue
-            if source.source_type != "confluence_rest":
-                raise AlquimistaError(
-                    "O RuntimeBuilder legado aceita apenas confluence_rest; "
-                    "use build_connectors para outros conectores."
-                )
-            data = self.trees.get(source.id)
-            if data is None:
-                log(f"Carregando árvore de {source.name}…")
-                with confluence_client_cls(
-                    source,
-                    project.extraction,
-                    secret=self.secrets.get(source.id),
-                    token=token,
-                    log=log,
-                ) as client:
-                    root, pages = client.fetch_tree()
-                data = {"root": root, "pages": pages, "loaded_at": now_iso()}
-            runtimes.append(
-                SourceRuntime(
-                    source,
-                    data["root"],
-                    {str(page["id"]): page for page in data["pages"]},
-                    list(source.selected_page_ids),
-                    self.secrets.get(source.id),
-                )
-            )
-        if not runtimes or not any(runtime.selected_page_ids for runtime in runtimes):
-            raise AlquimistaError("Nenhuma fonte ativa possui páginas selecionadas.")
-        return runtimes
 
     @staticmethod
     def _selected_available_keys(

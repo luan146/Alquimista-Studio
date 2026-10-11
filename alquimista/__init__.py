@@ -1,5 +1,8 @@
 """ALQuimista Studio application package."""
 
+# Single source of the product version: build scripts, installer and User-Agent read it.
+__version__ = "0.9.5"
+
 from .models import (
     ConsolidationOptions,
     ExtractionOptions,
@@ -15,5 +18,3 @@ __all__ = [
     "ProjectConfig",
     "SourceConfig",
 ]
-
-__version__ = "0.9.5"

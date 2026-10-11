@@ -18,7 +18,7 @@ from alquimista.errors import (
     RateLimitError,
     ResourceNotFoundError,
 )
-from alquimista.ui.operation_controller import _connection_error_presentation
+from alquimista.ui.controllers.operation_controller import _connection_error_presentation
 from alquimista.ui.workers import Worker
 
 

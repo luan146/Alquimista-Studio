@@ -25,6 +25,7 @@ from ..storage import (
     confined_path,
 )
 from .helpers import demote_headings, sanitize_filename
+from .links import PackageLinkIndex, link_references
 
 
 class ConsolidationService:
@@ -49,6 +50,7 @@ class ConsolidationService:
             self.base_dir, project.consolidation.output_subdir
         )
         self.selected_keys = selected_keys
+        self.skipped: list[str] = []
         self.token = token or CancellationToken()
         self.log = log or (lambda _message: None)
         self.progress = progress or (lambda _done, _total, _item: None)
@@ -127,10 +129,6 @@ class ConsolidationService:
     def _page_text(self, entry: ManifestEntry) -> str:
         self.token.check()
         path = confined_path(self.base_dir, entry.markdown_path)
-        self.log(
-            f"[Consolidação] Lendo documento {entry.document_key}: "
-            f"relativo={entry.markdown_path!r}; absoluto={path}; existe={path.is_file()}"
-        )
         if not path.is_file():
             raise ManifestError(
                 f"O manifesto {self.store.path} aponta para um arquivo inexistente: "
@@ -196,9 +194,13 @@ class ConsolidationService:
             overhead += max(0, len(entries) - 1) * 8
         return overhead
 
-    def preview(self) -> list[dict[str, Any]]:
+    def preview(self, entries: list[ManifestEntry] | None = None) -> list[dict[str, Any]]:
         self.token.check()
-        _manifest, entries = self._entries()
+        if entries is None:
+            _manifest, entries = self._entries()
+        sizes: dict[str, int] = {}
+        # A missing/empty file (e.g. deleted by hand) skips that document, not every package.
+        self.skipped = []
         groups: dict[str, list[ManifestEntry]] = defaultdict(list)
         for entry in entries:
             self.token.check()
@@ -211,7 +213,12 @@ class ConsolidationService:
             chunks: list[list[ManifestEntry]] = []
             for entry in self._sort(group_entries):
                 self.token.check()
-                size = len(self._page_text(entry))
+                try:
+                    size = sizes[entry.document_key] = len(self._page_text(entry))
+                except ManifestError as exc:
+                    self.skipped.append(str(exc))
+                    self.log(f"[Consolidação] Documento ignorado: {exc}")
+                    continue
                 projected = chars + size + self._estimate_overhead([*current, entry])
                 if current and (
                     len(current) >= self.project.consolidation.max_pages
@@ -226,7 +233,7 @@ class ConsolidationService:
                 chunks.append(current)
             for part, chunk in enumerate(chunks, 1):
                 self.token.check()
-                size = sum(len(self._page_text(entry)) for entry in chunk) + self._estimate_overhead(chunk)
+                size = sum(sizes[entry.document_key] for entry in chunk) + self._estimate_overhead(chunk)
                 result.append(
                     {
                         "group": group,
@@ -239,6 +246,8 @@ class ConsolidationService:
                         "document_keys": [entry.document_key for entry in chunk],
                     }
                 )
+        if not result and self.skipped:
+            raise ManifestError(self.skipped[0])
         return result
 
     def run(self) -> dict[str, Any]:
@@ -255,7 +264,7 @@ class ConsolidationService:
         self.token.check()
         manifest, entries = self._entries()
         self.token.check()
-        preview = self.preview()
+        preview = self.preview(entries)
         self.token.check()
         old_index_path = self.output_dir / PACKAGE_INDEX_NAME
         if self.project.consolidation.clean_output and old_index_path.exists():
@@ -277,21 +286,39 @@ class ConsolidationService:
             if self.project.consolidation.filename_prefix.strip()
             else ""
         )
-        for index, item in enumerate(preview, 1):
-            self.token.check()
+        # Every package name is known up front, so a page can point to one written later.
+        filenames: list[str] = []
+        for item in preview:
             group = item["group"]
             suffix = f"_parte_{item['part']:02d}" if item["parts"] > 1 else ""
             proposed = f"{prefix}{sanitize_filename(group.replace('__', '_'))}{suffix}.md"
-            filename = self._unique_package_filename(
-                proposed,
-                f"{group}:{item['part']}:{item['parts']}",
-                assigned_filenames,
+            filenames.append(
+                self._unique_package_filename(
+                    proposed,
+                    f"{group}:{item['part']}:{item['parts']}",
+                    assigned_filenames,
+                )
             )
+        links = (
+            PackageLinkIndex(
+                (by_key[key], filename)
+                for item, filename in zip(preview, filenames, strict=True)
+                for key in item["document_keys"]
+            )
+            if self.project.consolidation.link_references
+            else None
+        )
+        for index, (item, filename) in enumerate(zip(preview, filenames, strict=True), 1):
+            self.token.check()
+            group = item["group"]
             selected = [by_key[key] for key in item["document_keys"]]
             valid = []
             for entry in selected:
                 self.token.check()
-                valid.append((entry, self._page_text(entry)))
+                text = self._page_text(entry)
+                if links is not None:
+                    text = link_references(text, links, own_key=entry.document_key, own_package=filename)
+                valid.append((entry, text))
             valid = [(entry, text) for entry, text in valid if text]
             lines: list[str] = []
             options = self.project.consolidation
@@ -372,6 +399,7 @@ class ConsolidationService:
             "output_dir": str(self.output_dir),
             "packages": len(package_records),
             "pages": sum(item["pages"] for item in package_records),
+            "skipped_documents": len(self.skipped),
             "duration_seconds": round(time.monotonic() - started, 2),
         }
         self.log("Consolidação concluída.")

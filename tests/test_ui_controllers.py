@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
-
-import pytest
-
-from alquimista.errors import AlquimistaError
 from alquimista.models import (
     KnowledgeContainer,
     KnowledgeDocumentMetadata,
     KnowledgeSelection,
     ProjectConfig,
     SourceConfig,
-    default_project,
 )
 from alquimista.runtime import CancellationToken
-from alquimista.ui import controllers
 from alquimista.ui.controllers import RuntimeBuilder, RuntimeSecrets
 
 
@@ -26,69 +19,6 @@ def test_runtime_secrets_never_expose_a_serializable_mapping() -> None:
     assert not hasattr(secrets, "to_dict")
     secrets.clear()
     assert secrets.get("source") == ""
-
-
-def test_runtime_builder_uses_cached_tree_without_network() -> None:
-    project = default_project()
-    source = SourceConfig(id="source", enabled=True, selected_page_ids=["10"])
-    project.sources = [source]
-    trees: dict[str, dict[str, Any]] = {
-        "source": {
-            "root": {"id": "10"},
-            "pages": [{"id": "10", "title": "Root"}],
-        }
-    }
-
-    runtimes = RuntimeBuilder(trees, RuntimeSecrets()).build(
-        project, CancellationToken(), lambda _message: None
-    )
-
-    assert len(runtimes) == 1
-    assert runtimes[0].pages_by_id["10"]["title"] == "Root"
-
-
-def test_runtime_builder_fetches_missing_tree(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = default_project()
-    source = SourceConfig(id="source", enabled=True, selected_page_ids=["20"])
-    project.sources = [source]
-    calls: list[str] = []
-
-    class FakeClient:
-        def __init__(self, source: SourceConfig, *_args: Any, **_kwargs: Any) -> None:
-            calls.append(source.id)
-
-        def __enter__(self) -> FakeClient:
-            return self
-
-        def __exit__(self, *_args: Any) -> None:
-            return None
-
-        def fetch_tree(self) -> tuple[dict[str, str], list[dict[str, str]]]:
-            return {"id": "20"}, [{"id": "20", "title": "Page"}]
-
-    monkeypatch.setattr(controllers, "ConfluenceClient", FakeClient)
-
-    runtimes = RuntimeBuilder({}, RuntimeSecrets()).build(
-        project, CancellationToken(), lambda _message: None
-    )
-
-    assert calls == ["source"]
-    assert runtimes[0].root["id"] == "20"
-
-
-def test_legacy_runtime_builder_rejects_non_confluence_even_with_cached_tree() -> None:
-    source = SourceConfig(
-        id="gitbook", source_type="gitbook_api", selected_page_ids=["page-1"]
-    )
-    project = ProjectConfig(sources=[source])
-
-    with pytest.raises(AlquimistaError, match="aceita apenas confluence_rest"):
-        RuntimeBuilder(
-            {"gitbook": {"root": {}, "pages": [{"id": "page-1"}]}},
-            RuntimeSecrets(),
-        ).build(project, CancellationToken(), lambda _message: None)
 
 
 def test_runtime_builder_discovers_only_structured_selected_containers() -> None:

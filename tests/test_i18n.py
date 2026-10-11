@@ -80,11 +80,12 @@ def test_main_window_switches_major_pages_without_changing_internal_ids(
     window = MainWindow(language_manager=manager)
 
     assert window.nav_buttons["sources"].text() == "Sources"
-    dashboard_title = next(
-        label for label in window.pages["dashboard"].findChildren(QLabel)
+    assert window.nav_buttons["dashboard"].text() == "Home"
+    home_titles = [
+        label.text() for label in window.pages["dashboard"].findChildren(QLabel)
         if label.objectName() == "pageTitle"
-    )
-    assert dashboard_title.text() == "Choose your knowledge source"
+    ]
+    assert "Start by adding a source" in home_titles
     assert window.selection_filter.itemData(0) == "all"
     assert window.selection_filter.itemText(0) == "📋 All pages"
 
@@ -94,7 +95,7 @@ def test_main_window_switches_major_pages_without_changing_internal_ids(
     window.close()
 
 
-def test_main_window_retranslates_dashboard_cards_after_pt_br_to_english(
+def test_main_window_retranslates_catalog_cards_after_pt_br_to_english(
     qapp: QApplication, tmp_path: Path
 ) -> None:
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
@@ -102,23 +103,16 @@ def test_main_window_retranslates_dashboard_cards_after_pt_br_to_english(
     manager.set_language("pt-BR", persist=False)
     window = MainWindow(language_manager=manager)
 
-    dashboard = window.pages["dashboard"]
-    assert any(
-        "Selecione a origem do conhecimento que você deseja usar." in label.text()
-        for label in dashboard.findChildren(QLabel)
-    )
+    catalog = window.add_source_dialog
+    assert any(label.text() == "Ou escolha a plataforma" for label in catalog.findChildren(QLabel))
 
     manager.set_language("en", persist=False)
 
-    assert any(
-        "Select the knowledge source you want to use." in label.text()
-        for label in dashboard.findChildren(QLabel)
-    )
+    assert any(label.text() == "Or choose the platform" for label in catalog.findChildren(QLabel))
     assert any(
         label.text() == "Connect and extract Zendesk Guide articles,\ntickets and solutions."
-        for label in dashboard.findChildren(QLabel)
+        for label in catalog.findChildren(QLabel)
     )
-    assert "Your connection is secure" in window.dashboard_status.text()
     window._show_page("sources")
     assert (
         window.source_url_input.placeholderText()

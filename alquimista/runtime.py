@@ -32,8 +32,8 @@ LogCallback = Callable[[str], None]
 
 
 class RateLimiter:
-    def __init__(self, requests_per_second: float, token: CancellationToken) -> None:
-        self.interval = 1.0 / max(0.1, requests_per_second)
+    def __init__(self, requests_per_second: float, token: CancellationToken, *, min_interval: float = 0.0) -> None:
+        self.interval = max(1.0 / max(0.1, requests_per_second), min_interval)
         self.last_request = 0.0
         self.token = token
         self._lock = threading.Lock()
@@ -44,3 +44,8 @@ class RateLimiter:
             if remaining > 0:
                 self.token.wait(remaining)
             self.last_request = time.monotonic()
+
+    def pause(self, seconds: float) -> None:
+        """Hold every caller (e.g. parallel downloads) for ``seconds`` after an HTTP 429/5xx."""
+        with self._lock:
+            self.last_request = max(self.last_request, time.monotonic() + seconds - self.interval)

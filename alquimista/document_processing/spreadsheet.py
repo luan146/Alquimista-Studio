@@ -6,6 +6,7 @@ import io
 from pathlib import Path
 from typing import Any
 
+from ..errors import DocumentProcessingError
 from ..markdown import normalize_markdown
 from ..models import KnowledgeDocument
 from .base import DocumentProcessor
@@ -55,13 +56,11 @@ class SpreadsheetProcessor(DocumentProcessor):
     """Processor for spreadsheets (XLSX, XLS, XLSM without macros, CSV, TSV, ODS) to Markdown tables."""
 
     name = "spreadsheet"
-    supported_extensions = (".xlsx", ".xls", ".xlsm", ".csv", ".tsv", ".ods")
+    supported_extensions = (".xlsx", ".xlsm", ".csv", ".tsv")
     supported_mimetypes = (
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-excel",
         "text/csv",
         "text/tab-separated-values",
-        "application/vnd.oasis.opendocument.spreadsheet",
     )
 
     def process_file(
@@ -148,7 +147,7 @@ class SpreadsheetProcessor(DocumentProcessor):
                 finally:
                     wb.close()
             except Exception as exc:
-                sections.append(f"*[Não foi possível processar planilha: {exc}]*")
+                raise DocumentProcessingError(f"Não foi possível processar a planilha {filename}: {exc}") from exc
 
         full_content = normalize_markdown("\n\n".join(sections))
         doc_metadata.setdefault("raw_type", "spreadsheet")

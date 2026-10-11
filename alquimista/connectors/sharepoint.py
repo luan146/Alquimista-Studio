@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from collections import deque
+from collections.abc import Iterator
 from datetime import datetime
 from typing import Any
+from urllib.parse import unquote
 
+from ..document_processing import get_global_processor_registry
 from ..errors import AuthenticationError, InvalidResponseError
 from ..models import (
     ConnectorCapabilities,
@@ -60,7 +64,7 @@ class SharePointConnector(KnowledgeSourceConnector):
             source_type=self.SOURCE_TYPE,
             name=self.source.name,
             base_url=self.source.base_url or self.API_BASE_URL,
-            space_key=self.source.space_key,
+            metadata={"space_key": self.source.space_key},
         )
 
     def get_capabilities(self) -> ConnectorCapabilities:
@@ -82,15 +86,25 @@ class SharePointConnector(KnowledgeSourceConnector):
         name = payload.get("displayName") or "SharePoint Root Site"
         return {"spaces_visible": 1, "identity": str(name)}
 
+    def _paged(self, path: str, params: dict[str, Any] | None = None) -> Iterator[dict[str, Any]]:
+        """Yield every item of a Graph collection, following ``@odata.nextLink``."""
+        next_path: str | None = path
+        while next_path:
+            self.token.check()
+            payload = self.client.get_json(next_path, params=params)
+            if not isinstance(payload, dict) or not isinstance(payload.get("value"), list):
+                raise InvalidResponseError("A API do SharePoint retornou uma lista inválida.")
+            for item in payload["value"]:
+                if not isinstance(item, dict):
+                    raise InvalidResponseError("A API do SharePoint retornou um item inválido.")
+                yield item
+            next_path = payload.get("@odata.nextLink") or None
+            params = None  # nextLink already carries the query
+
     def list_containers(self) -> list[KnowledgeContainer]:
         containers: list[KnowledgeContainer] = []
-        payload = self.client.get_json("/sites?search=*")
-        if not isinstance(payload, dict) or not isinstance(payload.get("value"), list):
-            raise InvalidResponseError("A API do SharePoint retornou uma lista de sites inválida.")
         seen_ids: set[str] = set()
-        for item in payload["value"]:
-            if not isinstance(item, dict):
-                raise InvalidResponseError("A API do SharePoint retornou um site inválido.")
+        for item in self._paged("/sites?search=*"):
             site_id = str(item.get("id", ""))
             if not site_id or site_id in seen_ids:
                 continue
@@ -123,78 +137,90 @@ class SharePointConnector(KnowledgeSourceConnector):
         return containers
 
     def list_documents(self, container_id: str) -> list[KnowledgeDocumentMetadata]:
+        """Every convertible file of the site's document library, including subfolders."""
+        registry = get_global_processor_registry()
+        drive = self._drive(container_id)
         documents: list[KnowledgeDocumentMetadata] = []
-        payload = self.client.get_json(f"/sites/{container_id}/drive/root/children")
-        if not isinstance(payload, dict) or not isinstance(payload.get("value"), list):
-            raise InvalidResponseError("A API do SharePoint retornou uma lista de documentos inválida.")
-        for item in payload["value"]:
-            if not isinstance(item, dict):
-                raise InvalidResponseError("A API do SharePoint retornou um documento inválido.")
-            item_id = str(item.get("id", ""))
-            name = str(item.get("name", "Documento SharePoint"))
-            updated_at = None
-            if item.get("lastModifiedDateTime"):
-                try:
-                    updated_at = datetime.fromisoformat(item["lastModifiedDateTime"].replace("Z", "+00:00"))
-                except (TypeError, ValueError) as exc:
-                    raise InvalidResponseError("A API do SharePoint retornou uma data inválida.") from exc
-            doc = KnowledgeDocumentMetadata(
-                id=item_id,
-                title=name,
-                document_type="page" if not item.get("folder") else "folder",
-                container_id=container_id,
-                updated_at=updated_at,
-                original_url=item.get("webUrl", ""),
-            )
-            documents.append(doc)
+        folders: deque[tuple[str, list[str]]] = deque([(f"{drive}/root/children", [])])
+        while folders:
+            children_path, folder_path = folders.popleft()
+            for item in self._paged(children_path, params=_ITEM_QUERY):
+                item_id = str(item.get("id") or "")
+                name = str(item.get("name") or "")
+                if not item_id or not name:
+                    continue
+                if "folder" in item:
+                    folders.append((f"{drive}/items/{item_id}/children", [*folder_path, name]))
+                    continue
+                mime_type = str((item.get("file") or {}).get("mimeType") or "")
+                if registry.get_processor(file_path=name, mime_type=mime_type) is None:
+                    continue
+                documents.append(
+                    KnowledgeDocumentMetadata(
+                        id=item_id,
+                        title=name,
+                        container_id=container_id,
+                        updated_at=_graph_datetime(item.get("lastModifiedDateTime")),
+                        etag=item.get("cTag") or item.get("eTag"),
+                        original_url=str(item.get("webUrl") or ""),
+                        path=[*folder_path, name],
+                        metadata={"size": item.get("size"), "mime_type": mime_type},
+                    )
+                )
         return documents
 
+    def _drive(self, container_id: str | None) -> str:
+        site_id = container_id or self.source.space_key
+        return f"/sites/{site_id}/drive" if site_id else "/drive"
+
     def get_document(self, document_id: str, container_id: str | None = None) -> KnowledgeDocument:
-        title = "Documento SharePoint"
-        item_data = self.client.get_json(f"/drive/items/{document_id}")
+        drive = self._drive(container_id)
+        item_data = self.client.get_json(f"{drive}/items/{document_id}")
         if not isinstance(item_data, dict):
             raise InvalidResponseError("A API do SharePoint retornou os metadados em formato inválido.")
-        title = str(item_data.get("name") or title)
-        content_bytes = b""
-        try:
-            content_bytes = self.client.download(f"/drive/items/{document_id}/content")
-        except Exception:
-            pass
-        content = content_bytes.decode("utf-8", errors="replace") if content_bytes else f"# {title}\n\nDocumento do SharePoint."
+        title = str(item_data.get("name") or "Documento SharePoint")
+        folder_path = _folder_path(item_data)
+        content_bytes = self.client.download(f"{drive}/items/{document_id}/content")
+        converted = get_global_processor_registry().process_bytes(
+            content_bytes,
+            filename=title,
+            mime_type=str((item_data.get("file") or {}).get("mimeType") or ""),
+        )
 
         container = self._containers.get(container_id or self.source.space_key or "")
         return KnowledgeDocument(
             id=document_id,
             container_id=container_id or self.source.space_key,
-            title=title,
-            content=content,
-            document_type="page",
+            title=converted.title or title,
+            content=converted.content,
             original_url=str(item_data.get("webUrl") or ""),
             source_type=self.SOURCE_TYPE,
             container_name=container.name if container else "SharePoint",
-            metadata={"webUrl": item_data.get("webUrl"), "lastModifiedDateTime": item_data.get("lastModifiedDateTime")},
+            updated_at=_graph_datetime(item_data.get("lastModifiedDateTime")),
+            etag=item_data.get("cTag") or item_data.get("eTag"),
+            path=[*folder_path, title],
+            metadata={
+                **converted.metadata,
+                "webUrl": item_data.get("webUrl"),
+                "lastModifiedDateTime": item_data.get("lastModifiedDateTime"),
+            },
         )
 
     def get_document_children(self, document_id: str) -> list[KnowledgeDocumentMetadata]:
-        try:
-            payload = self.client.get_json(f"/drive/items/{document_id}/children")
-            if not isinstance(payload, dict) or not isinstance(payload.get("value"), list):
-                return []
-            result: list[KnowledgeDocumentMetadata] = []
-            for item in payload["value"]:
-                if isinstance(item, dict) and item.get("id"):
-                    result.append(
-                        KnowledgeDocumentMetadata(
-                            id=str(item["id"]),
-                            title=str(item.get("name") or "Item"),
-                            document_type="page" if not item.get("folder") else "folder",
-                            container_id=self.source.space_key or "sharepoint_site",
-                            original_url=str(item.get("webUrl") or ""),
-                        )
-                    )
-            return result
-        except Exception:
-            return []
+        payload = self.client.get_json(f"{self._drive(None)}/items/{document_id}/children")
+        if not isinstance(payload, dict) or not isinstance(payload.get("value"), list):
+            raise InvalidResponseError("A API do SharePoint retornou uma lista de itens inválida.")
+        return [
+            KnowledgeDocumentMetadata(
+                id=str(item["id"]),
+                title=str(item.get("name") or "Item"),
+                document_type="page" if not item.get("folder") else "folder",
+                container_id=self.source.space_key or "sharepoint_site",
+                original_url=str(item.get("webUrl") or ""),
+            )
+            for item in payload["value"]
+            if isinstance(item, dict) and item.get("id")
+        ]
 
     def normalize_document(self, raw_document: object) -> KnowledgeDocument:
         if isinstance(raw_document, KnowledgeDocument):
@@ -223,3 +249,25 @@ class SharePointConnector(KnowledgeSourceConnector):
         if hasattr(self, "client") and hasattr(self.client, "close"):
             self.client.close()
         self.secret = ""
+
+
+_ITEM_QUERY = {
+    "$select": "id,name,folder,file,webUrl,lastModifiedDateTime,size,cTag,eTag,parentReference",
+    "$top": "200",
+}
+
+
+def _graph_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise InvalidResponseError("A API do SharePoint retornou uma data inválida.") from exc
+
+
+def _folder_path(item: dict[str, Any]) -> list[str]:
+    """Folder names from ``parentReference.path`` (``/drives/{id}/root:/A/B``)."""
+    parent = str((item.get("parentReference") or {}).get("path") or "")
+    _, _, relative = parent.partition("root:")
+    return [unquote(part) for part in relative.split("/") if part]

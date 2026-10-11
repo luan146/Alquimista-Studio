@@ -63,3 +63,18 @@ def test_invalid_session_has_safe_error(
 
     with pytest.raises(Exception, match="inválida"):
         session_store.load_session("source_01")
+
+
+def test_failed_encryption_refuses_to_store_plaintext_cookies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    def broken(_data: bytes) -> bytes:
+        raise OSError("crypt32 indisponível")
+
+    monkeypatch.setattr(session_store, "_crypt_protect", broken)
+
+    with pytest.raises(session_store.AuthenticationError):
+        session_store.save_session("source_01", {"cookies": [{"name": "sid", "value": "secret"}]})
+    assert not session_store.session_path("source_01").exists()

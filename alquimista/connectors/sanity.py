@@ -126,6 +126,7 @@ class SanityConnector(KnowledgeSourceConnector):
                 )
         except Exception as exc:
             self.log(f"Erro ao listar tipos no Sanity: {exc}")
+            raise
 
         if not containers:
             containers.append(
@@ -172,6 +173,7 @@ class SanityConnector(KnowledgeSourceConnector):
                 )
         except Exception as exc:
             self.log(f"Erro ao listar documentos no Sanity: {exc}")
+            raise
 
         return documents
 

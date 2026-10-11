@@ -11,14 +11,14 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QLineEdit,
-    QPlainTextEdit,
     QSpinBox,
+    QTextEdit,
     QWidget,
 )
 
 from ...connectors.confluence_parser import ConfluenceDocumentParser
 from ...markdown import KnowledgeDocumentRenderer, sample_page
-from ...models import MarkdownOptions, SourceConfig
+from ...models import KnowledgeDocument, MarkdownOptions, SourceConfig
 from ..i18n import translate_text
 
 
@@ -29,13 +29,12 @@ class PreviewController:
         self,
         md_controls: dict[str, QWidget],
         preview_mode_combo: QComboBox | None = None,
-        preview_editor: QPlainTextEdit | None = None,
+        preview_editor: QTextEdit | None = None,
         preview_timer: QTimer | None = None,
         extraction_summary_label: Any | None = None,
         output_path_status_label: Any | None = None,
         output_structure_label: Any | None = None,
         output_dir_input: QLineEdit | None = None,
-        output_subfolder_checkbox: QCheckBox | None = None,
     ) -> None:
         self.md_controls = md_controls
         self.preview_mode_combo = preview_mode_combo
@@ -45,8 +44,9 @@ class PreviewController:
         self.output_path_status_label = output_path_status_label
         self.output_structure_label = output_structure_label
         self.output_dir_input = output_dir_input
-        self.output_subfolder_checkbox = output_subfolder_checkbox
         self._preview_raw = ""
+        # A page fetched from the real source (Seleção → "Prévia"); None = fictional sample.
+        self.real_document: tuple[KnowledgeDocument, SourceConfig] | None = None
 
     def load_markdown_controls(self, options: MarkdownOptions) -> None:
         for key, control in self.md_controls.items():
@@ -133,12 +133,15 @@ class PreviewController:
                     or translate_text("Espaço de exemplo"),
                 }
             )
-            page = sample_page(translate_text)
-            page["space"] = {
-                "key": source.space_key,
-                "name": source.space_name,
-            }
-            document = ConfluenceDocumentParser(source, options).parse(page)
+            if self.real_document is not None:
+                document, source = self.real_document
+            else:
+                page = sample_page(translate_text)
+                page["space"] = {
+                    "key": source.space_key,
+                    "name": source.space_name,
+                }
+                document = ConfluenceDocumentParser(source, options).parse(page)
             renderer = KnowledgeDocumentRenderer(options)
             prepared = renderer.prepare(document, source)
             self._preview_raw = renderer.render_prepared(
@@ -191,7 +194,6 @@ class PreviewController:
         output_dir_text: str,
         pages_subdir: str,
         consolidation_subdir: str,
-        use_subfolder: bool = False,
     ) -> None:
         if self.output_path_status_label is None:
             return
@@ -228,7 +230,7 @@ class PreviewController:
                 )
             )
         root = path.name or "ALQuimista"
-        execution = "Extracao-AAAA-MM-DD" if use_subfolder else root
+        execution = root
         if self.output_structure_label is not None:
             self.output_structure_label.setText(
                 translate_text(

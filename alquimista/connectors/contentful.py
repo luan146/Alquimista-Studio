@@ -125,6 +125,7 @@ class ContentfulConnector(KnowledgeSourceConnector):
                 )
         except Exception as exc:
             self.log(f"Erro ao listar tipos de conteúdo no Contentful: {exc}")
+            raise
 
         if not containers:
             containers.append(
@@ -175,6 +176,7 @@ class ContentfulConnector(KnowledgeSourceConnector):
                 )
         except Exception as exc:
             self.log(f"Erro ao listar entradas no Contentful: {exc}")
+            raise
 
         return documents
 

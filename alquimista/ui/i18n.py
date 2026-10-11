@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QLabel,
     QTableWidget,
+    QTabWidget,
     QTreeWidget,
     QVBoxLayout,
     QWidget,
@@ -186,6 +187,10 @@ def retranslate_widget_tree(root: QWidget, *, exclude: tuple[QWidget, ...] = ())
             for index in range(widget.count()):
                 source = _remember(widget, f"item_{index}", widget.itemText(index))
                 widget.setItemText(index, translate_text(source))
+        elif isinstance(widget, QTabWidget):
+            for index in range(widget.count()):
+                source = _remember(widget, f"tab_{index}", widget.tabText(index))
+                widget.setTabText(index, translate_text(source))
         elif isinstance(widget, QTableWidget):
             for index in range(widget.columnCount()):
                 item = widget.horizontalHeaderItem(index)

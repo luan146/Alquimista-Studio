@@ -97,6 +97,10 @@ class BrowserCache:
     """
 
     SCHEMA_VERSION = 1
+    # Expired rows stay usable as stale fallback (``allow_stale``) when the API
+    # fails; only rows expired for longer than this are deleted on open.
+    STALE_RETENTION_SECONDS = 30 * 24 * 3600
+    _TABLES = ("containers", "container_pages", "documents", "document_pages", "search_pages")
 
     def __init__(self, path: Path, *, clock: Callable[[], float] | None = None) -> None:
         self.path = Path(path)
@@ -210,6 +214,9 @@ class BrowserCache:
                     "INSERT OR REPLACE INTO cache_meta(key, value) VALUES ('schema_version', ?)",
                     (str(self.SCHEMA_VERSION),),
                 )
+                cutoff = self._clock() - self.STALE_RETENTION_SECONDS
+                for table in self._TABLES:
+                    connection.execute(f"DELETE FROM {table} WHERE expires_at < ?", (cutoff,))
         finally:
             connection.close()
 

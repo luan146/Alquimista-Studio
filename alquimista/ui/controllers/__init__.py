@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from ...client import ConfluenceClient
 from .consolidation_controller import ConsolidationController
 from .execution_controller import (
     execute_selected_operation,
@@ -45,7 +44,6 @@ from .tree_loader_controller import TreeLoaderController
 
 __all__ = [
     "ComboDataProvider",
-    "ConfluenceClient",
     "ConsolidationController",
     "DoneCallback",
     "NavigationController",

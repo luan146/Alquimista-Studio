@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -12,12 +12,14 @@ from ..errors import AlquimistaError
 from ..models import (
     EntryStatus,
     KnowledgeDocumentMetadata,
+    ManifestDocument,
     ManifestEntry,
     ProjectConfig,
     SourceConfig,
     now_iso,
 )
 from ..runtime import CancellationToken, LogCallback, ProgressCallback
+from ..selection import SelectionStore
 from ..storage import (
     MANIFEST_NAME,
     FileTransaction,
@@ -131,6 +133,10 @@ class SyncReport:
     failures: list[dict[str, str]]
     consolidated: bool
     generated_at: str = field(default_factory=now_iso)
+    # New documents extracted by this sync; the caller adds them to the project selection.
+    added_selections: list[str] = field(default_factory=list)
+    # Human-readable list of what changed (sincronizacoes/*.md); None when nothing changed.
+    summary_path: Path | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -141,7 +147,23 @@ class SyncReport:
             "failures": self.failures,
             "consolidated": self.consolidated,
             "generated_at": self.generated_at,
+            "added_selections": self.added_selections,
+            "summary_path": str(self.summary_path) if self.summary_path else None,
         }
+
+
+def add_to_selection(project: ProjectConfig, keys: list[str]) -> int:
+    """Mark "source:container:document" keys as selected; returns how many were not yet."""
+    store = SelectionStore.from_selections(project.selections)
+    added = 0
+    for key in keys:
+        source_id, container_id, document_id = key.split(":", 2)
+        if not store.is_selected(source_id, container_id, document_id):
+            store.set(source_id, container_id, document_id, True)
+            added += 1
+    if added:
+        project.selections = store.selections()
+    return added
 
 
 SYNC_REPORT_NAME = "sync_report.json"
@@ -194,10 +216,36 @@ class IncrementalSyncService:
         """Enforces that discovery does not indiscriminately enumerate outside SourceConfig."""
         if source.space_key and str(source.space_key) != str(container_id):
             return False
-        if source.root_mode == "id" and source.root_id and not source.include_root:
-            if str(document_id) == str(source.root_id):
+        if source.root_mode == "id" and source.root_value and not source.include_root:
+            if str(document_id) == str(source.root_value):
                 return False
         return True
+
+    def _selected_keys(self, runtime: SourceRuntime) -> set[str]:
+        """Selected document keys of a source; legacy keys keep only the document id."""
+        keys = self.project.selected_keys_for(runtime.source.id) | set(runtime.selected_page_ids)
+        return {key if key.count(":") == 2 and ":__legacy__:" not in key else key.rsplit(":", 1)[-1] for key in keys}
+
+    @staticmethod
+    def _under_selection(
+        source_id: str,
+        container_id: str,
+        docs: list[KnowledgeDocumentMetadata],
+        selected: set[str],
+    ) -> set[str]:
+        """Ids of documents that are selected or descend from a selected document."""
+        parents = {str(meta.id): str(meta.parent_id) if meta.parent_id else None for meta in docs}
+        covered: set[str] = set()
+        for doc_id in parents:
+            current: str | None = doc_id
+            seen: set[str] = set()
+            while current is not None and current not in seen:
+                if current in covered or current in selected or f"{source_id}:{container_id}:{current}" in selected:
+                    covered.add(doc_id)
+                    break
+                seen.add(current)
+                current = parents.get(current)
+        return covered
 
     def plan_sync(
         self,
@@ -222,6 +270,14 @@ class IncrementalSyncService:
                 existing_by_alias[f"{entry.source_id}:{entry.container_id}:{entry.document_id}"] = entry
             elif entry.page_id:
                 existing_by_alias[f"{entry.source_id}:{entry.space_key or ''}:{entry.page_id}"] = entry
+        active_by_container: dict[tuple[str, str], set[str]] = {}
+        for entry in manifest.entries:
+            if entry.active:
+                container_id = str(entry.container_id or entry.space_key or "")
+                doc_id = str(entry.document_id or entry.page_id or "")
+                active_by_container.setdefault((entry.source_id, container_id), set()).add(
+                    entry.document_key or f"{entry.source_id}:{container_id}:{doc_id}"
+                )
 
         discovered_keys: set[str] = set()
         completed_containers: set[tuple[str, str]] = set()
@@ -236,6 +292,7 @@ class IncrementalSyncService:
                 continue
 
             source = runtime.source
+            selected_keys = self._selected_keys(runtime)
             self.log(f"[{r_idx}/{total_runtimes}] Inspecionando estado remoto da fonte: {source.name}...")
 
             # 1. Discover target containers according to SourceConfig
@@ -263,12 +320,10 @@ class IncrementalSyncService:
                 if not self._matches_source_scope(source, container_id, ""):
                     continue
 
-                container_success = True
                 raw_docs: list[KnowledgeDocumentMetadata] = []
                 try:
                     raw_docs = list(connector.list_documents(container_id))
                 except Exception as exc:
-                    container_success = False
                     failures.append({
                         "source_id": source.id,
                         "container_id": container_id,
@@ -277,8 +332,13 @@ class IncrementalSyncService:
                     self.log(f"Aviso: Erro ao listar documentos no contêiner {container_id}: {exc}")
                     continue
 
-                if container_success:
-                    completed_containers.add((source.id, container_id))
+                # A new document joins only when it is selected or sits under a
+                # selected page; without any selection the configured scope rules.
+                covered = (
+                    self._under_selection(source.id, container_id, raw_docs, selected_keys)
+                    if selected_keys and f"{source.id}:{container_id}" not in self.project.whole_containers
+                    else None
+                )
 
                 # Process remote metadata items
                 for meta in raw_docs:
@@ -291,6 +351,9 @@ class IncrementalSyncService:
                     discovered_keys.add(doc_key)
 
                     old_entry = existing_by_key.get(doc_key) or existing_by_alias.get(doc_key)
+                    is_new = old_entry is None or not old_entry.active
+                    if is_new and covered is not None and doc_id not in covered:
+                        continue
                     change = self._classify_document(
                         runtime=runtime,
                         container_id=container_id,
@@ -300,6 +363,24 @@ class IncrementalSyncService:
                         old=old_entry,
                     )
                     items.append(change)
+
+                # A listing missing most known documents is far likelier a capped
+                # crawl or a fallback than a mass deletion: don't infer removals.
+                # ponytail: real mass deletions then need a manual cleanup.
+                known = active_by_container.get((source.id, container_id), set())
+                missing = len(known - discovered_keys)
+                if len(known) >= 10 and missing * 2 > len(known):
+                    failures.append({
+                        "source_id": source.id,
+                        "container_id": container_id,
+                        "error": (
+                            f"A listagem não trouxe {missing} de {len(known)} documentos já extraídos; "
+                            "remoções não foram aplicadas por segurança."
+                        ),
+                    })
+                    self.log(f"Aviso: listagem incompleta em {container_id}; remoções ignoradas.")
+                else:
+                    completed_containers.add((source.id, container_id))
 
         # 2. Identify removals (Strictly bounded by completed_containers)
         # Never mark removed if container was not completely and successfully discovered
@@ -538,6 +619,41 @@ class IncrementalSyncService:
                 )
         return changes
 
+    def _write_change_summary(self, items: list[SyncItemChange], manifest: ManifestDocument) -> Path | None:
+        """Write sincronizacoes/<date>.md listing new, changed and removed documents."""
+        sections = (
+            (SyncItemAction.NEW, "Novos"),
+            (SyncItemAction.UPDATED, "Alterados"),
+            (SyncItemAction.REMOVED, "Removidos"),
+        )
+        if not any(item.action in dict(sections) for item in items):
+            return None
+        entries = {entry.document_key: entry for entry in manifest.entries}
+        moment = datetime.now()
+        lines = [f"# Sincronização de {moment:%d/%m/%Y %H:%M}", ""]
+        for action, heading in sections:
+            changed = sorted(
+                (item for item in items if item.action == action), key=lambda item: item.title.casefold()
+            )
+            if not changed:
+                continue
+            lines += [f"## {heading} ({len(changed)})", ""]
+            for item in changed:
+                entry = entries.get(item.document_key)
+                if action != SyncItemAction.REMOVED and entry and entry.active and entry.markdown_path:
+                    line = f"- [{item.title}](<../{entry.markdown_path}>)"
+                else:
+                    line = f"- {item.title}"
+                if entry and entry.source_url:
+                    line += f" · [original]({entry.source_url})"
+                lines.append(line)
+            lines.append("")
+        path = self.output_dir / "sincronizacoes" / f"{moment:%Y-%m-%d_%H%M%S}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
+        self.log(f"Resumo das mudanças salvo em {path}")
+        return path
+
     def apply_sync(
         self,
         plan: SyncPlan,
@@ -623,6 +739,19 @@ class IncrementalSyncService:
 
         # Handle removals directly if there are any planned removals
         manifest = self.store.load()
+        # Without date or version a document is downloaded to compare; the content
+        # hash recorded by the extraction tells whether it really changed.
+        statuses = {entry.document_key: entry.status for entry in manifest.entries}
+        items = [
+            replace(item, action=SyncItemAction.UNCHANGED, reason="Conteúdo igual ao já extraído")
+            if item.action == SyncItemAction.UPDATED and statuses.get(item.document_key) == EntryStatus.UNCHANGED
+            else item
+            for item in plan.items
+        ]
+        new_keys = {item.document_key for item in plan.items if item.action == SyncItemAction.NEW}
+        added_selections = sorted(
+            entry.document_key for entry in manifest.entries if entry.active and entry.document_key in new_keys
+        )
         applied_removals = 0
         if plan.removed_count > 0:
             removed_keys = {
@@ -641,6 +770,12 @@ class IncrementalSyncService:
                             transaction.stage_delete(local_path)
             transaction.commit()
             self.store.save(manifest)
+
+        summary_path: Path | None = None
+        try:
+            summary_path = self._write_change_summary(items, manifest)
+        except OSError as exc:
+            self.log(f"Aviso: Não foi possível salvar o resumo da sincronização: {exc}")
 
         # Consolidate if requested and configured
         consolidated = False
@@ -661,9 +796,9 @@ class IncrementalSyncService:
         duration = round(time.monotonic() - start_time, 2)
         summary = {
             "new": plan.new_count,
-            "updated": plan.updated_count,
+            "updated": sum(item.action == SyncItemAction.UPDATED for item in items),
             "removed": applied_removals if plan.removed_count > 0 else 0,
-            "unchanged": plan.unchanged_count,
+            "unchanged": sum(item.action == SyncItemAction.UNCHANGED for item in items),
             "failures": len(plan.failures),
         }
 
@@ -678,10 +813,12 @@ class IncrementalSyncService:
                     "action": it.action.value,
                     "reason": it.reason,
                 }
-                for it in plan.items
+                for it in items
             ],
             failures=plan.failures,
             consolidated=consolidated,
+            added_selections=added_selections,
+            summary_path=summary_path,
         )
 
         # Save sync_report.json to output_dir
@@ -709,4 +846,5 @@ __all__ = [
     "SyncPlan",
     "SyncReport",
     "SyncScope",
+    "add_to_selection",
 ]

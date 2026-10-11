@@ -153,6 +153,7 @@ class HubSpotConnector(KnowledgeSourceConnector):
                     )
             except Exception as exc:
                 self.log(f"Erro ao consultar Tickets no HubSpot: {exc}")
+                raise
             return documents
 
         # HubSpot Knowledge Base / Blog Posts
@@ -177,6 +178,7 @@ class HubSpotConnector(KnowledgeSourceConnector):
                 )
         except Exception as exc:
             self.log(f"Erro ao consultar Knowledge Base no HubSpot: {exc}")
+            raise
 
         return documents
 

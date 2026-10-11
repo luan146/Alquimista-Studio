@@ -177,6 +177,8 @@ class SourceConfig(Model):
     root_page_id: str = ""
     auth_mode: AuthMode = AuthMode.PUBLIC
     username: str = ""
+    # The token itself is never stored here; it goes to the DPAPI-protected session folder.
+    remember_secret: bool = False
     include_root: bool = False
     enabled: bool = True
     # Non-secret connector-specific settings. Secrets remain runtime-only.
@@ -283,10 +285,15 @@ class MarkdownOptions(Model):
     absolute_links: bool = True
     separators: bool = True
     auto_demote_headings: bool = False
+    # Images become "[Imagem: ...]" text: AI tools cannot open authenticated image URLs.
+    images_as_text: bool = True
+    # Also read the text inside each image with Tesseract (slower; needs the bundled Tesseract).
+    read_image_text: bool = True
     hash_scope: Literal["content", "title_content", "stable_metadata"] = "title_content"
 
     def signature(self) -> str:
-        return stable_json_hash(self.model_dump())
+        # Left out while off, so projects saved before the option keep their format hash.
+        return stable_json_hash(self.model_dump(exclude=set() if self.images_as_text else {"images_as_text", "read_image_text"}))
 
     @classmethod
     def preset(cls, name: str) -> "MarkdownOptions":
@@ -346,6 +353,8 @@ class ExtractionOptions(Model):
     timeout_seconds: int = Field(60, ge=5, le=600)
     request_delay_ms: int = Field(150, ge=0, le=60_000)
     max_requests_per_second: float = Field(4.0, ge=0.1, le=100)
+    # Documents downloaded at the same time; the rate limit above still applies.
+    parallel_downloads: int = Field(4, ge=1, le=16)
     proxy_mode: Literal["system", "direct", "custom"] = "system"
     proxy_url: str = ""
     # Optional overrides for lazy discovery budgets. When None (the default) the
@@ -410,6 +419,8 @@ class ConsolidationOptions(Model):
     demote_page_headings: int = Field(0, ge=0, le=5)
     filename_prefix: str = ""
     sort_mode: Literal["path", "title", "updated", "id"] = "path"
+    # Links to other packaged pages become "(ver «Título» em pacote.md)", which an AI can follow.
+    link_references: bool = True
     manual_groups: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("output_subdir")
@@ -428,6 +439,8 @@ class ProjectConfig(Model):
     output_dir: str = "ALQuimista_Base"
     sources: list[SourceConfig] = Field(default_factory=list)
     selections: list[KnowledgeSelection] = Field(default_factory=list)
+    # "source_id:container_id" of spaces marked whole: sync also brings their new top-level pages.
+    whole_containers: list[str] = Field(default_factory=list)
     markdown: MarkdownOptions = Field(default_factory=MarkdownOptions)
     extraction: ExtractionOptions = Field(default_factory=ExtractionOptions)
     consolidation: ConsolidationOptions = Field(default_factory=ConsolidationOptions)
@@ -500,6 +513,14 @@ class ProjectConfig(Model):
             extraction.setdefault("max_requests_per_second", 4.0)
             extraction.setdefault("proxy_mode", "system")
             extraction.setdefault("proxy_url", "")
+        # Projects saved before "link references" existed keep their original links.
+        consolidation = migrated.get("consolidation")
+        if isinstance(consolidation, dict) and "link_references" not in consolidation:
+            migrated["consolidation"] = {**consolidation, "link_references": False}
+        # Projects saved before "images as text" existed keep their image links.
+        markdown = migrated.get("markdown")
+        if isinstance(markdown, dict) and "images_as_text" not in markdown:
+            migrated["markdown"] = {**markdown, "images_as_text": False}
         return cls.model_validate(migrated)
 
 

@@ -1,7 +1,7 @@
 ; Inno Setup configuration for the installed Windows distribution.
 #define AppName "ALQuimista Studio"
 #ifndef AppVersion
-  #define AppVersion "0.9.5"
+  #error Gere pelo tools/build/gerar_distribuicoes.ps1, que passa /DAppVersion a partir de alquimista/__init__.py.
 #endif
 #ifndef AppExeSource
   #define AppExeSource "..\\.tmp\\pyinstaller-dist\\ALQuimista Studio.exe"
@@ -31,6 +31,10 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 [Files]
 Source: "{#AppExeSource}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\distribuicao\LEIA-ME-PORTATIL.txt"; DestDir: "{app}"; Flags: ignoreversion
+#ifdef TesseractDir
+; Reads the text inside images (alquimista/image_text.py looks for {app}\tesseract).
+Source: "{#TesseractDir}\*"; DestDir: "{app}\tesseract"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 
 [Dirs]
 Name: "{userappdata}\ALQuimista Studio"

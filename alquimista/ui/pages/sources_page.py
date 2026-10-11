@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter
 from PySide6.QtWidgets import (
         QAbstractItemView,
         QCheckBox,
@@ -12,18 +13,75 @@ from PySide6.QtWidgets import (
         QLabel,
         QLineEdit,
         QListWidget,
+        QScrollArea,
+        QSplitter,
+        QStyle,
+        QStyledItemDelegate,
+        QStyleOptionViewItem,
         QTableWidget,
         QVBoxLayout,
         QWidget,
 )
 
 from ..components import button, card, page_header
+from ..dialogs.add_source_dialog import AddSourceDialog
+from ..theme import current_colors
+from .connection_page import build_connection_panel
+
+STATE_KIND_ROLE = int(Qt.ItemDataRole.UserRole) + 40
+_PILL_COLORS = {
+        "success": ("success_soft", "success"),
+        "warning": ("warning_soft", "warning"),
+        "danger": ("danger_soft", "danger"),
+        "neutral": ("surface_alt", "muted"),
+}
+
+
+class ConnectionPillDelegate(QStyledItemDelegate):
+        """Paint the "Conexão" cell as a colored pill; the item keeps its text for code and tests."""
+
+        @staticmethod
+        def _font(option: QStyleOptionViewItem) -> QFont:
+                font = QFont(option.font)
+                font.setPointSizeF(max(7.0, font.pointSizeF() - 1))
+                font.setWeight(QFont.Weight.DemiBold)
+                return font
+
+        def sizeHint(self, option: QStyleOptionViewItem, index: Any) -> QSize:
+                width = QFontMetrics(self._font(option)).horizontalAdvance(str(index.data() or ""))
+                return QSize(width + 32, super().sizeHint(option, index).height())
+
+        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: Any) -> None:
+                view_option = QStyleOptionViewItem(option)
+                self.initStyleOption(view_option, index)
+                view_option.text = ""
+                widget = view_option.widget
+                style = widget.style() if widget is not None else None
+                if style is not None:  # row background, hover and selection
+                        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, view_option, painter, widget)
+                text = str(index.data() or "")
+                background, foreground = _PILL_COLORS.get(str(index.data(STATE_KIND_ROLE) or ""), _PILL_COLORS["neutral"])
+                colors = current_colors()
+                font = self._font(option)
+                metrics = QFontMetrics(font)
+                width = min(metrics.horizontalAdvance(text) + 20, option.rect.width() - 12)
+                pill = QRect(option.rect.left() + 6, option.rect.center().y() - 11, max(0, width), 22)
+                painter.save()
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(colors[background]))
+                painter.drawRoundedRect(pill, 11, 11)
+                painter.setFont(font)
+                painter.setPen(QColor(colors[foreground]))
+                elided = metrics.elidedText(text, Qt.TextElideMode.ElideRight, max(0, pill.width() - 16))
+                painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, elided)
+                painter.restore()
 
 
 def build_sources_page(window: Any) -> QWidget:
         page, layout = page_header(
-            "Fontes de conteúdo",
-            "Cole uma URL e o ALQuimista identifica a plataforma e prepara a conexão automaticamente.",
+            "Fontes",
+            "Adicione as fontes do projeto e conecte cada uma. Selecione uma fonte na lista para ver a conexão.",
             "📚",
         )
         # These controls remain as the internal compatibility form used by
@@ -70,90 +128,53 @@ def build_sources_page(window: Any) -> QWidget:
             "A URL pode apontar para uma página, espaço, site ou raiz da plataforma.", legacy
         )
 
-        entry, entry_layout = card()
-        entry_title = QLabel("Adicionar uma fonte")
-        entry_title.setStyleSheet("font-size: 13pt; font-weight: 700;")
-        entry_layout.addWidget(entry_title)
-        entry_row = QHBoxLayout()
-        url_column = QVBoxLayout()
-        url_header_row = QHBoxLayout()
-        url_header_row.addWidget(QLabel("URL ou Caminho da fonte"))
-        url_header_row.addStretch()
-        pick_file_btn = button("📁 Arquivo...", window._pick_local_file)
-        pick_file_btn.setMaximumHeight(26)
-        pick_folder_btn = button("📂 Pasta...", window._pick_local_folder)
-        pick_folder_btn.setMaximumHeight(26)
-        url_header_row.addWidget(pick_file_btn)
-        url_header_row.addWidget(pick_folder_btn)
-        url_column.addLayout(url_header_row)
-        window.source_url_input = QLineEdit()
-        window.source_url_input.setPlaceholderText("Cole aqui a URL do Confluence, Notion, SharePoint, GitBook ou Zendesk")
-        window.source_url_input.setAccessibleName("URL da fonte")
-        window.source_url_input.textChanged.connect(window._preview_detected_source)
-        url_column.addWidget(window.source_url_input)
-
-        entry_row.addLayout(url_column, 3)
-        name_column = QVBoxLayout()
-        name_column.addWidget(QLabel("Nome da fonte (opcional)"))
-        window.source_name_input = QLineEdit()
-        window.source_name_input.setPlaceholderText("Nome da fonte")
-        window.source_name_input.setAccessibleName("Nome opcional da fonte")
-        name_column.addWidget(window.source_name_input)
-        entry_row.addLayout(name_column, 1)
-        entry_buttons = QVBoxLayout()
-        window.source_add_button = button("＋ Adicionar", window._commit_source_from_form, primary=True)
+        toolbar = QHBoxLayout()
+        window.add_source_button = button("＋ Adicionar fonte", window.open_add_source_dialog, primary=True)
+        toolbar.addWidget(window.add_source_button)
         window.source_remove_button = button("🗑 Remover", window.remove_selected_sources, danger=True)
-        window.source_cancel_button = button("Cancelar", window._cancel_source_edit)
-        window.source_cancel_button.setEnabled(False)
-        entry_buttons.addWidget(window.source_add_button)
-        entry_buttons.addWidget(window.source_remove_button)
-        entry_buttons.addWidget(window.source_cancel_button)
-
-        entry_row.addLayout(entry_buttons)
-        entry_layout.addLayout(entry_row)
-        window.source_detection_status = QLabel(
-            "A plataforma, a API e os detalhes iniciais serão identificados pela URL."
-        )
-        window.source_detection_status.setObjectName("subtitle")
-        window.source_detection_status.setWordWrap(True)
-        entry_layout.addWidget(window.source_detection_status)
-        layout.addWidget(entry)
-
-        listing, listing_layout = card()
-        listing_header = QHBoxLayout()
-        listing_title = QLabel("Lista de URLs")
-        listing_title.setStyleSheet("font-size: 13pt; font-weight: 700;")
-        listing_header.addWidget(listing_title)
-        listing_header.addStretch()
+        toolbar.addWidget(window.source_remove_button)
+        toolbar.addStretch()
         window.source_count_label = QLabel("0 itens")
         window.source_count_label.setObjectName("subtitle")
-        listing_header.addWidget(window.source_count_label)
-        window.sync_all_sources_button = button(
-            "🔄 Sincronizar Fontes", window.sync_project
-        )
-        window.sync_all_sources_button.setMaximumHeight(32)
+        toolbar.addWidget(window.source_count_label)
+        window.sync_all_sources_button = button("🔄 Sincronizar Fontes", window.sync_project)
         window.sync_all_sources_button.setToolTip("Verificar e sincronizar alterações em todas as fontes ativas")
-        listing_header.addWidget(window.sync_all_sources_button)
-        listing_layout.addLayout(listing_header)
+        toolbar.addWidget(window.sync_all_sources_button)
+        layout.addLayout(toolbar)
+
+        window.sources_split = QSplitter(Qt.Orientation.Horizontal)
+        window.sources_split.setChildrenCollapsible(False)
+
+        listing, listing_layout = card()
+        listing_title = QLabel("Fontes do projeto")
+        listing_title.setObjectName("sectionTitle")
+        listing_layout.addWidget(listing_title)
         window.source_table = QTableWidget(0, 6)
         window.source_table.setHorizontalHeaderLabels(
-            ["", "URL", "Nome da fonte", "Plataforma / API", "Adicionado em", ""]
+            ["", "Nome da fonte", "URL", "Plataforma / API", "Conexão", ""]
         )
-        window.source_table.setAccessibleName("Lista de URLs de fontes configuradas")
+        window.source_table.setAccessibleName("Lista de fontes configuradas")
         window.source_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         window.source_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         window.source_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         window.source_table.verticalHeader().setVisible(False)
+        window.source_table.verticalHeader().setDefaultSectionSize(40)
+        window.source_table.setShowGrid(False)
         window.source_table.horizontalHeader().setStretchLastSection(False)
         source_header = window.source_table.horizontalHeader()
-        source_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        source_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        source_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        source_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        source_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        source_header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        window.source_table.setColumnWidth(0, 42)
-        window.source_table.setColumnWidth(5, 52)
+        # Name, URL and platform share the leftover width (and elide); the pill and the menu always fit.
+        source_header.setMinimumSectionSize(36)
+        for column, mode in enumerate((
+                QHeaderView.ResizeMode.Fixed, QHeaderView.ResizeMode.Stretch, QHeaderView.ResizeMode.Stretch,
+                QHeaderView.ResizeMode.Stretch, QHeaderView.ResizeMode.ResizeToContents,
+                QHeaderView.ResizeMode.Fixed,
+        )):
+                source_header.setSectionResizeMode(column, mode)
+        window.source_table.setWordWrap(False)
+        window.source_table.setIconSize(QSize(20, 20))  # platform icon next to the name
+        window.source_table.setItemDelegateForColumn(4, ConnectionPillDelegate(window.source_table))
+        window.source_table.setColumnWidth(0, 36)
+        window.source_table.setColumnWidth(5, 44)
         window.source_table.currentCellChanged.connect(
             lambda row, *_args: window._source_table_row_changed(row)
         )
@@ -161,6 +182,10 @@ def build_sources_page(window: Any) -> QWidget:
             lambda row, _column: window._edit_source_row(row)
         )
         listing_layout.addWidget(window.source_table, 1)
+
+        window.sources_empty = QWidget()
+        empty_layout = QVBoxLayout(window.sources_empty)
+        empty_layout.addStretch()
         window.sources_empty_label = QLabel(
             "Adicione URLs de páginas para que o ALQuimista possa extrair e consolidar "
             "as informações automaticamente."
@@ -168,8 +193,25 @@ def build_sources_page(window: Any) -> QWidget:
         window.sources_empty_label.setObjectName("subtitle")
         window.sources_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         window.sources_empty_label.setWordWrap(True)
-        listing_layout.addWidget(window.sources_empty_label)
-        layout.addWidget(listing, 1)
+        empty_layout.addWidget(window.sources_empty_label)
+        empty_layout.addWidget(
+            button("＋ Adicionar a primeira fonte", window.open_add_source_dialog, primary=True),
+            0,
+            Qt.AlignmentFlag.AlignCenter,
+        )
+        empty_layout.addStretch()
+        listing_layout.addWidget(window.sources_empty, 1)
+        window.sources_split.addWidget(listing)
+
+        window.connection_card = QScrollArea()
+        window.connection_card.setWidgetResizable(True)
+        window.connection_card.setFrameShape(QScrollArea.Shape.NoFrame)
+        window.connection_card.setWidget(build_connection_panel(window))
+        window.connection_card.setMinimumWidth(340)
+        window.sources_split.addWidget(window.connection_card)
+        window.sources_split.setStretchFactor(0, 3)
+        window.sources_split.setStretchFactor(1, 2)
+        layout.addWidget(window.sources_split, 1)
+
+        window.add_source_dialog = AddSourceDialog(window)
         return page
-
-

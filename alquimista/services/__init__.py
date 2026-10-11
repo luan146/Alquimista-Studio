@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from ..client import ConfluenceClient
-from ..models import now_iso
 from .consolidation import ConsolidationService
 from .extraction import ExtractionService
 from .helpers import demote_headings, sanitize_filename
@@ -17,11 +15,11 @@ from .sync import (
     SyncPlan,
     SyncReport,
     SyncScope,
+    add_to_selection,
 )
 
 __all__ = [
     "AttachmentChange",
-    "ConfluenceClient",
     "ConsolidationService",
     "ExtractionService",
     "IncrementalSyncService",
@@ -35,7 +33,7 @@ __all__ = [
     "SyncPlan",
     "SyncReport",
     "SyncScope",
+    "add_to_selection",
     "demote_headings",
-    "now_iso",
     "sanitize_filename",
 ]
