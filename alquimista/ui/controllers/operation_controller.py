@@ -29,7 +29,10 @@ def log_level(message: str) -> str:
     """Level of a log line for the activity filter; the services only send plain text."""
     if re.search(r"\[\d+/\d+\]", message):
         return "info"  # progress line: the page title may contain "erro"
-    lowered = message.casefold()
+    lowered = message.strip().casefold()
+    # Warnings first: "Aviso: Erro ao listar…" and "Falha transitória…; nova tentativa" are not failures.
+    if lowered.startswith(("aviso", "warning")) or any(word in lowered for word in ("nova tentativa", "retry")):
+        return "warning"
     if any(word in lowered for word in ("falha", "erro", "error", "failed", "traceback")):
         return "error"
     if any(word in lowered for word in ("aviso", "warning", "ignorad", "ignored", "não atualizado")):
@@ -265,14 +268,19 @@ class WorkerOperationController:
     def worker_failed(self, error: Exception | str, detail: str) -> None:
         window = self.window
         message = str(error)
-        lowered = f"{message}\n{detail}".casefold()
-        cancelled = bool(self.token and self.token.cancelled) or "cancel" in lowered
+        # The token says whether the user cancelled; the text is only a guess when there is no token.
+        if self.token is not None:
+            cancelled = self.token.cancelled
+        else:
+            cancelled = "cancel" in f"{message}\n{detail}".casefold()
         if cancelled:  # not a failure: no red mark and no count in the failures chip
             self.append_log(f"{translate_text('Cancelado')}: {message}", "warning")
         else:
             self.append_log(f"{translate_text('FALHA')}: {message}")
         if detail.strip():
-            self.append_log(f"{translate_text('Detalhes técnicos')}:\n{detail.rstrip()}")
+            self.append_log(
+                f"{translate_text('Detalhes técnicos')}:\n{detail.rstrip()}", "warning" if cancelled else None
+            )
         self._set_state("CANCELLED" if cancelled else "FAILED")
         if cancelled:
             if getattr(window, "_tree_loading", False):

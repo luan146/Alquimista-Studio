@@ -428,11 +428,14 @@ def test_sign_out_deletes_remembered_token(window: MainWindow, monkeypatch: pyte
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     source = _token_source(window)
     session_store.save_secret(source.id, "segredo-falso")
+    session_store.save_session(source.id, {"cookies": []})
+    assert session_store.session_path(source.id).exists()
     window.secrets.set(source.id, "segredo-falso")
     window.connected_sources.add(source.id)
     monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Yes)
     window._sign_out(source.id)
     assert session_store.load_secret(source.id) == ""
+    assert not session_store.session_path(source.id).exists()
     assert window.secrets.get(source.id, "") == ""
     assert source.id not in window.connected_sources
 
@@ -550,3 +553,114 @@ def test_leftover_titles_use_section_title(window: MainWindow) -> None:
     assert window.con_distribution_title.objectName() == "sectionTitle"
     assert window.page_space_title.objectName() == "sectionTitle"
 
+
+
+def test_warnings_that_mention_errors_are_not_failures(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    sync_warning = "Aviso: Erro ao listar contêineres de Wiki: timeout"
+    retry = "Falha transitória de rede; nova tentativa em 1.0s."
+    assert log_level(sync_warning) == "warning"
+    assert log_level(retry) == "warning"
+    assert log_level("  warning: retrying") == "warning"
+    _failed_run(window, monkeypatch)
+    window._append_log(sync_warning)
+    window._append_log(retry)
+    assert window.run_failed_chip.text() == "0 falhas"
+
+
+def test_cancelled_run_logs_its_traceback_as_warning(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    _failed_run(window, monkeypatch)
+    window.operation_controller.token.cancel()  # type: ignore[union-attr]
+    window.operation_controller.worker_failed(
+        RuntimeError("Operação cancelada pelo usuário."), "Traceback (most recent call last):\n  RuntimeError: boom"
+    )
+    assert [level for level, _line in window._log_entries] == ["warning", "warning"]
+
+
+def test_failure_mentioning_cancel_is_still_a_failure(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    _failed_run(window, monkeypatch)
+    window.operation_controller.worker_failed(RuntimeError("Erro 500 ao cancelar a assinatura"), "")
+    assert window.run_failed_chip.text() == "1 falha"
+
+
+def test_sign_out_clears_memory_even_if_the_token_file_is_locked(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    from alquimista.ui.mixins import connection_mixin
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = _token_source(window)
+    window.secrets.set(source.id, "segredo-falso")
+    window.connected_sources.add(source.id)
+    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Yes)
+
+    def locked(_source_id: str) -> None:
+        raise PermissionError("arquivo travado")
+
+    warnings: list[str] = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda _p, _t, text, *_a, **_k: warnings.append(text))
+    monkeypatch.setattr(connection_mixin, "delete_secret", locked)
+    window._sign_out(source.id)
+    assert window.secrets.get(source.id, "") == ""
+    assert source.id not in window.connected_sources
+    assert len(warnings) == 1 and "arquivo travado" in warnings[0]
+
+
+def test_new_controls_show_keyboard_focus(qapp) -> None:
+    for colors in (LIGHT, DARK):
+        sheet = stylesheet(colors)
+        for selector in ('QPushButton[ghost="true"]:focus', "QFrame#segmented QPushButton:focus",
+                         'QFrame#segmented[tiles="true"] QToolButton:focus', 'QCheckBox[switch="true"]:focus'):
+            assert selector in sheet, selector
+            rule = sheet[sheet.index(selector):].split("}", 1)[0]
+            assert colors["primary"] in rule, selector
+
+
+def test_source_rows_show_platform_icon_and_connection_pill(window: MainWindow) -> None:
+    from alquimista.ui.pages.sources_page import STATE_KIND_ROLE, ConnectionPillDelegate
+    source = _token_source(window)
+    window._show_page("sources")
+    table = window.source_table
+    assert isinstance(table.itemDelegateForColumn(4), ConnectionPillDelegate)
+    assert not table.item(0, 1).icon().isNull()
+    assert table.item(0, 4).text() == "○ Sem token" and table.item(0, 4).data(STATE_KIND_ROLE) == "neutral"
+    window.connected_sources.add(source.id)
+    window._refresh_source_table()
+    assert table.item(0, 4).data(STATE_KIND_ROLE) == "success"
+
+
+@pytest.mark.parametrize("size", [(1366, 820), (1050, 700)])
+def test_source_table_fits_without_horizontal_scroll(window: MainWindow, qapp: Any, size: tuple[int, int]) -> None:
+    _token_source(window)
+    window.resize(*size)
+    window.show()
+    window._show_page("sources")
+    for _ in range(5):
+        qapp.processEvents()
+    table = window.source_table
+    assert table.horizontalScrollBar().maximum() == 0
+    right = table.columnViewportPosition(5) + table.columnWidth(5)
+    assert 0 < right <= table.viewport().width()
+
+
+def test_account_without_saved_access_says_so(window: MainWindow, monkeypatch: pytest.MonkeyPatch,
+                                              tmp_path: Path) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = _token_source(window)
+    assert window._account_identity(source)[1] == "Sem acesso salvo"
+    window.secrets.set(source.id, "segredo-falso")
+    assert window._account_identity(source)[1] == "Token salvo"
+
+
+def test_automatic_theme_follows_windows_live(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from PySide6.QtGui import QGuiApplication
+
+    from alquimista.ui.mixins import ux_mixin
+    applied: list[str] = []
+    monkeypatch.setattr(ux_mixin, "apply_theme", lambda _app, mode: applied.append(mode))
+    window.ui_settings.setValue("preferences/theme", "system")
+    QGuiApplication.styleHints().colorSchemeChanged.emit(Qt.ColorScheme.Dark)
+    assert applied == ["system"]
+    window.ui_settings.setValue("preferences/theme", "light")
+    window._system_theme_changed(Qt.ColorScheme.Dark)
+    assert applied == ["system"]

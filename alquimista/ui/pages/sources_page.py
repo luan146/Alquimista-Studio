@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter
 from PySide6.QtWidgets import (
         QAbstractItemView,
         QCheckBox,
@@ -14,6 +15,9 @@ from PySide6.QtWidgets import (
         QListWidget,
         QScrollArea,
         QSplitter,
+        QStyle,
+        QStyledItemDelegate,
+        QStyleOptionViewItem,
         QTableWidget,
         QVBoxLayout,
         QWidget,
@@ -21,7 +25,57 @@ from PySide6.QtWidgets import (
 
 from ..components import button, card, page_header
 from ..dialogs.add_source_dialog import AddSourceDialog
+from ..theme import current_colors
 from .connection_page import build_connection_panel
+
+STATE_KIND_ROLE = int(Qt.ItemDataRole.UserRole) + 40
+_PILL_COLORS = {
+        "success": ("success_soft", "success"),
+        "warning": ("warning_soft", "warning"),
+        "danger": ("danger_soft", "danger"),
+        "neutral": ("surface_alt", "muted"),
+}
+
+
+class ConnectionPillDelegate(QStyledItemDelegate):
+        """Paint the "Conexão" cell as a colored pill; the item keeps its text for code and tests."""
+
+        @staticmethod
+        def _font(option: QStyleOptionViewItem) -> QFont:
+                font = QFont(option.font)
+                font.setPointSizeF(max(7.0, font.pointSizeF() - 1))
+                font.setWeight(QFont.Weight.DemiBold)
+                return font
+
+        def sizeHint(self, option: QStyleOptionViewItem, index: Any) -> QSize:
+                width = QFontMetrics(self._font(option)).horizontalAdvance(str(index.data() or ""))
+                return QSize(width + 32, super().sizeHint(option, index).height())
+
+        def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: Any) -> None:
+                view_option = QStyleOptionViewItem(option)
+                self.initStyleOption(view_option, index)
+                view_option.text = ""
+                widget = view_option.widget
+                style = widget.style() if widget is not None else None
+                if style is not None:  # row background, hover and selection
+                        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, view_option, painter, widget)
+                text = str(index.data() or "")
+                background, foreground = _PILL_COLORS.get(str(index.data(STATE_KIND_ROLE) or ""), _PILL_COLORS["neutral"])
+                colors = current_colors()
+                font = self._font(option)
+                metrics = QFontMetrics(font)
+                width = min(metrics.horizontalAdvance(text) + 20, option.rect.width() - 12)
+                pill = QRect(option.rect.left() + 6, option.rect.center().y() - 11, max(0, width), 22)
+                painter.save()
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(colors[background]))
+                painter.drawRoundedRect(pill, 11, 11)
+                painter.setFont(font)
+                painter.setPen(QColor(colors[foreground]))
+                elided = metrics.elidedText(text, Qt.TextElideMode.ElideRight, max(0, pill.width() - 16))
+                painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, elided)
+                painter.restore()
 
 
 def build_sources_page(window: Any) -> QWidget:
@@ -108,16 +162,19 @@ def build_sources_page(window: Any) -> QWidget:
         window.source_table.setShowGrid(False)
         window.source_table.horizontalHeader().setStretchLastSection(False)
         source_header = window.source_table.horizontalHeader()
-        source_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        source_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        source_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        source_header.setMinimumSectionSize(90)
-        source_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        # Name, URL and platform share the leftover width (and elide); the pill and the menu always fit.
+        source_header.setMinimumSectionSize(36)
+        for column, mode in enumerate((
+                QHeaderView.ResizeMode.Fixed, QHeaderView.ResizeMode.Stretch, QHeaderView.ResizeMode.Stretch,
+                QHeaderView.ResizeMode.Stretch, QHeaderView.ResizeMode.ResizeToContents,
+                QHeaderView.ResizeMode.Fixed,
+        )):
+                source_header.setSectionResizeMode(column, mode)
         window.source_table.setWordWrap(False)
-        source_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        source_header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        window.source_table.setColumnWidth(0, 42)
-        window.source_table.setColumnWidth(5, 52)
+        window.source_table.setIconSize(QSize(20, 20))  # platform icon next to the name
+        window.source_table.setItemDelegateForColumn(4, ConnectionPillDelegate(window.source_table))
+        window.source_table.setColumnWidth(0, 36)
+        window.source_table.setColumnWidth(5, 44)
         window.source_table.currentCellChanged.connect(
             lambda row, *_args: window._source_table_row_changed(row)
         )

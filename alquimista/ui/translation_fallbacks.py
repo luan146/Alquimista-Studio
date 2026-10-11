@@ -425,9 +425,9 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "{name}: In development. No calls will be made.",
         "es": "{name}: En desarrollo. No se realizarán llamadas.",
     },
-    "O token foi apagado, mas a sessão do navegador não pôde ser removida por completo: {error}": {
-        "en": "The token was deleted, but the browser session could not be fully removed: {error}",
-        "es": "El token se eliminó, pero la sesión del navegador no pudo eliminarse por completo: {error}",
+    "Você saiu, mas alguns dados de acesso não puderam ser apagados deste computador: {error}": {
+        "en": "You signed out, but some access data could not be deleted from this computer: {error}",
+        "es": "Cerraste la sesión, pero algunos datos de acceso no pudieron borrarse de este equipo: {error}",
     },
     "{checked} de {total} páginas carregadas selecionadas · {visible} visíveis": {
         "en": "{checked} of {total} loaded pages selected · {visible} visible",
@@ -975,6 +975,7 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
     "Pasta local": {"en": "Local folder", "es": "Carpeta local"},
     "Acesso público": {"en": "Public access", "es": "Acceso público"},
     "Token salvo": {"en": "Saved token", "es": "Token guardado"},
+    "Sem acesso salvo": {"en": "No saved access", "es": "Sin acceso guardado"},
     "● Conectado agora": {"en": "● Connected now", "es": "● Conectado ahora"},
     "Contas conectadas": {"en": "Connected accounts", "es": "Cuentas conectadas"},
     "Apaga a sessão do navegador e o token lembrado deste computador.": {"en": "Deletes the browser session and the remembered token from this computer.", "es": "Borra la sesión del navegador y el token recordado de este equipo."},

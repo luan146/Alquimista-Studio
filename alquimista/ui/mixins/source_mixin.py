@@ -21,9 +21,11 @@ from ...models import AuthMode, SourceConfig, now_iso
 from ...runtime import CancellationToken
 from ...session_store import delete_secret
 from ...source_detection import DetectedSource, detect_source_url
+from ..components import AlchemistIconAtlas
 from ..controllers.source_controller import source_by_combo as resolve_source_by_combo
 from ..controllers.source_controller import source_by_index as resolve_source_by_index
 from ..i18n import translate_text
+from ..pages.sources_page import STATE_KIND_ROLE
 from ..workers import Worker
 from . import WindowBase
 
@@ -80,6 +82,7 @@ class SourceMixin(WindowBase):
     _selection_render_limits: dict[tuple[str, str], int]
     _connection_source_changed: Any
     _source_connection_badge: Any
+    _source_connection_state: Any
     sources_empty: Any
     connection_card: Any
     _selection_source_changed: Any
@@ -192,6 +195,8 @@ class SourceMixin(WindowBase):
                 descriptor = self.connector_registry.get(source.source_type)
                 platform = QTableWidgetItem(descriptor.display_name)
                 platform.setToolTip(f"{descriptor.display_name} · {descriptor.integration_name}")
+                name_item.setIcon(AlchemistIconAtlas.connector_icon(descriptor.card.icon, 20))
+                name_item.setToolTip(f"{descriptor.display_name} · {original_url}")
             except ValueError:
                 platform = QTableWidgetItem(
                     translate_text("{source_type} · Conector não registrado").format(
@@ -200,7 +205,10 @@ class SourceMixin(WindowBase):
                 )
             self.source_table.setItem(table_row, 3, platform)
             self._source_added_at.setdefault(source.id, now_iso())
-            self.source_table.setItem(table_row, 4, QTableWidgetItem(self._source_connection_badge(source)))
+            state_text, state_kind = self._source_connection_state(source)
+            state_item = QTableWidgetItem(state_text)
+            state_item.setData(STATE_KIND_ROLE, state_kind)
+            self.source_table.setItem(table_row, 4, state_item)
 
             menu = QPushButton("⋮")
             menu.setToolTip(translate_text("Opções da fonte (sincronizar, editar, remover)"))

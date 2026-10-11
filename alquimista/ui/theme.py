@@ -74,6 +74,7 @@ def stylesheet(c: dict[str, str]) -> str:
     QPushButton[ghost="true"]:hover {{ background: {c["surface_alt"]}; color: {c["text"]}; }}
     QPushButton[ghost="true"][danger="true"] {{ color: {c["danger"]}; }}
     QPushButton[ghost="true"][danger="true"]:hover {{ background: {c["danger_soft"]}; color: {c["danger"]}; }}
+    QPushButton[ghost="true"]:focus {{ border-color: {c["primary"]}; }}
     QPushButton:disabled {{ color: {c["muted"]}; background: {c["surface_alt"]}; border-color: {c["border"]}; }}
     QPushButton#googleButton {{ border-radius: 22px; padding: 10px 18px; font-size: 10.5pt; font-weight: 600; }}
     QPushButton#googleButton:hover {{ border-color: {c["muted"]}; }}
@@ -91,7 +92,7 @@ def stylesheet(c: dict[str, str]) -> str:
     QToolButton#presetCard:checked {{ border: 2px solid {c["primary"]}; }}
 
     QFrame#segmented {{ background: {c["surface_alt"]}; border: 0; border-radius: 12px; }}
-    QFrame#segmented QPushButton {{ background: transparent; border: 0; border-radius: 9px; padding: 5px 14px; color: {c["muted"]}; }}
+    QFrame#segmented QPushButton {{ background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 5px 14px; color: {c["muted"]}; }}
     QFrame#segmented QPushButton:hover {{ color: {c["text"]}; }}
     QFrame#segmented QPushButton:checked {{ background: {c["surface"]}; color: {c["text"]}; font-weight: 600; }}
     QFrame#segmented[vertical="true"] {{ background: transparent; }}
@@ -100,6 +101,8 @@ def stylesheet(c: dict[str, str]) -> str:
     QFrame#segmented[tiles="true"] {{ background: transparent; }}
     QFrame#segmented[tiles="true"] QToolButton {{ background: {c["surface"]}; border: 1px solid {c["border"]}; border-radius: 12px; padding: 8px; }}
     QFrame#segmented[tiles="true"] QToolButton:checked {{ border: 2px solid {c["primary"]}; }}
+    QFrame#segmented QPushButton:focus {{ border-color: {c["primary"]}; }}
+    QFrame#segmented[tiles="true"] QToolButton:focus {{ border-color: {c["primary"]}; background: {c["primary_soft"]}; }}
 
     QLabel#chip {{ border-radius: 10px; padding: 2px 10px; font-size: 9pt; font-weight: 600; background: {c["surface_alt"]}; color: {c["muted"]}; }}
     QLabel#chip[kind="accent"] {{ background: {c["primary_soft"]}; color: {c["primary"]}; }}
@@ -131,9 +134,11 @@ def stylesheet(c: dict[str, str]) -> str:
     QTableView::indicator:checked {{ image: {_image("controle_check_on")}; }}
     QCheckBox::indicator:indeterminate, QTreeView::indicator:indeterminate,
     QTableView::indicator:indeterminate {{ image: {_image("controle_check_partial")}; }}
-    QCheckBox[switch="true"]::indicator {{ width: 36px; height: 20px; }}
+    QCheckBox[switch="true"]::indicator {{ width: 36px; height: 20px; border: 2px solid transparent; border-radius: 12px; }}
     QCheckBox[switch="true"]::indicator:unchecked {{ image: {_image("controle_switch_off")}; }}
     QCheckBox[switch="true"]::indicator:checked {{ image: {_image("controle_switch_on")}; }}
+    QCheckBox[switch="true"]:focus {{ color: {c["primary"]}; }}
+    QCheckBox[switch="true"]::indicator:focus {{ border-color: {c["primary"]}; }}
 
     QTreeView, QTreeWidget, QTableWidget, QTableView, QListWidget {{
         background: {c["surface"]}; alternate-background-color: {c["surface"]};

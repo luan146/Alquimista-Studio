@@ -273,14 +273,14 @@ class ConnectionMixin(WindowBase):
             != QMessageBox.StandardButton.Yes
         ):
             return
-        # The remembered token goes first: a failure deleting the browser session/cache must not keep it.
-        delete_secret(source.id)
+        # Memory first, then each file on its own: a locked file must not keep the source signed in.
         self.secrets.pop(source.id)
-        cleanup_error: Exception | None = None
-        try:
-            delete_session(source)
-        except Exception as exc:  # the token is already gone: finish signing out, then warn
-            cleanup_error = exc
+        errors: list[str] = []
+        for cleanup in (lambda: delete_secret(source.id), lambda: delete_session(source)):
+            try:
+                cleanup()
+            except Exception as exc:  # finish signing out, then warn
+                errors.append(str(exc))
         self.connected_sources.discard(source.id)
         self.connection_states[source.id] = translate_text("○ Você saiu — escolha um modo de acesso")
         current = self.source_by_combo(self.connection_source)
@@ -288,13 +288,13 @@ class ConnectionMixin(WindowBase):
             self.auth_secret.clear()
             self._connection_source_changed()
         self._refresh_workflow_state()
-        if cleanup_error is not None:
+        if errors:
             QMessageBox.warning(
                 self,
                 translate_text("Sair da conta"),
                 translate_text(
-                    "O token foi apagado, mas a sessão do navegador não pôde ser removida por completo: {error}"
-                ).format(error=cleanup_error),
+                    "Você saiu, mas alguns dados de acesso não puderam ser apagados deste computador: {error}"
+                ).format(error="; ".join(errors)),
             )
 
     def _account_identity(self, source: SourceConfig) -> tuple[str, str]:
@@ -304,6 +304,8 @@ class ConnectionMixin(WindowBase):
             return "🌐", translate_text("Acesso público")
         if source.username:
             return initials(source.username), source.username
+        if not self._has_saved_login(source):
+            return initials(source.name), translate_text("Sem acesso salvo")
         if source.auth_mode == AuthMode.BROWSER:
             return initials(source.name), translate_text("Sessão do navegador")
         return initials(source.name), translate_text("Token salvo")

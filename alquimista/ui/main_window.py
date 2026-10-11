@@ -190,6 +190,7 @@ class MainWindow(
             status_bar=self.statusBar(),
         )
         apply_theme(QApplication.instance(), self._theme_preference())
+        QApplication.styleHints().colorSchemeChanged.connect(self._system_theme_changed)
         self._build()
         self._load_project_ui()
         self._update_load_context()

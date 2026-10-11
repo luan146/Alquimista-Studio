@@ -31,6 +31,8 @@ from . import WindowBase
 
 # Below this window width the sidebar shows icons only (unless the user chose).
 COMPACT_WIDTH = 1200
+# The source list gets about a third of the window: below this width its URL and platform columns do not fit.
+SOURCE_DETAIL_COLUMNS_WIDTH = 1600
 EXAMPLE_DIR = Path(__file__).resolve().parents[3] / "assets" / "exemplo"
 TOUR_STEPS = [
     ("dashboard", "Início", "Aqui você vê a situação do projeto, o próximo passo e os projetos recentes."),
@@ -85,6 +87,11 @@ class UxMixin(WindowBase):
         apply_theme(QApplication.instance(), value)
         if hasattr(self, "_refresh_accounts"):
             self._refresh_accounts()  # avatar colours are fixed per theme
+
+    def _system_theme_changed(self, *_scheme: object) -> None:
+        """Windows switched light/dark: only "Automático" follows it."""
+        if self._theme_preference() == "system":
+            self._set_theme("system")
 
     def _ui_scale_preference(self) -> float:
         try:
@@ -161,8 +168,10 @@ class UxMixin(WindowBase):
         super().resizeEvent(event)
         compact = event.size().width() < COMPACT_WIDTH
         if hasattr(self, "source_table"):
-            # Narrow windows: the URL stays available as the name's tooltip.
-            self.source_table.setColumnHidden(2, compact)
+            # Narrow windows: the name keeps the platform icon, and URL and platform stay in its tooltip.
+            narrow = event.size().width() < SOURCE_DETAIL_COLUMNS_WIDTH
+            self.source_table.setColumnHidden(2, narrow)
+            self.source_table.setColumnHidden(3, narrow)
         if hasattr(self, "sidebar") and not getattr(self, "_sidebar_manual", False):
             if compact != getattr(self, "_sidebar_collapsed", False):
                 self._set_sidebar_collapsed(compact)

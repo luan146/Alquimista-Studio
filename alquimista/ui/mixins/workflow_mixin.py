@@ -27,6 +27,7 @@ from ...storage import MANIFEST_NAME, REPORT_NAME, ManifestStore, load_history
 from ..components import NAVIGATION, WORKFLOW_STEPS
 from ..i18n import translate_text
 from ..recent_projects import recent_projects, remember_project
+from ..theme import current_colors
 from . import WindowBase
 
 STEP_LABELS = dict(NAVIGATION)
@@ -102,29 +103,29 @@ class WorkflowMixin(WindowBase):
         return bool(self.secrets.get(source.id, ""))
 
     def _source_connection_badge(self, source: SourceConfig) -> str:
+        return self._source_connection_state(source)[0]
+
+    def _source_connection_state(self, source: SourceConfig) -> tuple[str, str]:
+        """Connection text and its chip kind (success, warning, danger or neutral)."""
         try:
             descriptor = self.connector_registry.get(source.source_type)
         except ValueError:
-            return translate_text("⚠ Conector não registrado")
+            return translate_text("⚠ Conector não registrado"), "danger"
         if not descriptor.runnable:
-            return translate_text("Em desenvolvimento")
+            return translate_text("Em desenvolvimento"), "neutral"
         if source.id in self.connected_sources:
-            return translate_text("● Conectada")
+            return translate_text("● Conectada"), "success"
         if source.source_type == "local_files":
-            return translate_text("● Pasta local")
+            return translate_text("● Pasta local"), "success"
         if source.auth_mode == AuthMode.BROWSER:
-            return (
-                translate_text("◐ Sessão salva — testar")
-                if session_exists(source.id)
-                else translate_text("○ Fazer login")
-            )
+            if session_exists(source.id):
+                return translate_text("◐ Sessão salva — testar"), "warning"
+            return translate_text("○ Fazer login"), "neutral"
         if source.auth_mode in {AuthMode.BASIC, AuthMode.BEARER}:
-            return (
-                translate_text("◐ Token informado — testar")
-                if self.secrets.get(source.id, "")
-                else translate_text("○ Sem token")
-            )
-        return translate_text("◐ Público — testar")
+            if self.secrets.get(source.id, ""):
+                return translate_text("◐ Token informado — testar"), "warning"
+            return translate_text("○ Sem token"), "neutral"
+        return translate_text("◐ Público — testar"), "warning"
 
     def open_add_source_dialog(self) -> None:
         self._show_page("sources")
@@ -418,7 +419,7 @@ class WorkflowMixin(WindowBase):
         if blocker is not None:
             message, target = blocker
             link = (
-                f' <a href="{target}" style="color:#42B8BE;">{translate_text("Ir para a etapa")}</a>'
+                f' <a href="{target}" style="color:{current_colors()["primary"]};">{translate_text("Ir para a etapa")}</a>'
                 if target
                 else ""
             )
