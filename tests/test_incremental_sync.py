@@ -456,3 +456,34 @@ def test_new_documents_brought_by_sync_join_the_selection(sync_env):
     assert report.added_selections == ["src1:c1:child", "src1:c1:doc1"]
     assert add_to_selection(project, report.added_selections) == 1
     assert project.selected_keys_for("src1") == {"src1:c1:doc1", "src1:c1:child"}
+
+
+def test_sync_writes_a_readable_summary_of_changes(sync_env):
+    service: IncrementalSyncService = sync_env["service"]
+    runtime: SourceRuntime = sync_env["runtime"]
+    connector: MockConnector = sync_env["connector"]
+    service.apply_sync(service.plan_sync([runtime], target_source_id="src1"), [runtime])
+    connector.docs_meta["c1"] = [
+        KnowledgeDocumentMetadata(
+            id="doc1", container_id="c1", title="Doc 1",
+            updated_at=datetime(2026, 8, 2, tzinfo=timezone.utc), etag="v2",
+        ),
+    ]
+
+    report = service.apply_sync(service.plan_sync([runtime], target_source_id="src1"), [runtime])
+
+    assert report.summary_path is not None
+    text = report.summary_path.read_text(encoding="utf-8")
+    assert report.summary_path.parent == sync_env["output_dir"] / "sincronizacoes"
+    assert "## Alterados (1)" in text and "[Doc 1](<../" in text
+    assert "## Removidos (1)" in text and "Doc 2" in text
+
+
+def test_sync_without_changes_writes_no_summary(sync_env):
+    service: IncrementalSyncService = sync_env["service"]
+    runtime: SourceRuntime = sync_env["runtime"]
+    service.apply_sync(service.plan_sync([runtime], target_source_id="src1"), [runtime])
+
+    report = service.apply_sync(service.plan_sync([runtime], target_source_id="src1"), [runtime])
+
+    assert report.summary_path is None

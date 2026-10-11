@@ -892,6 +892,7 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
     "Aplicando sincronização...": {"en": "Applying synchronization...", "es": "Aplicando sincronización..."},
     "Sincronização concluída com {count} falha(s) em {seconds}s. Veja o relatório de sincronização.": {"en": "Synchronization finished with {count} failure(s) in {seconds}s. See the synchronization report.", "es": "Sincronización finalizada con {count} fallo(s) en {seconds}s. Consulte el informe de sincronización."},
     "Sincronização concluída com sucesso em {seconds}s!": {"en": "Synchronization completed successfully in {seconds}s!", "es": "¡Sincronización completada con éxito en {seconds}s!"},
+    "Ver o que mudou": {"en": "See what changed", "es": "Ver qué cambió"},
     "Concluir": {"en": "Finish", "es": "Finalizar"},
     "Erro na execução da sincronização: {error}": {"en": "Error while running the synchronization: {error}", "es": "Error al ejecutar la sincronización: {error}"},
     "Cancelando operação...": {"en": "Cancelling operation...", "es": "Cancelando operación..."},

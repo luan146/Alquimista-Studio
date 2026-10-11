@@ -192,3 +192,16 @@ def test_dialog_follows_the_interface_language(qtbot: Any, tmp_path: Any) -> Non
         assert dialog.status_label.text().startswith("¡Todo actualizado!")
     finally:
         manager.set_language("pt-BR", persist=False)
+
+
+def test_summary_button_appears_only_when_something_changed(qtbot: Any, tmp_path: Any) -> None:
+    report = _report()
+    report.summary_path = tmp_path / "resumo.md"
+    dialog = _dialog(qtbot, FakeService(_plan(), report))
+    qtbot.waitUntil(lambda: dialog.plan is not None)
+    assert not dialog.summary_button.isVisibleTo(dialog)
+
+    dialog._on_confirm_sync()
+    qtbot.waitUntil(lambda: dialog.report is not None)
+
+    assert dialog.summary_button.isVisibleTo(dialog)

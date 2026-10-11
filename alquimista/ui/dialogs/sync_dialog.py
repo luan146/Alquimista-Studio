@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import QObject, Qt, QThread, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QObject, Qt, QThread, QUrl, Signal
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -228,9 +228,12 @@ class SyncPreviewDialog(QDialog):
         self.cancel_button = button(tr("Cancelar"), self._on_cancel)
         self.sync_button = button(tr("🔄 Confirmar e Sincronizar"), self._on_confirm_sync, primary=True)
         self.sync_button.setEnabled(False)
+        self.summary_button = button(tr("Ver o que mudou"), self._open_summary)
+        self.summary_button.setVisible(False)
 
         btn_row.addWidget(self.cancel_button)
         btn_row.addStretch()
+        btn_row.addWidget(self.summary_button)
         btn_row.addWidget(self.sync_button)
         main_layout.addLayout(btn_row)
 
@@ -355,6 +358,11 @@ class SyncPreviewDialog(QDialog):
         self.cancel_button.setText(tr("Concluir"))
         self.sync_button.setText(tr("Concluído"))
         self.sync_button.setEnabled(False)
+        self.summary_button.setVisible(report.summary_path is not None)
+
+    def _open_summary(self) -> None:
+        if self.report and self.report.summary_path:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.report.summary_path)))
 
     def _on_apply_failed(self, error: str) -> None:
         self._cleanup_thread()

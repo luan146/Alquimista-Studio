@@ -12,6 +12,7 @@ from ..errors import AlquimistaError
 from ..models import (
     EntryStatus,
     KnowledgeDocumentMetadata,
+    ManifestDocument,
     ManifestEntry,
     ProjectConfig,
     SourceConfig,
@@ -134,6 +135,8 @@ class SyncReport:
     generated_at: str = field(default_factory=now_iso)
     # New documents extracted by this sync; the caller adds them to the project selection.
     added_selections: list[str] = field(default_factory=list)
+    # Human-readable list of what changed (sincronizacoes/*.md); None when nothing changed.
+    summary_path: Path | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -145,6 +148,7 @@ class SyncReport:
             "consolidated": self.consolidated,
             "generated_at": self.generated_at,
             "added_selections": self.added_selections,
+            "summary_path": str(self.summary_path) if self.summary_path else None,
         }
 
 
@@ -615,6 +619,41 @@ class IncrementalSyncService:
                 )
         return changes
 
+    def _write_change_summary(self, plan: SyncPlan, manifest: ManifestDocument) -> Path | None:
+        """Write sincronizacoes/<date>.md listing new, changed and removed documents."""
+        sections = (
+            (SyncItemAction.NEW, "Novos"),
+            (SyncItemAction.UPDATED, "Alterados"),
+            (SyncItemAction.REMOVED, "Removidos"),
+        )
+        if not any(item.action in dict(sections) for item in plan.items):
+            return None
+        entries = {entry.document_key: entry for entry in manifest.entries}
+        moment = datetime.now()
+        lines = [f"# Sincronização de {moment:%d/%m/%Y %H:%M}", ""]
+        for action, heading in sections:
+            changed = sorted(
+                (item for item in plan.items if item.action == action), key=lambda item: item.title.casefold()
+            )
+            if not changed:
+                continue
+            lines += [f"## {heading} ({len(changed)})", ""]
+            for item in changed:
+                entry = entries.get(item.document_key)
+                if action != SyncItemAction.REMOVED and entry and entry.active and entry.markdown_path:
+                    line = f"- [{item.title}](<../{entry.markdown_path}>)"
+                else:
+                    line = f"- {item.title}"
+                if entry and entry.source_url:
+                    line += f" · [original]({entry.source_url})"
+                lines.append(line)
+            lines.append("")
+        path = self.output_dir / "sincronizacoes" / f"{moment:%Y-%m-%d_%H%M%S}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
+        self.log(f"Resumo das mudanças salvo em {path}")
+        return path
+
     def apply_sync(
         self,
         plan: SyncPlan,
@@ -723,6 +762,12 @@ class IncrementalSyncService:
             transaction.commit()
             self.store.save(manifest)
 
+        summary_path: Path | None = None
+        try:
+            summary_path = self._write_change_summary(plan, manifest)
+        except OSError as exc:
+            self.log(f"Aviso: Não foi possível salvar o resumo da sincronização: {exc}")
+
         # Consolidate if requested and configured
         consolidated = False
         if options.auto_consolidate and getattr(self.project, "consolidation", None):
@@ -764,6 +809,7 @@ class IncrementalSyncService:
             failures=plan.failures,
             consolidated=consolidated,
             added_selections=added_selections,
+            summary_path=summary_path,
         )
 
         # Save sync_report.json to output_dir
