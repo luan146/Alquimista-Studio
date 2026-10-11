@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -619,21 +619,21 @@ class IncrementalSyncService:
                 )
         return changes
 
-    def _write_change_summary(self, plan: SyncPlan, manifest: ManifestDocument) -> Path | None:
+    def _write_change_summary(self, items: list[SyncItemChange], manifest: ManifestDocument) -> Path | None:
         """Write sincronizacoes/<date>.md listing new, changed and removed documents."""
         sections = (
             (SyncItemAction.NEW, "Novos"),
             (SyncItemAction.UPDATED, "Alterados"),
             (SyncItemAction.REMOVED, "Removidos"),
         )
-        if not any(item.action in dict(sections) for item in plan.items):
+        if not any(item.action in dict(sections) for item in items):
             return None
         entries = {entry.document_key: entry for entry in manifest.entries}
         moment = datetime.now()
         lines = [f"# Sincronização de {moment:%d/%m/%Y %H:%M}", ""]
         for action, heading in sections:
             changed = sorted(
-                (item for item in plan.items if item.action == action), key=lambda item: item.title.casefold()
+                (item for item in items if item.action == action), key=lambda item: item.title.casefold()
             )
             if not changed:
                 continue
@@ -739,6 +739,15 @@ class IncrementalSyncService:
 
         # Handle removals directly if there are any planned removals
         manifest = self.store.load()
+        # Without date or version a document is downloaded to compare; the content
+        # hash recorded by the extraction tells whether it really changed.
+        statuses = {entry.document_key: entry.status for entry in manifest.entries}
+        items = [
+            replace(item, action=SyncItemAction.UNCHANGED, reason="Conteúdo igual ao já extraído")
+            if item.action == SyncItemAction.UPDATED and statuses.get(item.document_key) == EntryStatus.UNCHANGED
+            else item
+            for item in plan.items
+        ]
         new_keys = {item.document_key for item in plan.items if item.action == SyncItemAction.NEW}
         added_selections = sorted(
             entry.document_key for entry in manifest.entries if entry.active and entry.document_key in new_keys
@@ -764,7 +773,7 @@ class IncrementalSyncService:
 
         summary_path: Path | None = None
         try:
-            summary_path = self._write_change_summary(plan, manifest)
+            summary_path = self._write_change_summary(items, manifest)
         except OSError as exc:
             self.log(f"Aviso: Não foi possível salvar o resumo da sincronização: {exc}")
 
@@ -787,9 +796,9 @@ class IncrementalSyncService:
         duration = round(time.monotonic() - start_time, 2)
         summary = {
             "new": plan.new_count,
-            "updated": plan.updated_count,
+            "updated": sum(item.action == SyncItemAction.UPDATED for item in items),
             "removed": applied_removals if plan.removed_count > 0 else 0,
-            "unchanged": plan.unchanged_count,
+            "unchanged": sum(item.action == SyncItemAction.UNCHANGED for item in items),
             "failures": len(plan.failures),
         }
 
@@ -804,7 +813,7 @@ class IncrementalSyncService:
                     "action": it.action.value,
                     "reason": it.reason,
                 }
-                for it in plan.items
+                for it in items
             ],
             failures=plan.failures,
             consolidated=consolidated,

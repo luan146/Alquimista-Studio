@@ -487,3 +487,19 @@ def test_sync_without_changes_writes_no_summary(sync_env):
     report = service.apply_sync(service.plan_sync([runtime], target_source_id="src1"), [runtime])
 
     assert report.summary_path is None
+
+
+def test_documents_without_date_count_as_changed_only_when_content_changed(sync_env):
+    service: IncrementalSyncService = sync_env["service"]
+    runtime: SourceRuntime = sync_env["runtime"]
+    connector: MockConnector = sync_env["connector"]
+    for meta in connector.docs_meta["c1"]:
+        meta.updated_at, meta.etag = None, None
+    service.apply_sync(service.plan_sync([runtime], target_source_id="src1"), [runtime])
+    connector.doc_bodies["doc2"] = "<h1>Doc 2</h1><p>Texto novo</p>"
+
+    report = service.apply_sync(service.plan_sync([runtime], target_source_id="src1"), [runtime])
+
+    assert (report.summary["updated"], report.summary["unchanged"]) == (1, 1)
+    assert report.summary_path is not None
+    assert "Doc 1" not in report.summary_path.read_text(encoding="utf-8")
