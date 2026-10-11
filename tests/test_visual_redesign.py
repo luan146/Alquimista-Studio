@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QComboBox, QPushButton, QStackedWidg
 
 from alquimista.models import MarkdownOptions, SourceConfig
 from alquimista.ui.components import AlchemistIconAtlas, SegmentedControl, chip
+from alquimista.ui.controllers.operation_controller import log_level
 from alquimista.ui.i18n import LanguageManager
 from alquimista.ui.icons import (
     AUTH_ICONS,
@@ -268,3 +269,53 @@ def test_settings_menu_switches_sections_and_theme_tiles_save_the_theme(window: 
     assert window._theme_preference() == "dark"
     window.ui_scale_pills.buttons()[-1].click()
     assert window._ui_scale_preference() == 1.5
+
+
+def test_log_levels() -> None:
+    assert log_level("FALHA: timeout") == "error"
+    assert log_level("Aviso: imagem grande") == "warning"
+    assert log_level("Wiki [1/3] Página") == "info"
+    assert log_level("Wiki [2/3] Como resolver o erro 500") == "info"
+
+
+def test_monitor_shows_while_running_and_returns_on_success(window: MainWindow) -> None:
+    window._show_page("extraction")
+    started: list[Any] = []
+    window.operation_controller.thread_pool.start = lambda worker: started.append(worker)  # type: ignore[method-assign]
+    window._start_worker(lambda *_a: {}, window._operation_done)
+    assert window.execute_stack.currentIndex() == 1
+    window.operation_controller.on_progress(12, 18, "Página 12")
+    assert window.run_count.text() == "12 de 18" and "6" in window.run_left_chip.text()
+    window.operation_controller.worker_finished()
+    window._operation_done({})
+    assert window.execute_stack.currentIndex() == 0
+
+
+def test_monitor_stays_after_failure(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "critical", lambda *_a, **_k: None)
+    window.operation_controller.thread_pool.start = lambda worker: None  # type: ignore[method-assign]
+    window._start_worker(lambda *_a: {}, window._operation_done)
+    window.operation_controller.worker_failed(RuntimeError("Erro 500"), "")
+    window.operation_controller.worker_finished()
+    assert window.execute_stack.currentIndex() == 1
+    assert "1" in window.run_failed_chip.text() and window.run_back_button.isEnabled()
+
+
+def test_failure_with_traceback_counts_once(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "critical", lambda *_a, **_k: None)
+    window.operation_controller.thread_pool.start = lambda worker: None  # type: ignore[method-assign]
+    window._start_worker(lambda *_a: {}, window._operation_done)
+    window.operation_controller.worker_failed(RuntimeError("Erro 500"), "Traceback (most recent call last):\n  boom")
+    assert window.run_failed_chip.text() == "1 falha"
+
+
+def test_activity_filter_shows_only_errors(window: MainWindow) -> None:
+    window._append_log("Wiki [1/2] Página A")
+    window._append_log("FALHA: Página B")
+    window.log_filter.buttons()[1].click()
+    text = window.log_text.toPlainText()
+    assert "Página B" in text and "Página A" not in text
+    window.log_filter.buttons()[0].click()
+    assert "Página A" in window.log_text.toPlainText()

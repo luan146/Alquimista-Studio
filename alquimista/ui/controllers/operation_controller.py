@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -16,12 +17,28 @@ from ...errors import (
     ResourceNotFoundError,
 )
 from ...runtime import CancellationToken
-from ..components import inform
+from ..components import inform, set_chip_kind
 from ..i18n import translate_text
 from ..workers import Worker
 
 WorkerFunction = Callable[..., Any]
 DoneCallback = Callable[[Any], None]
+
+
+def log_level(message: str) -> str:
+    """Level of a log line for the activity filter; the services only send plain text."""
+    if re.search(r"\[\d+/\d+\]", message):
+        return "info"  # progress line: the page title may contain "erro"
+    lowered = message.casefold()
+    if any(word in lowered for word in ("falha", "erro", "error", "failed", "traceback")):
+        return "error"
+    if any(word in lowered for word in ("aviso", "warning", "ignorad", "ignored", "não atualizado")):
+        return "warning"
+    return "info"
+
+
+def _count(n: int, one: str, many: str) -> str:
+    return translate_text(one if n == 1 else many).format(n=n)
 
 
 def _duration(seconds: float) -> str:
@@ -155,6 +172,20 @@ class WorkerOperationController:
         window.started_at = time.monotonic()
         window.cancel_button.setEnabled(True)
         window.progress.setValue(0)
+        # Only real runs open the monitor; tree loads, connection tests and syncs use other callbacks.
+        if done == getattr(window, "_operation_done", None) and hasattr(window, "execute_stack"):
+            from ..pages.review_page import render_log, show_run_monitor
+
+            window._log_entries = []
+            window.run_failures = 0
+            window.run_count.setText(translate_text("{done} de {total}").format(done=0, total=0))
+            window.run_done_chip.setText(_count(0, "{n} pronta", "{n} prontas"))
+            window.run_failed_chip.setText(_count(0, "{n} falha", "{n} falhas"))
+            set_chip_kind(window.run_failed_chip, "neutral")
+            window.run_left_chip.setText(_count(0, "{n} restante", "{n} restantes"))
+            render_log(window)
+            window.run_back_button.setEnabled(False)
+            show_run_monitor(window, True)
         worker.signals.progress.connect(self.on_progress)
         worker.signals.log.connect(self.append_log)
         worker.signals.failed.connect(self.worker_failed)
@@ -172,6 +203,10 @@ class WorkerOperationController:
         window = self.window
         percent = int(done * 100 / total) if total else 0
         window.progress.setValue(percent)
+        if hasattr(window, "run_count") and not getattr(window, "_tree_loading", False):
+            window.run_count.setText(translate_text("{done} de {total}").format(done=done, total=total))
+            window.run_done_chip.setText(_count(done, "{n} pronta", "{n} prontas"))
+            window.run_left_chip.setText(_count(max(0, total - done), "{n} restante", "{n} restantes"))
         elapsed = time.monotonic() - window.started_at
         window.progress_label.setText(
             translate_text("{done}/{total}  —  {item}  —  {elapsed}").format(
@@ -201,8 +236,23 @@ class WorkerOperationController:
     def append_log(self, message: str) -> None:
         window = self.window
         window.technical_logger.info(message)
-        if hasattr(window, "log_text"):
-            window.log_text.append(f"[{time.strftime('%H:%M:%S')}] {message}")
+        entries = getattr(window, "_log_entries", None)
+        if entries is None or not hasattr(window, "log_text"):
+            return
+        level = log_level(message)
+        line = f"[{time.strftime('%H:%M:%S')}] {message}"
+        entries.append((level, line))
+        # The traceback that follows a failure is part of it, not a second one.
+        is_detail = message.startswith(translate_text("Detalhes técnicos"))
+        if level == "error" and not is_detail and hasattr(window, "run_failed_chip"):
+            window.run_failures = getattr(window, "run_failures", 0) + 1
+            window.run_failed_chip.setText(_count(window.run_failures, "{n} falha", "{n} falhas"))
+            set_chip_kind(window.run_failed_chip, "danger")
+        wanted = window.log_filter.value() if hasattr(window, "log_filter") else "all"
+        if wanted in (None, "all", level):
+            from ..pages.review_page import append_rendered
+
+            append_rendered(window, level, line)
 
     def worker_failed(self, error: Exception | str, detail: str) -> None:
         window = self.window
@@ -274,6 +324,8 @@ class WorkerOperationController:
         if getattr(window, "_tree_loading", False):
             window._set_tree_loading(False)
         window.cancel_button.setEnabled(False)
+        if hasattr(window, "run_back_button"):
+            window.run_back_button.setEnabled(True)
         window._refresh_dashboard()
         if hasattr(window, "_refresh_workflow_state"):
             window._refresh_workflow_state()
@@ -312,4 +364,5 @@ __all__ = [
     "WorkerFunction",
     "WorkerOperationController",
     "_connection_error_presentation",
+    "log_level",
 ]

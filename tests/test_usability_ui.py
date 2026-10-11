@@ -15,7 +15,6 @@ from alquimista.services import ExtractionService
 from alquimista.ui.components import inform
 from alquimista.ui.i18n import LanguageManager
 from alquimista.ui.main_window import MainWindow
-from alquimista.ui.pages.review_page import _toggle_log
 from alquimista.ui.tree_models import display_timestamp
 
 
@@ -167,10 +166,3 @@ def test_settings_scroll_and_theme_is_remembered(window: MainWindow) -> None:
     window.theme_combo.setCurrentIndex(window.theme_combo.findData("dark"))
     assert window._theme_preference() == "dark"
 
-
-def test_run_log_can_be_shown(window: MainWindow) -> None:
-    window._show_page("extraction")
-    window.show()
-    assert not window.log_text.isVisible()
-    _toggle_log(window)
-    assert window.log_text.isVisible() and "Ocultar" in window.log_toggle.text()

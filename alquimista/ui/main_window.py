@@ -1025,6 +1025,10 @@ class MainWindow(
         self.operation_controller.cancel()
 
     def _operation_done(self, result: dict[str, Any]) -> None:
+        if hasattr(self, "execute_stack"):
+            from .pages.review_page import show_run_monitor
+
+            show_run_monitor(self, False)
         self.last_result = result
         self.progress.setValue(100)
         self.progress_label.setText(translate_text("Operação concluída."))
