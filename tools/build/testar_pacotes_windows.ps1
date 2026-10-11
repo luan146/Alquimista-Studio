@@ -13,7 +13,16 @@ $env:TESSDATA_PREFIX = Join-Path $work "tesseract\tessdata"
 $text = & (Join-Path $work "tesseract\tesseract.exe") $image stdout -l por
 if ("$text" -notmatch "ALQUIMISTA") { Fail "O Tesseract do portátil não leu o texto: $text" }
 
-$app = Start-Process -FilePath (Join-Path $work "ALQuimista Studio.exe") -PassThru
+$exe = Join-Path $work "ALQuimista Studio.exe"
+# A startup error opens a dialog that never closes, so a quick command must finish with code 0.
+$command = Start-Process -FilePath $exe -ArgumentList "--set-language", "pt-BR" -PassThru
+if (-not $command.WaitForExit(90000)) {
+    taskkill /T /F /PID $command.Id | Out-Null
+    Fail "O programa portátil travou ao iniciar (provável janela de erro)."
+}
+if ($command.ExitCode -ne 0) { Fail "O programa portátil terminou com erro (código $($command.ExitCode))." }
+
+$app = Start-Process -FilePath $exe -PassThru
 Start-Sleep -Seconds 20
 if ($app.HasExited) { Fail "O programa portátil fechou sozinho (código $($app.ExitCode))." }
 taskkill /T /F /PID $app.Id | Out-Null

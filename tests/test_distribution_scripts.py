@@ -1,4 +1,5 @@
 import re
+import runpy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,3 +74,10 @@ def test_linux_distributions_ship_tesseract_and_an_installer() -> None:
     assert 'dpkg-deb --root-owner-group --build "$DEB_ROOT" "$DEB"' in script
     assert workflow.index("tools/build/gerar_portable_linux.sh") < workflow.index("tools/build/testar_pacotes_linux.sh")
     assert "needs: [test, linux-distribution]" in workflow and "gh release create" in workflow
+
+
+def test_entry_point_runs_as_a_loose_script_like_in_the_executable() -> None:
+    # PyInstaller runs alquimista/__main__.py with no parent package: a relative import breaks the executable.
+    namespace = runpy.run_path(str(ROOT / "alquimista" / "__main__.py"), run_name="alquimista_entry")
+
+    assert callable(namespace["main"])
