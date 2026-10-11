@@ -258,3 +258,13 @@ def test_preset_card_clears_when_a_switch_is_flipped(window: MainWindow) -> None
     check = window.md_controls["include_title"]
     check.setChecked(not check.isChecked())
     assert _checked_presets(window) == []
+
+
+def test_settings_menu_switches_sections_and_theme_tiles_save_the_theme(window: MainWindow) -> None:
+    window._show_page("settings")
+    window.settings_menu.buttons()[2].click()
+    assert window.settings_stack.currentWidget().isAncestorOf(window.timeout_spin)
+    window.theme_tiles.buttons()[1].click()  # Escuro
+    assert window._theme_preference() == "dark"
+    window.ui_scale_pills.buttons()[-1].click()
+    assert window._ui_scale_preference() == 1.5

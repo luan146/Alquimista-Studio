@@ -161,7 +161,7 @@ def test_real_page_preview_replaces_the_sample(window: MainWindow, monkeypatch: 
 
 
 def test_settings_scroll_and_theme_is_remembered(window: MainWindow) -> None:
-    scroll = next(area for area in window.pages["settings"].findChildren(QScrollArea))
+    scroll = next(area for area in window.pages["settings"].findChildren(QScrollArea) if area.widget().isAncestorOf(window.timeout_spin))
     assert scroll.widget().isAncestorOf(window.timeout_spin)
 
     window.theme_combo.setCurrentIndex(window.theme_combo.findData("dark"))

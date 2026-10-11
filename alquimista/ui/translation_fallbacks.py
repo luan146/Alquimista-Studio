@@ -921,6 +921,22 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
     "Pesquisar por título, caminho ou pageId…": {"en": "Search by title, path or pageId…", "es": "Buscar por título, ruta o pageId…"},
     "Mostrar/ocultar Page ID": {"en": "Show/hide Page ID", "es": "Mostrar/ocultar Page ID"},
     "Sincronizar seleção": {"en": "Sync selection", "es": "Sincronizar selección"},
+    "Automático": {"en": "Automatic", "es": "Automático"},
+    "Automático segue o Windows.": {"en": "Automatic follows Windows.", "es": "Automático sigue a Windows."},
+    "Textos, botões e mensagens.": {"en": "Texts, buttons and messages.", "es": "Textos, botones y mensajes."},
+    "Tempo limite de leitura (s)": {"en": "Read timeout (s)", "es": "Tiempo límite de lectura (s)"},
+    "Quanto esperar cada resposta do site.": {"en": "How long to wait for each site response.", "es": "Cuánto esperar cada respuesta del sitio."},
+    "Quantas vezes repetir uma página que falhou.": {"en": "How many times to retry a failed page.", "es": "Cuántas veces repetir una página que falló."},
+    "Pausa para não sobrecarregar o site.": {"en": "Pause so the site isn't overloaded.", "es": "Pausa para no sobrecargar el sitio."},
+    "Páginas baixadas ao mesmo tempo.": {"en": "Pages downloaded at the same time.", "es": "Páginas descargadas al mismo tiempo."},
+    "O computador precisa estar ligado nesse horário.": {"en": "The computer must be on at that time.", "es": "La computadora debe estar encendida a esa hora."},
+    "Agendamento": {"en": "Schedule", "es": "Programación"},
+    "Rede": {"en": "Network", "es": "Red"},
+    "Aparência": {"en": "Appearance", "es": "Apariencia"},
+    "Rede (avançado)": {"en": "Network (advanced)", "es": "Red (avanzado)"},
+    "Sincronização agendada do projeto": {"en": "Scheduled project synchronization", "es": "Sincronización programada del proyecto"},
+    "Mostra de novo as 6 etapas do programa.": {"en": "Shows the program's 6 steps again.", "es": "Muestra de nuevo los 6 pasos del programa."},
+    "Uma base fictícia para testar sem senha nem token.": {"en": "A made-up base to try without password or token.", "es": "Una base ficticia para probar sin contraseña ni token."},
 }
 
 
