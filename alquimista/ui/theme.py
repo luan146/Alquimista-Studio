@@ -50,14 +50,14 @@ def stylesheet(c: dict[str, str]) -> str:
     QLabel#subtitle, QLabel[muted="true"], QLabel#navStepStatus {{ color: {c["muted"]}; }}
     QLabel#runCount {{ font-size: 22pt; font-weight: 600; }}
     QLabel#optionTitle {{ font-weight: 600; }}
-    QFrame#card, QGroupBox, QFrame#connectionPanel, QFrame#reviewStepCard, QFrame#markdownPreviewCard,
+    QFrame#card, QGroupBox, QFrame#connectionPanel, QFrame#markdownPreviewCard,
     QFrame#consolidationControlsCard, QFrame#consolidationPreviewCard, QFrame#pageTableCard,
-    QFrame#selectionIntroCard, QFrame#sourcePanel, QFrame#accountCard, QFrame#metricCard, QFrame#statCard {{
+    QFrame#sourcePanel, QFrame#accountCard, QFrame#metricCard, QFrame#statCard {{
         background: {c["surface"]}; border: 1px solid {c["border"]}; border-radius: 12px; }}
     QFrame#markdownSection, QFrame#consolidationStep, QFrame#consolidationMetric, QFrame#pageStat,
-    QFrame#consolidationSummary, QFrame#reviewItem {{
+    QFrame#consolidationSummary {{
         background: {c["surface"]}; border: 1px solid {c["border"]}; border-radius: 10px; }}
-    QFrame#pageSummaryCard, QFrame#markdownOptionRow, QFrame#optionRow {{ background: transparent; border: 0; }}
+    QFrame#pageSummaryCard, QFrame#optionRow {{ background: transparent; border: 0; }}
     QFrame#optionRow {{ border-bottom: 1px solid {c["border"]}; }}
     QGroupBox {{ margin-top: 12px; padding: 18px 12px 12px 12px; font-weight: 600; }}
     QGroupBox::title {{ subcontrol-origin: margin; left: 12px; padding: 0 6px; }}

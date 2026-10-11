@@ -76,7 +76,7 @@ def build_results_page(window: Any) -> QWidget:
     folder_info = QVBoxLayout()
     folder_info.setSpacing(2)
     folder_title = QLabel("Destino dos arquivos gerados")
-    folder_title.setStyleSheet("font-weight: 700; font-size: 10pt;")
+    folder_title.setObjectName("sectionTitle")
     folder_info.addWidget(folder_title)
     window.result_output_path_label = QLabel("Acesse os arquivos consolidados e avulsos na pasta de saída.")
     window.result_output_path_label.setObjectName("subtitle")
@@ -134,4 +134,5 @@ def build_results_page(window: Any) -> QWidget:
 
     body.addWidget(window.results_tabs, 1)
     layout.addWidget(window.results_body, 1)
+    layout.addStretch(0)  # empty state: leftover space goes below the card, not between header and card
     return page

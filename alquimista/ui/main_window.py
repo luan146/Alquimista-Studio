@@ -376,7 +376,7 @@ class MainWindow(
         self.project_badge.setObjectName("subtitle")
         side.addWidget(self.project_badge)
         self.sidebar = sidebar
-        self.sidebar_texts = [brand, tagline, self.project_badge]
+        self.sidebar_texts = [brand_icon, brand, tagline, self.project_badge]  # the logo does not fit the 72px rail
         outer.addWidget(sidebar)
         content = QVBoxLayout()
         content.setContentsMargins(0, 0, 0, 0)

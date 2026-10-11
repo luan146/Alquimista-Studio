@@ -57,6 +57,7 @@ from PySide6.QtWidgets import (
 )
 
 from .icons import AUTH_ICONS, EMOJI_ICONS, SYSTEM_ICONS, svg_icon, svg_pixmap
+from .theme import current_colors
 
 APP_TITLE = "ALQuimista Studio — Extração e consolidação"
 
@@ -185,11 +186,11 @@ NAV_ICON_INDEX = {
     "markdown": 5,
     "consolidation": 6,
     "format": 5,
-    "extraction": 7,
-    "review": 7,
-    "output": 7,
-    "results": 8,
-    "settings": 9,
+    "extraction": 6,
+    "review": 6,
+    "output": 6,
+    "results": 7,
+    "settings": 8,
 }
 
 BUTTON_ICON_INDEX = {
@@ -219,7 +220,6 @@ BUTTON_ICON_INDEX = {
     "➕": 10,
     "＋": 10,
     "📂": 11,
-    "↺": 9,
     "🔑": 2,
 }
 
@@ -362,6 +362,7 @@ class AlchemistIconAtlas:
     def page_index(cls, fallback: str) -> int | None:
         fallback = repair_mojibake(fallback)
         return {
+            "🧭": 0,
             "📚": 1,
             "🌳": 3,
             "☑": 3,
@@ -994,14 +995,15 @@ class VisibilityBadgeDelegate(QStyledItemDelegate):
             if badge_rect.isEmpty():
                 return
 
+            colors = current_colors()
             if kind == "public":
-                foreground, background = QColor("#19C98A"), QColor("#103B38")
+                foreground, background = QColor(colors["success"]), QColor(colors["success_soft"])
             elif kind == "private":
-                foreground, background = QColor("#C5A5FF"), QColor("#302744")
-            elif kind == "root":
-                foreground, background = QColor("#D6B9FF"), QColor("#33294B")
+                foreground, background = QColor(colors["danger"]), QColor(colors["danger_soft"])
+            elif kind in ("root", "folder"):
+                foreground, background = QColor(colors["primary"]), QColor(colors["primary_soft"])
             else:
-                foreground, background = QColor("#A7B5C4"), QColor("#273645")
+                foreground, background = QColor(colors["muted"]), QColor(colors["surface_alt"])
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(background)
             painter.drawRoundedRect(badge_rect, 9, 9)

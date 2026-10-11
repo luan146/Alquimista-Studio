@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from alquimista.models import AuthMode
 from alquimista.ui.components import SourceCard, VisibilityBadgeDelegate
 from alquimista.ui.main_window import MainWindow
+from alquimista.ui.theme import current_colors
 from alquimista.ui.tree_models import ordered_pages
 
 
@@ -430,7 +431,7 @@ def test_visibility_badge_delegate_clips_cell_and_does_not_duplicate_title(
         for y in range(option.rect.top(), option.rect.bottom() + 1)
     )
     assert any(
-        image.pixelColor(x, y) == QColor("#103B38")
+        image.pixelColor(x, y) == QColor(current_colors()["success_soft"])
         for x in range(option.rect.left(), option.rect.right() + 1)
         for y in range(option.rect.top(), option.rect.bottom() + 1)
     )

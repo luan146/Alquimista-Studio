@@ -190,6 +190,7 @@ def build_selection_page(window: Any) -> QWidget:
     window.selection_tree.setItemDelegateForColumn(0, VisibilityBadgeDelegate(window.selection_tree))
     window.selection_tree.itemExpanded.connect(window._selection_tree_item_expanded)
     window.selection_tree.itemChanged.connect(window._selection_changed)
+    window.selection_tree.header().setStretchLastSection(True)  # no grey block after "Estado"
     window.selection_tree.setColumnHidden(1, True)
     window.selection_tree.setColumnHidden(2, True)  # the tree already shows where a page lives
     window.selection_tree.setAlternatingRowColors(False)

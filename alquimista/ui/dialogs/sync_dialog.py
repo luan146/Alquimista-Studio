@@ -31,6 +31,7 @@ from ...services.sync import (
 )
 from ..components import button, chip
 from ..i18n import translate_text as tr
+from ..theme import current_colors
 
 RuntimesOrFactory = list[Any] | Callable[[CancellationToken], list[Any]]
 
@@ -175,10 +176,11 @@ class SyncPreviewDialog(QDialog):
             vbox.addWidget(lbl)
             return frame, val, lbl
 
-        card_new, self.val_new, _ = make_stat_card("Novos (+)", "#4CAF50")
-        card_upd, self.val_upd, _ = make_stat_card("Alterados (~)", "#FFC107")
-        card_rem, self.val_rem, _ = make_stat_card("Removidos (-)", "#F44336")
-        card_unc, self.val_unc, _ = make_stat_card("Inalterados (=)", "#9E9E9E")
+        colors = current_colors()
+        card_new, self.val_new, _ = make_stat_card("Novos (+)", colors["success"])
+        card_upd, self.val_upd, _ = make_stat_card("Alterados (~)", colors["warning"])
+        card_rem, self.val_rem, _ = make_stat_card("Removidos (-)", colors["danger"])
+        card_unc, self.val_unc, _ = make_stat_card("Inalterados (=)", colors["muted"])
 
         summary_row.addWidget(card_new)
         summary_row.addWidget(card_upd)
@@ -271,13 +273,14 @@ class SyncPreviewDialog(QDialog):
             }.get(item.action, item.action.value))
 
             status_item = QTableWidgetItem(status_text)
+            colors = current_colors()
             color = {
-                SyncItemAction.NEW: "#4CAF50",
-                SyncItemAction.UPDATED: "#FFC107",
-                SyncItemAction.REMOVED: "#F44336",
-                SyncItemAction.UNCHANGED: "#9E9E9E",
-                SyncItemAction.FAILED: "#E91E63",
-            }.get(item.action, "#FFFFFF")
+                SyncItemAction.NEW: colors["success"],
+                SyncItemAction.UPDATED: colors["warning"],
+                SyncItemAction.REMOVED: colors["danger"],
+                SyncItemAction.UNCHANGED: colors["muted"],
+                SyncItemAction.FAILED: colors["danger"],
+            }.get(item.action, colors["text"])
             status_item.setForeground(QColor(color))
             self.table.setItem(row, 0, status_item)
             self.table.setItem(row, 1, QTableWidgetItem(item.title))

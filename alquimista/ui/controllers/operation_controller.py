@@ -209,11 +209,15 @@ class WorkerOperationController:
             window.run_done_chip.setText(_count(done, "{n} pronta", "{n} prontas"))
             window.run_left_chip.setText(_count(max(0, total - done), "{n} restante", "{n} restantes"))
         elapsed = time.monotonic() - window.started_at
-        window.progress_label.setText(
-            translate_text("{done}/{total}  —  {item}  —  {elapsed}").format(
-                done=done, total=total, item=item, elapsed=progress_eta(done, total, elapsed)
+        eta = progress_eta(done, total, elapsed)
+        if getattr(window, "_run_active", False):
+            # O contador grande já mostra "done de total".
+            progress_text = f"{item}  —  {eta}" if item else eta
+        else:
+            progress_text = translate_text("{done}/{total}  —  {item}  —  {elapsed}").format(
+                done=done, total=total, item=item, elapsed=eta
             )
-        )
+        window.progress_label.setText(progress_text)
         if getattr(window, "_tree_loading", False) and hasattr(
             window, "tree_load_progress"
         ):

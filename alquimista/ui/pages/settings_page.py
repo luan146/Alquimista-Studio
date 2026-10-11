@@ -173,7 +173,9 @@ def build_settings_page(window: Any) -> QWidget:
     ):
         spin.setMinimumWidth(110)
         layout.addWidget(_row(title, detail, spin))
-    layout.addWidget(button("↺ Restaurar valores recomendados", window._restore_network_defaults))
+    restore = button("↺ Restaurar valores recomendados", window._restore_network_defaults)
+    restore.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+    layout.addWidget(restore, 0, Qt.AlignmentFlag.AlignLeft)
     window.settings_stack.addWidget(network)
 
     schedule, layout = _section("Sincronização agendada do projeto")

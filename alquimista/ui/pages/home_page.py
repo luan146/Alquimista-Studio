@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -67,7 +68,7 @@ def build_home_page(window: Any) -> QWidget:
 
     next_card, next_layout = card()
     window.home_next_title = QLabel("")
-    window.home_next_title.setStyleSheet("font-size: 13pt; font-weight: 700;")
+    window.home_next_title.setObjectName("sectionTitle")
     next_layout.addWidget(window.home_next_title)
     window.home_next_detail = QLabel("")
     window.home_next_detail.setObjectName("subtitle")
@@ -87,11 +88,13 @@ def build_home_page(window: Any) -> QWidget:
     recent_card, recent_layout = card()
     recent_header = QHBoxLayout()
     recent_title = QLabel("Projetos recentes")
-    recent_title.setStyleSheet("font-weight: 700;")
+    recent_title.setObjectName("sectionTitle")
     recent_header.addWidget(recent_title)
     recent_header.addStretch()
-    recent_header.addWidget(button("➕ Novo projeto", window.new_project))
-    recent_header.addWidget(button("📂 Abrir projeto", window.open_project))
+    for text, slot in (("➕ Novo projeto", window.new_project), ("📂 Abrir projeto", window.open_project)):
+        action = button(text, slot)
+        action.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        recent_header.addWidget(action)
     recent_layout.addLayout(recent_header)
     window.home_recent_list = QListWidget()
     window.home_recent_list.setAccessibleName("Projetos abertos recentemente")

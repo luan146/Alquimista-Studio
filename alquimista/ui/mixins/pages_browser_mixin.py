@@ -176,7 +176,7 @@ class PagesBrowserMixin(WindowBase):
         )
         detail_tools.addWidget(self.page_back_button)
         self.page_space_title = QLabel("Espaço selecionado")
-        self.page_space_title.setStyleSheet("font-size: 13pt; font-weight: 700;")
+        self.page_space_title.setObjectName("sectionTitle")
         detail_tools.addWidget(self.page_space_title)
         detail_tools.addStretch()
         detail_layout.addLayout(detail_tools)

@@ -276,16 +276,26 @@ class ConnectionMixin(WindowBase):
         # The remembered token goes first: a failure deleting the browser session/cache must not keep it.
         delete_secret(source.id)
         self.secrets.pop(source.id)
+        cleanup_error: Exception | None = None
         try:
             delete_session(source)
-        finally:
-            self.connected_sources.discard(source.id)
-            self.connection_states[source.id] = translate_text("○ Você saiu — escolha um modo de acesso")
-            current = self.source_by_combo(self.connection_source)
-            if current is not None and current.id == source.id:
-                self.auth_secret.clear()
-                self._connection_source_changed()
-            self._refresh_workflow_state()
+        except Exception as exc:  # the token is already gone: finish signing out, then warn
+            cleanup_error = exc
+        self.connected_sources.discard(source.id)
+        self.connection_states[source.id] = translate_text("○ Você saiu — escolha um modo de acesso")
+        current = self.source_by_combo(self.connection_source)
+        if current is not None and current.id == source.id:
+            self.auth_secret.clear()
+            self._connection_source_changed()
+        self._refresh_workflow_state()
+        if cleanup_error is not None:
+            QMessageBox.warning(
+                self,
+                translate_text("Sair da conta"),
+                translate_text(
+                    "O token foi apagado, mas a sessão do navegador não pôde ser removida por completo: {error}"
+                ).format(error=cleanup_error),
+            )
 
     def _account_identity(self, source: SourceConfig) -> tuple[str, str]:
         if source.source_type == "local_files":

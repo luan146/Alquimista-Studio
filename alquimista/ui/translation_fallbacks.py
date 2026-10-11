@@ -425,9 +425,13 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "{name}: In development. No calls will be made.",
         "es": "{name}: En desarrollo. No se realizarán llamadas.",
     },
-    "… {checked} de {total} páginas carregadas selecionadas · {visible} visíveis": {
-        "en": "… {checked} of {total} loaded pages selected · {visible} visible",
-        "es": "… {checked} de {total} páginas cargadas seleccionadas · {visible} visibles",
+    "O token foi apagado, mas a sessão do navegador não pôde ser removida por completo: {error}": {
+        "en": "The token was deleted, but the browser session could not be fully removed: {error}",
+        "es": "El token se eliminó, pero la sesión del navegador no pudo eliminarse por completo: {error}",
+    },
+    "{checked} de {total} páginas carregadas selecionadas · {visible} visíveis": {
+        "en": "{checked} of {total} loaded pages selected · {visible} visible",
+        "es": "{checked} de {total} páginas cargadas seleccionadas · {visible} visibles",
     },
     "● Alterações não salvas": {
         "en": "● Unsaved changes",

@@ -305,7 +305,7 @@ class TourDialog(QDialog):
         self.setMinimumWidth(420)
         layout = QVBoxLayout(self)
         self.title = QLabel()
-        self.title.setStyleSheet("font-size: 13pt; font-weight: 700;")
+        self.title.setObjectName("sectionTitle")
         layout.addWidget(self.title)
         self.text = QLabel()
         self.text.setWordWrap(True)

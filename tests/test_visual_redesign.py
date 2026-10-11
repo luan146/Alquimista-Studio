@@ -287,6 +287,7 @@ def test_monitor_shows_while_running_and_returns_on_success(window: MainWindow) 
     assert window.execute_stack.currentIndex() == 1
     window.operation_controller.on_progress(12, 18, "Página 12")
     assert window.run_count.text() == "12 de 18" and "6" in window.run_left_chip.text()
+    assert window.progress_label.text().startswith("Página 12") and "12/18" not in window.progress_label.text()
     window.operation_controller.worker_finished()
     window._operation_done({})
     assert window.execute_stack.currentIndex() == 0
@@ -496,11 +497,15 @@ def test_sign_out_removes_token_even_if_session_cleanup_fails(window: MainWindow
     def broken(_source: Any) -> bool:
         raise OSError("cache travado")
 
+    warnings: list[str] = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda _p, _t, text, *_a, **_k: warnings.append(text))
     monkeypatch.setattr(connection_mixin, "delete_session", broken)
-    with pytest.raises(OSError):
-        window._sign_out(source.id)
+    window.connected_sources.add(source.id)
+    window._sign_out(source.id)
     assert session_store.load_secret(source.id) == ""
     assert window.secrets.get(source.id, "") == ""
+    assert source.id not in window.connected_sources
+    assert len(warnings) == 1 and "cache travado" in warnings[0]
 
 
 def test_sign_out_answered_no_keeps_everything(window: MainWindow, monkeypatch: pytest.MonkeyPatch,
@@ -525,3 +530,23 @@ def test_ghost_danger_button_is_red(qapp) -> None:
         sheet = stylesheet(colors)
         assert f'QPushButton[ghost="true"][danger="true"] {{ color: {colors["danger"]}; }}' in sheet
         assert sheet.index('[ghost="true"][danger="true"]') > sheet.index('QPushButton[ghost="true"] {')
+
+
+def test_tree_badge_colors_follow_theme(qapp) -> None:
+    apply_theme(QApplication.instance(), "dark")
+    assert current_colors()["danger_soft"] == DARK["danger_soft"]
+    apply_theme(QApplication.instance(), "light")
+    assert current_colors()["danger_soft"] == LIGHT["danger_soft"]
+
+
+def test_home_header_icon_and_selection_count_text(window: MainWindow) -> None:
+    assert AlchemistIconAtlas.page_index("🧭") == 0
+    window._update_selection_count()
+    assert not window.selection_count.text().startswith("…")
+
+
+def test_leftover_titles_use_section_title(window: MainWindow) -> None:
+    assert window.home_next_title.objectName() == "sectionTitle"
+    assert window.con_distribution_title.objectName() == "sectionTitle"
+    assert window.page_space_title.objectName() == "sectionTitle"
+

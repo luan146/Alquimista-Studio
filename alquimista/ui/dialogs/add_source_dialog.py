@@ -82,7 +82,7 @@ class AddSourceDialog(QDialog):
         layout.addLayout(actions)
 
         catalog_title = QLabel("Ou escolha a plataforma")
-        catalog_title.setStyleSheet("font-size: 12pt; font-weight: 700;")
+        catalog_title.setObjectName("sectionTitle")
         layout.addWidget(catalog_title)
         layout.addWidget(build_source_catalog(window), 1)
 

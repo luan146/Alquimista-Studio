@@ -294,7 +294,7 @@ class SelectionMixin(WindowBase):
         visible = sum(not item.isHidden() for item in leaves)
         self.selection_count.setText(
             translate_text(
-                "… {checked} de {total} páginas carregadas selecionadas · {visible} visíveis"
+                "{checked} de {total} páginas carregadas selecionadas · {visible} visíveis"
             ).format(checked=checked, total=total, visible=visible)
         )
         self._update_extraction_summary()
