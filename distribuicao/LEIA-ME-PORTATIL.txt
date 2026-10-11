@@ -25,8 +25,8 @@ Observacoes / Notes / Notas
   O navegador Chromium nao e incluido neste primeiro pacote portatil.
 - A pasta "tesseract" contem o Tesseract OCR (licenca Apache 2.0,
   https://github.com/tesseract-ocr/tesseract), usado para ler o texto
-  dentro das imagens. No Linux, instale os pacotes "tesseract-ocr" e
-  "tesseract-ocr-por" do sistema.
+  dentro das imagens, no Windows e no Linux. Nao e preciso instalar
+  Python nem Tesseract.
 - Nunca compartilhe a pasta de sessoes ou arquivos de projeto que contenham
   informacoes sensiveis.
 

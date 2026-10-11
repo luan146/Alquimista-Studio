@@ -210,7 +210,7 @@ The synchronization service can operate at selection, source, or project scope. 
 
 NotebookLM and Claude/ChatGPT projects cannot open images or links that require sign-in. In new projects, by default:
 
-- each image becomes `[Imagem: description — texto na imagem: …]`, with the text read by **Tesseract**, bundled with the Windows installer and ZIP (on Linux, install `tesseract-ocr`);
+- each image becomes `[Imagem: description — texto na imagem: …]`, with the text read by **Tesseract**, bundled with every package (the Linux `.deb` installs it as a dependency);
 - in consolidated packages, a link to another extracted page becomes `text (ver «Title» em package.md)`.
 
 The options live in **Output → Markdown** (*Images as text*, *Read the text inside images*) and **Output → Packages** (*Links between pages become references*). Existing projects keep their previous output.
@@ -259,14 +259,16 @@ Download → install or extract → open ALQuimista Studio.
 | Platform | Package |
 |---|---|
 | 🪟 Windows | [Installer `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-installer-0.9.5.exe) · [Portable ZIP `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-windows-portable-0.9.5.zip) |
-| 🐧 Linux | [Portable tar.gz](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-portable-0.9.5.tar.gz) |
+| 🐧 Linux | [Installer .deb `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-installer-0.9.5.deb) · [Portable tar.gz `0.9.5`](https://github.com/luan146/Alquimista-Studio/releases/latest/download/ALQuimista-Studio-linux-portable-0.9.5.tar.gz) |
 
 ➡️ [View all releases](https://github.com/luan146/Alquimista-Studio/releases)
 
 The Windows Installer creates shortcuts and keeps preferences in the user
 profile. The Portable package can be extracted and launched without
-installation. On Linux, extract the tarball and run the included
-`ALQuimista Studio` executable.
+installation. On Linux (Ubuntu, Debian and derivatives), install the `.deb`
+with `sudo apt install ./ALQuimista-Studio-linux-installer-*.deb`, or extract
+the tarball and run the included `ALQuimista Studio` executable. No package
+needs Python.
 
 ### 2. For developers: run from source
 

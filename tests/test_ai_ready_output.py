@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import io
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -136,6 +137,16 @@ def test_tesseract_can_be_pointed_to_by_environment(monkeypatch: pytest.MonkeyPa
     executable.write_bytes(b"")
     monkeypatch.setenv("ALQUIMISTA_TESSERACT", str(executable))
     assert FIND_TESSERACT() == executable
+
+
+def test_linux_bundle_uses_its_libraries_instead_of_pyinstallers(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    (tmp_path / "lib").mkdir()
+    monkeypatch.setattr(image_text.sys, "frozen", True, raising=False)
+    env = {"LD_LIBRARY_PATH": "/tmp/_MEI123", "LD_LIBRARY_PATH_ORIG": "/usr/local/lib"}
+
+    paths = image_text._library_path(tmp_path / "tesseract", env)
+
+    assert paths == {"LD_LIBRARY_PATH": os.pathsep.join([str(tmp_path / "lib"), "/usr/local/lib"])}
 
 
 class _ImageConnector:

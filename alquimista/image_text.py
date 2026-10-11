@@ -1,4 +1,4 @@
-"""Read the text inside images with Tesseract, shipped next to the Windows executable."""
+"""Read the text inside images with Tesseract, shipped next to the Windows and Linux executables."""
 from __future__ import annotations
 
 import base64
@@ -18,12 +18,13 @@ from .markdown import ImageReader
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 _PREFERRED_LANGUAGES = ("por", "eng", "spa")
+_EXECUTABLE_NAME = "tesseract.exe" if sys.platform == "win32" else "tesseract"
 
 
 def tesseract_path() -> Path | None:
     """Bundled Tesseract first, then ALQUIMISTA_TESSERACT, PATH and the default Windows folder."""
     candidates = [
-        Path(sys.executable).parent / "tesseract" / "tesseract.exe" if getattr(sys, "frozen", False) else None,
+        Path(sys.executable).parent / "tesseract" / _EXECUTABLE_NAME if getattr(sys, "frozen", False) else None,
         Path(os.environ["ALQUIMISTA_TESSERACT"]) if os.environ.get("ALQUIMISTA_TESSERACT") else None,
         Path(found) if (found := shutil.which("tesseract")) else None,
         Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tesseract-OCR" / "tesseract.exe",
@@ -35,6 +36,8 @@ def _run(executable: Path, arguments: list[str], data: bytes | None = None) -> s
     env = dict(os.environ)
     if (executable.parent / "tessdata").is_dir():
         env["TESSDATA_PREFIX"] = str(executable.parent / "tessdata")
+    if sys.platform != "win32":
+        env.update(_library_path(executable, env))
     completed = subprocess.run(
         [str(executable), *arguments],
         input=data,
@@ -45,6 +48,14 @@ def _run(executable: Path, arguments: list[str], data: bytes | None = None) -> s
         check=False,
     )
     return completed.stdout.decode("utf-8", errors="replace") if completed.returncode == 0 else ""
+
+
+def _library_path(executable: Path, env: dict[str, str]) -> dict[str, str]:
+    """Linux: the bundled libraries first; never PyInstaller's own, which can clash with the system Tesseract."""
+    inherited = env.pop("LD_LIBRARY_PATH_ORIG", "") if getattr(sys, "frozen", False) else env.get("LD_LIBRARY_PATH", "")
+    bundled = executable.parent / "lib"
+    paths = [str(bundled)] if bundled.is_dir() else []
+    return {"LD_LIBRARY_PATH": os.pathsep.join(paths + ([inherited] if inherited else []))}
 
 
 @functools.cache
