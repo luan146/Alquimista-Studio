@@ -11,6 +11,7 @@ from PySide6.QtCore import (
     QEasingCurve,
     QEvent,
     QPoint,
+    QPointF,
     QPropertyAnimation,
     QRect,
     QRectF,
@@ -53,6 +54,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .icons import AUTH_ICONS, EMOJI_ICONS, SYSTEM_ICONS, svg_icon, svg_pixmap
 from .theme import (
     ACCENT_COLOR,
     CARD_BACKGROUND,
@@ -295,28 +297,14 @@ def _button_presentation(text: str) -> tuple[str, int | None]:
 
 
 class AlchemistIconAtlas:
-    """Loads separated generated atlases for system, connector, and auth icons."""
+    """Interface icons come from assets/icons/ui (SVG); connector icons still come from the generated atlas."""
 
-    _system_pixmap: QPixmap | None = None
     _connector_pixmap_cache: QPixmap | None = None
-    _auth_pixmap_cache: QPixmap | None = None
-    _system_path = (
-        Path(__file__).resolve().parents[2]
-        / "assets"
-        / "icons"
-        / "alchemist_system_atlas.png"
-    )
     _connector_path = (
         Path(__file__).resolve().parents[2]
         / "assets"
         / "icons"
         / "alchemist_connector_atlas.png"
-    )
-    _auth_path = (
-        Path(__file__).resolve().parents[2]
-        / "assets"
-        / "icons"
-        / "alchemist_auth_atlas.png"
     )
     _fallback_path = (
         Path(__file__).resolve().parents[2]
@@ -326,28 +314,12 @@ class AlchemistIconAtlas:
     )
 
     @classmethod
-    def _load_system(cls) -> QPixmap:
-        if cls._system_pixmap is None:
-            cls._system_pixmap = QPixmap(str(cls._system_path))
-            if cls._system_pixmap.isNull():
-                cls._system_pixmap = QPixmap(str(cls._fallback_path))
-        return cls._system_pixmap
-
-    @classmethod
     def _load_connectors(cls) -> QPixmap:
         if cls._connector_pixmap_cache is None:
             cls._connector_pixmap_cache = QPixmap(str(cls._connector_path))
             if cls._connector_pixmap_cache.isNull():
                 cls._connector_pixmap_cache = QPixmap(str(cls._fallback_path))
         return cls._connector_pixmap_cache
-
-    @classmethod
-    def _load_auth(cls) -> QPixmap:
-        if cls._auth_pixmap_cache is None:
-            cls._auth_pixmap_cache = QPixmap(str(cls._auth_path))
-            if cls._auth_pixmap_cache.isNull():
-                cls._auth_pixmap_cache = cls._load_system()
-        return cls._auth_pixmap_cache
 
     @classmethod
     def _cell(
@@ -372,7 +344,7 @@ class AlchemistIconAtlas:
 
     @classmethod
     def pixmap(cls, index: int, size: int = 64) -> QPixmap:
-        return cls._cell(cls._load_system(), index, 4, 4, size)
+        return svg_pixmap(SYSTEM_ICONS[index % len(SYSTEM_ICONS)], size)
 
     @classmethod
     def connector_pixmap(cls, index: int, size: int = 64) -> QPixmap:
@@ -385,17 +357,15 @@ class AlchemistIconAtlas:
 
     @classmethod
     def auth_pixmap(cls, index: int, size: int = 24) -> QPixmap:
-        return cls._cell(cls._load_auth(), index, 4, 2, size)
+        return svg_pixmap(AUTH_ICONS[index % len(AUTH_ICONS)], size)
 
     @classmethod
     def auth_icon(cls, index: int, size: int = 24) -> QIcon:
-        pixmap = cls.auth_pixmap(index, size)
-        return QIcon(pixmap) if not pixmap.isNull() else QIcon()
+        return svg_icon(AUTH_ICONS[index % len(AUTH_ICONS)], size)
 
     @classmethod
     def icon(cls, index: int, size: int = 24) -> QIcon:
-        pixmap = cls.pixmap(index, size)
-        return QIcon(pixmap) if not pixmap.isNull() else QIcon()
+        return svg_icon(SYSTEM_ICONS[index % len(SYSTEM_ICONS)], size)
 
     @classmethod
     def page_index(cls, fallback: str) -> int | None:
@@ -1009,7 +979,12 @@ class VisibilityBadgeDelegate(QStyledItemDelegate):
                 QStyle.SubElement.SE_ItemViewItemText, view_option, widget
             )
         ).intersected(cell_rect)
-        icon_width = view_option.fontMetrics.horizontalAdvance(icon) if icon else 0
+        kind = str(index.data(self.VISIBILITY_KIND_ROLE) or "unknown")
+        icon_name = EMOJI_ICONS.get(icon)
+        if icon_name == "pagina" and kind == "private":
+            icon_name = "pagina_restrita"
+        icon_size = 18
+        icon_width = icon_size if icon_name else (view_option.fontMetrics.horizontalAdvance(icon) if icon else 0)
         icon_gap = 8 if icon else 0
         badge_width = view_option.fontMetrics.horizontalAdvance(badge) + 16 if badge else 0
         badge_height = min(18.0, max(16.0, float(text_rect.height() - 4)))
@@ -1034,7 +1009,12 @@ class VisibilityBadgeDelegate(QStyledItemDelegate):
                 else QPalette.ColorRole.Text
             )
             painter.setPen(view_option.palette.color(text_color))
-            if icon:
+            if icon_name:
+                painter.drawPixmap(
+                    QPointF(text_rect.left(), text_rect.center().y() - icon_size / 2),
+                    svg_pixmap(icon_name, icon_size),
+                )
+            elif icon:
                 icon_rect = QRectF(
                     text_rect.left(), text_rect.top(), icon_width, text_rect.height()
                 )
@@ -1079,7 +1059,6 @@ class VisibilityBadgeDelegate(QStyledItemDelegate):
             if badge_rect.isEmpty():
                 return
 
-            kind = str(index.data(self.VISIBILITY_KIND_ROLE) or "unknown")
             if kind == "public":
                 foreground, background = QColor("#19C98A"), QColor("#103B38")
             elif kind == "private":
