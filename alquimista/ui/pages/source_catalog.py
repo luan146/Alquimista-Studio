@@ -99,11 +99,7 @@ def build_source_catalog(window: Any) -> QWidget:
         btn = QPushButton(cat_name)
         btn.setCheckable(True)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setStyleSheet(
-            "QPushButton { border: 1px solid #334155; border-radius: 14px; padding: 5px 12px; background: #1E293B; color: #94A3B8; font-size: 9pt; font-weight: 600; }"
-            "QPushButton:checked { background: #3B82F6; color: #FFFFFF; border-color: #3B82F6; }"
-            "QPushButton:hover:!checked { background: #334155; color: #F1F5F9; }"
-        )
+        btn.setObjectName("categoryPill")
         if cat_id == "all":
             btn.setChecked(True)
         btn.clicked.connect(lambda _checked=False, c=cat_id: refresh_cards(c))
@@ -117,7 +113,6 @@ def build_source_catalog(window: Any) -> QWidget:
     scroll_area.setWidgetResizable(True)
     scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
     scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    scroll_area.setStyleSheet("background: transparent;")
     scroll_area.setWidget(grid_container)
 
     source_panel, source_layout = card()

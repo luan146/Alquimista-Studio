@@ -188,18 +188,6 @@ class MainWindow(
             settings=self.ui_settings,
             status_bar=self.statusBar(),
         )
-        self.visual_profile_combo = QComboBox()
-        self.visual_profile_combo.addItem("Atelier", "atelier")
-        self.visual_profile_combo.addItem("Legado", "legacy")
-        saved_profile = str(
-            self.ui_settings.value("preferences/visual_profile", "atelier")
-            or "atelier"
-        )
-        profile_idx = self.visual_profile_combo.findData(saved_profile)
-        self.visual_profile_combo.setCurrentIndex(max(0, profile_idx))
-        self.visual_profile_combo.currentIndexChanged.connect(
-            self._visual_profile_changed
-        )
         apply_theme(QApplication.instance(), self._theme_preference())
         self._build()
         self._load_project_ui()
@@ -289,21 +277,6 @@ class MainWindow(
     def _tree_loading(self, value: bool) -> None:
         if hasattr(self, "tree_loader_controller"):
             self.tree_loader_controller.loading = value
-
-    @property
-    def visual_profile(self) -> str:
-        return str(
-            getattr(self, "visual_profile_combo", None)
-            and self.visual_profile_combo.currentData()
-            or "atelier"
-        )
-
-    def _visual_profile_changed(self, *_args: Any) -> None:
-        profile = self.visual_profile
-        self.ui_settings.setValue("preferences/visual_profile", profile)
-        self.ui_settings.sync()
-        if QApplication.instance():
-            apply_theme(QApplication.instance(), self._theme_preference())
 
     @property
     def trees(self) -> dict[str, dict[str, Any]]:
@@ -407,10 +380,7 @@ class MainWindow(
         content = QVBoxLayout()
         content.setContentsMargins(0, 0, 0, 0)
         top = QFrame()
-        top.setObjectName("card")
-        top.setStyleSheet(
-            "border-radius: 0; border-top: 0; border-left: 0; border-right: 0;"
-        )
+        top.setObjectName("topBar")
         top_layout = QHBoxLayout(top)
         top_layout.setContentsMargins(22, 10, 22, 10)
         self.project_menu_button = QToolButton()
@@ -424,7 +394,7 @@ class MainWindow(
         )
         top_layout.addWidget(self.project_menu_button)
         self.top_project = QLabel(self.project.project_name)
-        self.top_project.setStyleSheet("font-weight: 700;")
+        self.top_project.setObjectName("sectionTitle")
         top_layout.addWidget(self.top_project)
         top_layout.addStretch()
         settings_button = button(
@@ -441,12 +411,6 @@ class MainWindow(
         content.addWidget(top)
         self.banner = QFrame()
         self.banner.setObjectName("banner")
-        self.banner.setStyleSheet(
-            "QFrame#banner { background: rgba(66, 184, 190, 0.16); border: 1px solid #42B8BE;"
-            " border-radius: 8px; }"
-            "QFrame#banner[kind=\"success\"] { background: rgba(127, 228, 181, 0.16); border-color: #3FB984; }"
-            "QFrame#banner[kind=\"warning\"] { background: rgba(240, 180, 80, 0.16); border-color: #D9A441; }"
-        )
         banner_layout = QHBoxLayout(self.banner)
         banner_layout.setContentsMargins(14, 8, 8, 8)
         self.banner_label = QLabel()
@@ -470,10 +434,7 @@ class MainWindow(
         self.stack = QStackedWidget()
         content.addWidget(self.stack, 1)
         self.step_footer = QFrame()
-        self.step_footer.setObjectName("card")
-        self.step_footer.setStyleSheet(
-            "border-radius: 0; border-bottom: 0; border-left: 0; border-right: 0;"
-        )
+        self.step_footer.setObjectName("stepFooter")
         footer_layout = QHBoxLayout(self.step_footer)
         footer_layout.setContentsMargins(22, 8, 22, 8)
         self.step_back_button = button("Voltar", lambda: self._go_step("back"))

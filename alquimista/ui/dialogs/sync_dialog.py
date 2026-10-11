@@ -29,7 +29,7 @@ from ...services.sync import (
     SyncReport,
     SyncScope,
 )
-from ..components import button
+from ..components import button, chip
 from ..i18n import translate_text as tr
 
 RuntimesOrFactory = list[Any] | Callable[[CancellationToken], list[Any]]
@@ -148,14 +148,10 @@ class SyncPreviewDialog(QDialog):
         # Header
         header_row = QHBoxLayout()
         header_title = QLabel(tr("Prévia de Mudanças"))
-        header_title.setStyleSheet("font-size: 14pt; font-weight: 700;")
+        header_title.setObjectName("pageTitle")
         header_row.addWidget(header_title)
         header_row.addStretch()
-        self.scope_badge = QLabel(tr("Escopo: {scope}").format(scope=self.scope.value.upper()))
-        self.scope_badge.setStyleSheet(
-            "background: rgba(66, 184, 190, 0.15); color: #42B8BE; "
-            "padding: 4px 10px; border-radius: 4px; font-weight: 600;"
-        )
+        self.scope_badge = chip(tr("Escopo: {scope}").format(scope=self.scope.value.upper()), "accent")
         header_row.addWidget(self.scope_badge)
         main_layout.addLayout(header_row)
 
@@ -166,10 +162,6 @@ class SyncPreviewDialog(QDialog):
         def make_stat_card(label: str, color: str) -> tuple[QFrame, QLabel, QLabel]:
             frame = QFrame()
             frame.setObjectName("statCard")
-            frame.setStyleSheet(
-                f"QFrame#statCard {{ background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); "
-                f"border-radius: 8px; padding: 8px; }} QLabel {{ color: {color}; }}"
-            )
             vbox = QVBoxLayout(frame)
             vbox.setContentsMargins(10, 8, 10, 8)
             vbox.setSpacing(2)
@@ -177,7 +169,7 @@ class SyncPreviewDialog(QDialog):
             val.setStyleSheet(f"font-size: 16pt; font-weight: 700; color: {color};")
             val.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl = QLabel(tr(label))
-            lbl.setStyleSheet("font-size: 9pt; opacity: 0.8;")
+            lbl.setObjectName("subtitle")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             vbox.addWidget(val)
             vbox.addWidget(lbl)
@@ -221,7 +213,7 @@ class SyncPreviewDialog(QDialog):
 
         # Progress / Status
         self.status_label = QLabel(tr("Inspecionando estado remoto e calculando diferenças..."))
-        self.status_label.setStyleSheet("font-size: 9.5pt; color: #BBB;")
+        self.status_label.setObjectName("subtitle")
         main_layout.addWidget(self.status_label)
 
         self.progress_bar = QProgressBar()

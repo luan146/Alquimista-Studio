@@ -86,7 +86,6 @@ def build_settings_page(window: Any) -> QWidget:
         lambda _index: window._change_language(str(window.language_combo.currentData()))
     )
     appearance_form.addRow("Idioma da interface", window.language_combo)
-    appearance_form.addRow("Perfil visual", window.visual_profile_combo)
     window.ui_scale_combo = QComboBox()
     for scale, label in UI_SCALES:
         window.ui_scale_combo.addItem(label, scale)

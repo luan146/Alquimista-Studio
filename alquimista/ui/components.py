@@ -6,8 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import (
-    Property,
-    QAbstractAnimation,
     QEasingCurve,
     QEvent,
     QPoint,
@@ -22,7 +20,6 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QColor,
     QContextMenuEvent,
-    QEnterEvent,
     QIcon,
     QKeyEvent,
     QMouseEvent,
@@ -35,9 +32,11 @@ from PySide6.QtGui import (
     QWheelEvent,
 )
 from PySide6.QtWidgets import (
+    QAbstractButton,
+    QBoxLayout,
+    QButtonGroup,
     QComboBox,
     QFrame,
-    QGraphicsDropShadowEffect,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -46,26 +45,18 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
+    QTabWidget,
+    QToolButton,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from .icons import AUTH_ICONS, EMOJI_ICONS, SYSTEM_ICONS, svg_icon, svg_pixmap
-from .theme import (
-    ACCENT_COLOR,
-    CARD_BACKGROUND,
-    CARD_HOVER_BACKGROUND,
-    SELECTED_BACKGROUND_GRADIENT_END,
-    SELECTED_BACKGROUND_GRADIENT_START,
-    SELECTED_HOVER_GRADIENT_END,
-    SELECTED_HOVER_GRADIENT_START,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-)
 
 APP_TITLE = "ALQuimista Studio — Extração e consolidação"
 
@@ -410,20 +401,6 @@ def metric_card(
     return frame, val_label, sub_label
 
 
-def status_badge(text: str, level: str = "info") -> QLabel:
-    """Create a colored status pill."""
-    label = QLabel(text)
-    obj_names = {
-        "success": "statusBadgeSuccess",
-        "warning": "statusBadgeWarning",
-        "danger": "statusBadgeDanger",
-        "info": "statusBadgeInfo",
-    }
-    label.setObjectName(obj_names.get(level, "statusBadge"))
-    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    return label
-
-
 def button(
     text: str, slot: Any, *, primary: bool = False, danger: bool = False
 ) -> QPushButton:
@@ -440,78 +417,18 @@ def button(
     return result
 
 
-class GlowButton(QPushButton):
-    """Push button with a subtle animated glow for important actions."""
-
-    def __init__(self, text: str, accent: str, parent: QWidget | None = None) -> None:
-        super().__init__(text, parent)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setOffset(0, 5)
-        self._shadow.setColor(QColor(accent))
-        self._shadow.setBlurRadius(10)
-        self.setGraphicsEffect(self._shadow)
-
-        self._hover_animation = QPropertyAnimation(self._shadow, b"blurRadius", self)
-        self._hover_animation.setDuration(900)
-        self._hover_animation.setEasingCurve(QEasingCurve.Type.InOutSine)
-        self._hover_animation.setStartValue(10)
-        self._hover_animation.setKeyValueAt(0.5, 22)
-        self._hover_animation.setEndValue(10)
-        self._hover_animation.setLoopCount(-1)
-
-        self._click_animation = QPropertyAnimation(self._shadow, b"blurRadius", self)
-        self._click_animation.setDuration(280)
-        self._click_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._click_animation.finished.connect(self._resume_hover_animation)
-        self.pressed.connect(self._pulse_on_click)
-
-    def enterEvent(self, event: QEnterEvent) -> None:
-        if self._hover_animation.state() != QAbstractAnimation.State.Running:
-            self._hover_animation.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event: QEvent) -> None:
-        self._hover_animation.stop()
-        self._click_animation.stop()
-        self._click_animation.setStartValue(self._shadow.blurRadius())
-        self._click_animation.setEndValue(8)
-        self._click_animation.start()
-        super().leaveEvent(event)
-
-    def _pulse_on_click(self) -> None:
-        self._hover_animation.stop()
-        self._click_animation.stop()
-        self._click_animation.setStartValue(self._shadow.blurRadius())
-        self._click_animation.setKeyValueAt(0.35, 30)
-        self._click_animation.setEndValue(18)
-        self._click_animation.start()
-
-    def _resume_hover_animation(self) -> None:
-        if self.underMouse():
-            self._hover_animation.start()
-
-
 def animated_button(
     text: str,
     slot: Any,
     *,
     primary: bool = False,
     danger: bool = False,
-    accent: str = "#42B8BE",
+    accent: str = "",
 ) -> QPushButton:
-    clean_text, icon_index = _button_presentation(text)
-    result = GlowButton(clean_text, accent)
-    result.setMinimumHeight(46)
-    result.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-    if icon_index is not None:
-        result.setIcon(AlchemistIconAtlas.icon(icon_index, 22))
-        result.setIconSize(QSize(22, 22))
+    """Kept for old callers; the glow animation was dropped in the new look (accent is ignored)."""
+    result = button(text, slot, primary=primary, danger=danger)
     result.setObjectName("connectionAction")
-    result.setProperty("primary", primary)
-    result.setProperty("danger", danger)
-    result.clicked.connect(slot)
+    result.setMinimumHeight(44)
     return result
 
 
@@ -524,29 +441,131 @@ def card() -> tuple[QFrame, QVBoxLayout]:
     return frame, layout
 
 
+def chip(text: str, kind: str = "neutral") -> QLabel:
+    """Pill label; kind is neutral, accent, success, warning or danger (styled by theme.py)."""
+    label = QLabel(text)
+    label.setObjectName("chip")
+    label.setProperty("kind", kind)
+    return label
+
+
+def set_chip_kind(label: QLabel, kind: str) -> None:
+    label.setProperty("kind", kind)
+    label.style().unpolish(label)
+    label.style().polish(label)
+
+
+def section_title(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setObjectName("sectionTitle")
+    return label
+
+
+class SegmentedControl(QFrame):
+    """Pill buttons side by side that drive an existing combo, tab widget or stack (the source of truth)."""
+
+    changed = Signal(object)
+
+    def __init__(
+        self,
+        options: list[tuple[Any, ...]],
+        *,
+        vertical: bool = False,
+        tiles: bool = False,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("segmented")
+        self.setProperty("vertical", vertical)
+        self.setProperty("tiles", tiles)
+        layout: QBoxLayout = QVBoxLayout(self) if vertical else QHBoxLayout(self)
+        if vertical or tiles:
+            layout.setContentsMargins(0, 0, 0, 0)
+        else:
+            layout.setContentsMargins(3, 3, 3, 3)
+        layout.setSpacing(8 if tiles else 2)
+        self._group = QButtonGroup(self)
+        self._values: list[Any] = []
+        for index, option in enumerate(options):
+            label, value = option[0], option[1]
+            icon = option[2] if len(option) > 2 else None
+            segment: QAbstractButton
+            if tiles:
+                segment = QToolButton()
+                segment.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+                segment.setIconSize(QSize(88, 52))
+            else:
+                segment = QPushButton()
+            segment.setText(label)
+            if icon is not None:
+                segment.setIcon(icon)
+            segment.setCheckable(True)
+            segment.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._group.addButton(segment, index)
+            layout.addWidget(segment)
+            self._values.append(value)
+        if vertical:
+            layout.addStretch()
+        self._group.idClicked.connect(lambda index: self.changed.emit(self._values[index]))
+
+    def buttons(self) -> list[QAbstractButton]:
+        return [self._group.button(index) for index in range(len(self._values))]
+
+    def value(self) -> Any:
+        index = self._group.checkedId()
+        return self._values[index] if index >= 0 else None
+
+    def set_value(self, value: Any) -> None:
+        if value in self._values:
+            self._group.button(self._values.index(value)).setChecked(True)
+            return
+        # A value without a segment (e.g. a filter picked from a menu) leaves none checked.
+        self._group.setExclusive(False)
+        for segment in self._group.buttons():
+            segment.setChecked(False)
+        self._group.setExclusive(True)
+
+    def bind_combo(self, combo: QComboBox) -> SegmentedControl:
+        self.set_value(combo.currentData())
+        self.changed.connect(lambda value: combo.setCurrentIndex(combo.findData(value)))
+        combo.currentIndexChanged.connect(lambda _index: self.set_value(combo.currentData()))
+        return self
+
+    def bind_stack(self, widget: QStackedWidget | QTabWidget) -> SegmentedControl:
+        self.set_value(widget.currentIndex())
+        self.changed.connect(widget.setCurrentIndex)
+        widget.currentChanged.connect(self.set_value)
+        return self
+
+    def sync_enabled_from(self, combo: QComboBox) -> None:
+        """Hide segments whose combo item is disabled (e.g. auth modes a platform doesn't accept)."""
+        model = combo.model()
+        for segment, value in zip(self.buttons(), self._values, strict=True):
+            row = combo.findData(value)
+            item = model.item(row) if hasattr(model, "item") and row >= 0 else None
+            segment.setHidden(item is not None and not item.isEnabled())
+
+
 def page_header(title: str, subtitle: str, emoji: str) -> tuple[QWidget, QVBoxLayout]:
     title = repair_mojibake(title)
     subtitle = repair_mojibake(subtitle)
     emoji = repair_mojibake(emoji)
     page = QWidget()
     layout = QVBoxLayout(page)
-    layout.setContentsMargins(26, 22, 26, 22)
+    layout.setContentsMargins(28, 20, 28, 20)
     layout.setSpacing(14)
     row = QHBoxLayout()
+    row.setSpacing(14)
     icon = QLabel()
     icon.setObjectName("heroIcon")
     icon_index = AlchemistIconAtlas.page_index(emoji)
-    icon_pixmap = (
-        AlchemistIconAtlas.pixmap(icon_index, 62)
-        if icon_index is not None
-        else QPixmap()
-    )
-    if icon_pixmap.isNull():
+    if icon_index is None:
         icon.setText(emoji)
     else:
-        icon.setPixmap(icon_pixmap)
-    row.addWidget(icon)
+        icon.setPixmap(AlchemistIconAtlas.pixmap(icon_index, 40))
+    row.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)
     text = QVBoxLayout()
+    text.setSpacing(2)
     heading = QLabel(title)
     heading.setObjectName("pageTitle")
     detail = QLabel(subtitle)
@@ -613,44 +632,14 @@ class SourceCard(QFrame):
         description = repair_mojibake(description)
         visibility = repair_mojibake(visibility) if visibility else visibility
         self.source_type = source_type
-        self._accent = accent
+        self._accent = accent  # kept for callers; colors come from theme.py
         self._selected = False
         self.setObjectName("sourceCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        self.setMinimumHeight(218)
-        self.setMaximumHeight(280)
-        self.setStyleSheet(
-            "QFrame#sourceCard {"
-            f" background-color: {CARD_BACKGROUND};"
-            f" border: 1px solid {accent};"
-            " border-radius: 18px;"
-            "}"
-            "QFrame#sourceCard:hover {"
-            f" background-color: {CARD_HOVER_BACKGROUND};"
-            f" border: 2px solid {accent};"
-            "}"
-        )
-
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setOffset(0, 8)
-        self._shadow.setColor(QColor(accent))
-        self._shadow.setBlurRadius(14)
-        self.setGraphicsEffect(self._shadow)
-
-        self._hover_animation = QPropertyAnimation(self._shadow, b"blurRadius", self)
-        self._hover_animation.setDuration(900)
-        self._hover_animation.setEasingCurve(QEasingCurve.Type.InOutSine)
-        self._hover_animation.setStartValue(16)
-        self._hover_animation.setKeyValueAt(0.5, 30)
-        self._hover_animation.setEndValue(16)
-        self._hover_animation.setLoopCount(-1)
-
-        self._click_animation = QPropertyAnimation(self._shadow, b"blurRadius", self)
-        self._click_animation.setDuration(280)
-        self._click_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-
+        self.setMinimumHeight(180)
+        self.setMaximumHeight(230)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(22, 20, 22, 18)
         layout.setSpacing(8)
@@ -658,10 +647,6 @@ class SourceCard(QFrame):
         self.selection_badge = QLabel("✓ SELECIONADO")
         self.selection_badge.setObjectName("sourceCardSelectionBadge")
         self.selection_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.selection_badge.setStyleSheet(
-            f"color: #0C1D2A; background: {ACCENT_COLOR}; border-radius: 10px; "
-            "padding: 3px 12px; font-size: 8pt; font-weight: 800;"
-        )
         self.selection_badge.setFixedHeight(22)
         self.selection_badge.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.selection_badge.setVisible(False)
@@ -671,14 +656,13 @@ class SourceCard(QFrame):
         icon_label.setObjectName("sourceCardIcon")
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if isinstance(icon, int):
-            icon_pixmap = AlchemistIconAtlas.connector_pixmap(icon, 76)
+            icon_pixmap = AlchemistIconAtlas.connector_pixmap(icon, 64)
             if icon_pixmap.isNull():
                 icon_label.setText("✦")
             else:
                 icon_label.setPixmap(icon_pixmap)
         else:
             icon_label.setText(icon)
-            icon_label.setStyleSheet(f"font-size: 27pt; color: {accent};")
         icon_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(icon_label)
 
@@ -690,43 +674,27 @@ class SourceCard(QFrame):
         title_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        title_label.setStyleSheet(f"font-size: 15pt; font-weight: 700; color: {TEXT_PRIMARY};")
         title_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(title_label)
 
         if visibility:
-            visibility_label = QLabel(visibility)
+            visibility_label = chip(visibility, "danger" if visibility_kind == "private" else "success")
             visibility_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            if visibility_kind == "private":
-                color, background = "#C5A5FF", "#302744"
-            else:
-                color, background = "#19C98A", "#103B38"
-            visibility_label.setStyleSheet(
-                f"color: {color}; background: {background}; border-radius: 9px; "
-                "padding: 3px 10px; font-size: 8pt; font-weight: 700;"
-            )
             visibility_label.setFixedHeight(22)
             visibility_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             layout.addWidget(visibility_label, 0, Qt.AlignmentFlag.AlignCenter)
-
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFixedWidth(136)
-        line.setStyleSheet(f"color: {accent}; background: {accent}; max-height: 1px;")
-        layout.addWidget(line, 0, Qt.AlignmentFlag.AlignCenter)
 
         description_label = QLabel(description or subtitle)
         description_label.setObjectName("sourceCardDescription")
         description_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         description_label.setWordWrap(True)
-        description_label.setStyleSheet(f"font-size: 10pt; color: {TEXT_SECONDARY};")
         description_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(description_label, 1)
 
         arrow = QLabel("›")
         arrow.setObjectName("sourceCardArrow")
         arrow.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-        arrow.setStyleSheet(f"font-size: 18pt; color: {accent}; font-weight: 600;")
+        arrow.setStyleSheet("font-size: 18pt; font-weight: 600;")
         arrow.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(arrow)
 
@@ -738,66 +706,13 @@ class SourceCard(QFrame):
         self._selected = selected
         if hasattr(self, "selection_badge"):
             self.selection_badge.setVisible(selected)
-        if selected:
-            self.setStyleSheet(
-                "QFrame#sourceCard {"
-                f" background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {SELECTED_BACKGROUND_GRADIENT_START}, stop:1 {SELECTED_BACKGROUND_GRADIENT_END});"
-                f" border: 2px solid {ACCENT_COLOR};"
-                " border-radius: 18px;"
-                "}"
-                "QFrame#sourceCard:hover {"
-                f" background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {SELECTED_HOVER_GRADIENT_START}, stop:1 {SELECTED_HOVER_GRADIENT_END});"
-                f" border: 3px solid {ACCENT_COLOR};"
-                "}"
-            )
-            self._shadow.setColor(QColor(ACCENT_COLOR))
-            if animate:
-                self._click_animation.stop()
-                self._click_animation.setStartValue(14)
-                self._click_animation.setKeyValueAt(0.4, 34)
-                self._click_animation.setEndValue(24)
-                self._click_animation.start()
-            else:
-                self._shadow.setBlurRadius(24)
-        else:
-            self.setStyleSheet(
-                "QFrame#sourceCard {"
-                f" background-color: {CARD_BACKGROUND};"
-                f" border: 1px solid {self._accent};"
-                " border-radius: 18px;"
-                "}"
-                "QFrame#sourceCard:hover {"
-                f" background-color: {CARD_HOVER_BACKGROUND};"
-                f" border: 2px solid {self._accent};"
-                "}"
-            )
-            self._shadow.setColor(QColor(self._accent))
-            self._shadow.setBlurRadius(14)
+        self.setProperty("selected", selected)
+        self.style().unpolish(self)
+        self.style().polish(self)
         self.selection_toggled.emit(selected)
 
     def toggle_selected(self) -> None:
         self.set_selected(not self.selected)
-
-    def _set_glow_radius(self, value: float) -> None:
-        self._shadow.setBlurRadius(value)
-
-    def _get_glow_radius(self) -> float:
-        return self._shadow.blurRadius()
-
-    glow_radius = Property(float, _get_glow_radius, _set_glow_radius)
-
-    def enterEvent(self, event: QEnterEvent) -> None:
-        if self._hover_animation.state() != QAbstractAnimation.State.Running:
-            self._hover_animation.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event: QEvent) -> None:
-        self._hover_animation.stop()
-        self._click_animation.stop()
-        self._click_animation.setStartValue(self._shadow.blurRadius())
-        self._click_animation.setEndValue(24 if self.selected else 14)
-        self._click_animation.start()
-        super().leaveEvent(event)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         ancestor = self.parentWidget()
@@ -816,11 +731,6 @@ class SourceCard(QFrame):
     def mousePressEvent(self, event: QMouseEvent) -> None:
         btn = getattr(event, "button", lambda: None)()
         if btn == Qt.MouseButton.LeftButton:
-            self._click_animation.stop()
-            self._click_animation.setStartValue(self._shadow.blurRadius())
-            self._click_animation.setKeyValueAt(0.35, 38)
-            self._click_animation.setEndValue(24 if self.selected else 14)
-            self._click_animation.start()
             self.clicked.emit(self.source_type)
             getattr(event, "accept", lambda: None)()
             return
