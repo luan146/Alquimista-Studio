@@ -64,7 +64,7 @@ def test_both_themes_build_a_stylesheet_with_existing_control_images(qapp) -> No
     for colors in (LIGHT, DARK):
         sheet = stylesheet(colors)
         assert colors["primary"] in sheet
-        for name in ("controle_check_on", "controle_switch_on"):
+        for name in ("controle_check_on", "controle_switch_on", "controle_seta_baixo", "controle_seta_cima"):
             assert (ICON_DIR / f"{name}.svg").as_posix() in sheet
     apply_theme(QApplication.instance(), "dark")
     assert current_colors() is DARK

@@ -112,6 +112,13 @@ def stylesheet(c: dict[str, str]) -> str:
     QLineEdit#searchField {{ border-radius: 16px; padding-left: 12px; background: {c["surface_alt"]}; border-color: {c["surface_alt"]}; }}
     QLineEdit#searchField:focus {{ border-color: {c["primary"]}; background: {c["surface"]}; }}
     QComboBox::drop-down {{ border: 0; width: 26px; }}
+    QComboBox::down-arrow {{ image: {_image("controle_seta_baixo")}; width: 12px; height: 12px; }}
+    QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {{ subcontrol-origin: border; width: 20px;
+        background: transparent; border: 0; }}
+    QAbstractSpinBox::up-button {{ subcontrol-position: top right; }}
+    QAbstractSpinBox::down-button {{ subcontrol-position: bottom right; }}
+    QAbstractSpinBox::up-arrow {{ image: {_image("controle_seta_cima")}; width: 10px; height: 10px; }}
+    QAbstractSpinBox::down-arrow {{ image: {_image("controle_seta_baixo")}; width: 10px; height: 10px; }}
     QComboBox QAbstractItemView {{ background: {c["surface"]}; border: 1px solid {c["border"]}; outline: 0;
         selection-background-color: {c["primary_soft"]}; selection-color: {c["text"]}; }}
     QCheckBox {{ spacing: 8px; }}

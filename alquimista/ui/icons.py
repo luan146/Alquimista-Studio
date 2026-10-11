@@ -22,7 +22,7 @@ EMOJI_ICONS = {"\U0001f4c1": "pasta", "\U0001f4c2": "pasta", "\U0001f4c4": "pagi
 # Check box and switch indicators referenced by the stylesheet.
 CONTROL_ICONS = (
     "controle_check_off", "controle_check_on", "controle_check_partial",
-    "controle_switch_off", "controle_switch_on",
+    "controle_switch_off", "controle_switch_on", "controle_seta_baixo", "controle_seta_cima",
 )
 
 
