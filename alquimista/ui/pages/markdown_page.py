@@ -166,6 +166,11 @@ def build_markdown_page(window: Any) -> QWidget:
                 "Imagens como texto (para IA)",
                 "Troca cada imagem por uma descrição e pelo texto lido nela; IA não abre imagens que exigem login.",
             ),
+            (
+                "read_image_text",
+                "Ler o texto dentro das imagens",
+                "Usa o Tesseract incluído no programa; deixa a extração mais lenta.",
+            ),
             ("include_attachments", "Anexos", "Converte anexos em links."),
             ("include_videos", "Vídeos", "Preserva referências de vídeo."),
             ("include_links", "Links", "Mantém links clicáveis."),

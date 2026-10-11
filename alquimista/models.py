@@ -287,11 +287,13 @@ class MarkdownOptions(Model):
     auto_demote_headings: bool = False
     # Images become "[Imagem: ...]" text: AI tools cannot open authenticated image URLs.
     images_as_text: bool = True
+    # Also read the text inside each image with Tesseract (slower; needs the bundled Tesseract).
+    read_image_text: bool = True
     hash_scope: Literal["content", "title_content", "stable_metadata"] = "title_content"
 
     def signature(self) -> str:
         # Left out while off, so projects saved before the option keep their format hash.
-        return stable_json_hash(self.model_dump(exclude=set() if self.images_as_text else {"images_as_text"}))
+        return stable_json_hash(self.model_dump(exclude=set() if self.images_as_text else {"images_as_text", "read_image_text"}))
 
     @classmethod
     def preset(cls, name: str) -> "MarkdownOptions":

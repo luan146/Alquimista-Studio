@@ -148,6 +148,7 @@ class ConfluenceClient:
         *,
         params: dict[str, Any] | None = None,
         expect_json: bool = True,
+        binary: bool = False,
     ) -> Any:
         url = self._request_url(path)
         # Credentials go only to the configured origin; absolute links returned by
@@ -211,6 +212,8 @@ class ConfluenceClient:
                     self.token.wait(delay)
                     continue
                 response.raise_for_status()
+                if binary:
+                    return response.content
                 if not expect_json:
                     return response.text
                 try:
@@ -531,6 +534,10 @@ class ConfluenceClient:
                 f"A página raiz “{title}” não foi encontrada no espaço."
             )
         return exact
+
+    def download(self, path: str) -> bytes:
+        """Binary resource (image, attachment); credentials only reach the configured origin."""
+        return bytes(self._request(path, binary=True))
 
     def fetch_page(
         self, page_id: str, *, include_body: bool, include_labels: bool = False

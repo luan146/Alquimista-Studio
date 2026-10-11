@@ -14,8 +14,11 @@ from ..errors import (
     AuthenticationError,
     ExtractionCancelledError,
 )
+from ..image_text import image_text_reader
 from ..markdown import (
+    ImageReader,
     KnowledgeDocumentRenderer,
+    images_as_text,
     sha256_text,
 )
 from ..models import (
@@ -481,13 +484,19 @@ class ExtractionService:
         )
 
     @staticmethod
-    def _fetch_document(connector: Any, document_id: str, container_id: str) -> Any:
+    def _fetch_document(
+        connector: Any, document_id: str, container_id: str, image_reader: ImageReader | None = None
+    ) -> Any:
         try:
-            return connector.get_document(document_id, container_id=container_id)
+            document = connector.get_document(document_id, container_id=container_id)
         except TypeError as exc:
             if "container_id" not in str(exc):
                 raise
-            return connector.get_document(document_id)
+            document = connector.get_document(document_id)
+        if image_reader is not None and isinstance(getattr(document, "content", None), str):
+            # Read the images here, in the download thread; rendering then hits the reader cache.
+            images_as_text(document.content, image_reader)
+        return document
 
     def _extract_generic_document(
         self,
@@ -642,7 +651,6 @@ class ExtractionService:
             if runtime.source.enabled
         )
         completed = 0
-        renderer = KnowledgeDocumentRenderer(self.project.markdown)
         if self.store.path.exists():
             transaction.stage_text(
                 self.store.path.with_suffix(self.store.path.suffix + ".bak"),
@@ -670,6 +678,11 @@ class ExtractionService:
                 if not runtime.source.enabled or runtime.connector is None:
                     continue
                 connector = runtime.connector
+                markdown = self.project.markdown
+                image_reader = (
+                    image_text_reader(connector) if markdown.images_as_text and markdown.read_image_text else None
+                )
+                renderer = KnowledgeDocumentRenderer(markdown, image_reader)
                 workers = self.project.extraction.parallel_downloads
                 pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="alquimista-fetch")
                 try:
@@ -722,7 +735,11 @@ class ExtractionService:
                                 summaries[ahead], olds[ahead], transform_hash
                             ):
                                 downloads[ahead] = pool.submit(
-                                    self._fetch_document, connector, refs[ahead].document_id, refs[ahead].container_id
+                                    self._fetch_document,
+                                    connector,
+                                    refs[ahead].document_id,
+                                    refs[ahead].container_id,
+                                    image_reader,
                                 )
                             ahead += 1
                         download = downloads.pop(position, None)
@@ -754,7 +771,7 @@ class ExtractionService:
                                 runtime=runtime,
                                 fetch=download.result
                                 if download
-                                else partial(self._fetch_document, connector, document_id, container_id),
+                                else partial(self._fetch_document, connector, document_id, container_id, image_reader),
                                 summary=summary,
                                 key=key,
                                 container_id=container_id,

@@ -8,6 +8,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 @pytest.fixture(autouse=True)
+def no_installed_tesseract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Extraction tests must not download images just because Tesseract is installed."""
+    from alquimista import image_text
+
+    monkeypatch.setattr(image_text, "tesseract_path", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def silence_windows_notifications(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
     """Unattended-sync tests must not pop real Windows notifications."""
     from alquimista import scheduler
