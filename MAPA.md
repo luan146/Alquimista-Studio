@@ -742,6 +742,9 @@ Módulos que apenas re-exportam outro pacote:
 | `alquimista/__main__.py` | `python -m alquimista` → `run_app("complete")`; `--sync <projeto.json>` → `headless.sync_project` (sem janela) |
 | `alquimista/headless.py` | Sincronização incremental + consolidação sem UI; códigos de saída 0/1/2 |
 | `alquimista/scheduler.py` | Tarefa diária no Agendador do Windows (`Register-ScheduledTask`); usado pelo card das Configurações via `ui/controllers/schedule_controller.py` |
+| `alquimista/image_text.py` | Acha o Tesseract (pasta `tesseract/` ao lado do executável, `ALQUIMISTA_TESSERACT`, PATH) e lê o texto das imagens baixadas com o acesso da fonte |
+| `alquimista/markdown/images.py` | `images_as_text`: imagem Markdown/HTML vira `[Imagem: …]` (usado pelo `KnowledgeDocumentRenderer`) |
+| `alquimista/services/links.py` | `PackageLinkIndex`/`link_references`: links para páginas empacotadas viram «Título» na consolidação |
 | `alquimista/__init__.py` | Exports: ProjectConfig, SourceConfig, opções |
 | `abrir_completo.bat` | Atalho Windows → `python -m alquimista` |
 

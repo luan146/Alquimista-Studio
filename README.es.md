@@ -182,6 +182,17 @@ El servicio de sincronización puede operar en el ámbito de selección, fuente 
 
 **Sincronización programada (Windows):** en **Configuración → Sincronización programada del proyecto**, elija la hora y haga clic en **Programar**; el Programador de tareas ejecutará `"ALQuimista Studio.exe" --sync "<proyecto.json>"` todos los días sin abrir la ventana. Las fuentes con token necesitan **Recordar en este equipo**; las fuentes con inicio de sesión en el navegador usan la sesión guardada (inicie sesión de nuevo cuando caduque). El resultado queda en `sync_report.json` y en el registro técnico.
 
+**Solo lo que seleccionó:** las páginas nuevas de la fuente entran solo cuando están debajo de una página marcada o en un espacio marcado como **Completo**, y aparecen ya marcadas. Cada sincronización con cambios guarda un resumen legible en `sincronizacoes/AAAA-MM-DD_HHMMSS.md` (botón **Ver qué cambió**), y la sincronización programada muestra un aviso de Windows cuando algo cambia, falla o el acceso caduca.
+
+### 🧠 Salida lista para IA
+
+NotebookLM y los proyectos de Claude/ChatGPT no abren imágenes ni enlaces que requieren inicio de sesión. En los proyectos nuevos, por defecto:
+
+- cada imagen se convierte en `[Imagem: descripción — texto na imagem: …]`, con el texto leído por **Tesseract**, incluido en el instalador y el ZIP de Windows (en Linux, instale `tesseract-ocr` y `tesseract-ocr-spa`);
+- en los paquetes consolidados, el enlace a otra página extraída se convierte en `texto (ver «Título» em paquete.md)`.
+
+Las opciones están en **Salida → Markdown** (*Imágenes como texto*, *Leer el texto dentro de las imágenes*) y **Salida → Paquetes** (*Los enlaces entre páginas se vuelven referencias*). Los proyectos existentes conservan su salida.
+
 ---
 
 ## 🎯 ¿Qué puedo hacer con el contenido exportado?

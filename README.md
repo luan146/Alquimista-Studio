@@ -204,6 +204,17 @@ The synchronization service can operate at selection, source, or project scope. 
 
 **Scheduled synchronization (Windows):** in **Settings → Scheduled project synchronization**, pick a time and click **Schedule**; the Task Scheduler then runs `"ALQuimista Studio.exe" --sync "<project.json>"` every day without opening the window. Sources with a token need **Remember on this computer**; sources with browser login use the saved session (log in again when it expires). Results go to `sync_report.json` and the technical log.
 
+**Only what you selected:** new pages in the source join only when they sit under a selected page or in a space marked **Whole**, and they show up selected. Every synchronization with changes writes a readable summary to `sincronizacoes/YYYY-MM-DD_HHMMSS.md` (**See what changed** button), and the scheduled synchronization shows a Windows notification when something changes, fails, or access expires.
+
+### 🧠 AI-ready output
+
+NotebookLM and Claude/ChatGPT projects cannot open images or links that require sign-in. In new projects, by default:
+
+- each image becomes `[Imagem: description — texto na imagem: …]`, with the text read by **Tesseract**, bundled with the Windows installer and ZIP (on Linux, install `tesseract-ocr`);
+- in consolidated packages, a link to another extracted page becomes `text (ver «Title» em package.md)`.
+
+The options live in **Output → Markdown** (*Images as text*, *Read the text inside images*) and **Output → Packages** (*Links between pages become references*). Existing projects keep their previous output.
+
 ---
 
 ## 📄 What does ALQuimista generate?
