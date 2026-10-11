@@ -15,6 +15,7 @@ from .sync import (
     SyncPlan,
     SyncReport,
     SyncScope,
+    add_to_selection,
 )
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "SyncPlan",
     "SyncReport",
     "SyncScope",
+    "add_to_selection",
     "demote_headings",
     "sanitize_filename",
 ]

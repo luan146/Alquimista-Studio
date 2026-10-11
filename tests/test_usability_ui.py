@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -11,6 +12,7 @@ from PySide6.QtWidgets import QApplication, QScrollArea
 
 from alquimista.models import KnowledgeDocument, SourceConfig
 from alquimista.runtime import CancellationToken
+from alquimista.selection import SelectionStore
 from alquimista.services import ExtractionService
 from alquimista.ui.components import inform
 from alquimista.ui.i18n import LanguageManager
@@ -56,6 +58,17 @@ def test_whole_space_checkbox_selects_and_clears_every_page(window: MainWindow) 
 
     window._mark_whole_space("A", False)
     assert not window.project.selected_keys_for(source.id)
+
+
+def test_whole_space_becomes_a_sync_rule_until_a_page_is_unchecked(window: MainWindow) -> None:
+    _two_spaces(window)
+    window._mark_whole_space("A", True)
+    assert window.project.whole_containers == ["wiki:A"]
+
+    store = SelectionStore.from_selections(window.project.selections)
+    store.set("wiki", "A", "a1", False)
+    window._commit_selection_store(store)
+    assert window.project.whole_containers == []
 
 
 def test_whole_space_loads_an_unopened_space_first(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -166,3 +179,22 @@ def test_settings_scroll_and_theme_is_remembered(window: MainWindow) -> None:
     window.theme_combo.setCurrentIndex(window.theme_combo.findData("dark"))
     assert window._theme_preference() == "dark"
 
+
+def test_pages_brought_by_sync_appear_selected(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    from alquimista.ui.controllers import execution_controller
+    from alquimista.ui.dialogs import sync_dialog
+
+    source = _two_spaces(window)
+
+    class FinishedDialog:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            self.report = SimpleNamespace(added_selections=["wiki:A:nova"])
+
+        def exec(self) -> int:
+            return 0
+
+    monkeypatch.setattr(sync_dialog, "SyncPreviewDialog", FinishedDialog)
+    execution_controller._open_sync_dialog(window, window.project.model_copy(), None, source_name="Wiki")
+
+    assert window.project.selected_keys_for(source.id) == {"wiki:A:nova"}
+    assert window.dirty

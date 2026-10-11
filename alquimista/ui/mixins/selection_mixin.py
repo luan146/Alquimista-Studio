@@ -169,6 +169,9 @@ class SelectionMixin(WindowBase):
                 if item.source_id == source.id and item.container_id == container_id:
                     store.set(source.id, container_id, item.document_id, False)
         self._commit_selection_store(store)
+        whole = f"{source.id}:{container_id}"
+        if selected and whole not in self.project.whole_containers:
+            self.project.whole_containers = [*self.project.whole_containers, whole]
         self._flush_selection_state()
         self._refresh_selection_home()
 
@@ -271,6 +274,14 @@ class SelectionMixin(WindowBase):
         # project.selections is the source of truth; the store and the legacy
         # selected_page_ids (kept for older project files and counters) are
         # derived here, the only place the window writes selection state.
+        # A space stops being "whole" as soon as one of its pages is unchecked.
+        dropped = {
+            f"{item.source_id}:{item.container_id}"
+            for item in self.project.selections
+            if not store.is_selected(item.source_id, item.container_id, item.document_id)
+        }
+        if dropped.intersection(self.project.whole_containers):
+            self.project.whole_containers = [key for key in self.project.whole_containers if key not in dropped]
         self.project.selections = store.selections()
         self.selection_store = store
         for source in self.project.sources:

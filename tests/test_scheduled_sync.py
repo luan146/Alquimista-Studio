@@ -12,7 +12,7 @@ from alquimista.connectors.local_files import LocalFilesConnector
 from alquimista.errors import AlquimistaError
 from alquimista.headless import EXIT_ERROR, EXIT_OK, sync_project
 from alquimista.models import ExtractionOptions, KnowledgeSelection, ProjectConfig, SourceConfig
-from alquimista.storage import save_project
+from alquimista.storage import load_project, save_project
 from alquimista.ui.controllers import RuntimeSecrets
 
 
@@ -140,3 +140,16 @@ def test_remember_checkbox_saves_and_forgets_the_token(qtbot: Any, fake_dpapi: N
     window._store_runtime_secret()
     assert session_store.load_secret(source.id) == ""
     window.dirty = False
+
+
+def test_sync_command_selects_new_files_of_a_whole_folder(tmp_path: Path, fake_dpapi: None) -> None:
+    project_path = _local_project(tmp_path)
+    project = load_project(project_path)
+    project.whole_containers = ["local:root"]
+    save_project(project_path, project)
+    (tmp_path / "docs" / "novo.md").write_text("# Novo\n\nChegou depois.", encoding="utf-8")
+
+    assert sync_project(project_path, lambda _message: None) == EXIT_OK
+
+    assert list((tmp_path / "base").rglob("novo*.md"))
+    assert len(load_project(project_path).selected_keys_for("local")) == 2

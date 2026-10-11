@@ -12,6 +12,7 @@ from alquimista.models import (
     KnowledgeContainer,
     KnowledgeDocument,
     KnowledgeDocumentMetadata,
+    KnowledgeSelection,
     ProjectConfig,
     SourceConfig,
 )
@@ -23,6 +24,7 @@ from alquimista.services import (
     SyncItemAction,
     SyncOptions,
     SyncScope,
+    add_to_selection,
 )
 from alquimista.storage import MANIFEST_NAME, ManifestStore
 
@@ -425,3 +427,32 @@ def test_sync_without_selection_keeps_whole_configured_scope(sync_env):
     plan = service.plan_sync([runtime], target_source_id="src1")
 
     assert plan.new_count == 2
+
+
+def test_whole_space_rule_brings_new_top_level_pages(sync_env):
+    service: IncrementalSyncService = sync_env["service"]
+    runtime: SourceRuntime = sync_env["runtime"]
+    connector: MockConnector = sync_env["connector"]
+    runtime.selected_page_ids = ["src1:c1:doc1"]
+    sync_env["project"].whole_containers = ["src1:c1"]
+    connector.docs_meta["c1"] = [_meta("doc1"), _meta("brand_new")]
+
+    plan = service.plan_sync([runtime], target_source_id="src1")
+
+    assert {item.document_id for item in plan.items if item.action == SyncItemAction.NEW} == {"doc1", "brand_new"}
+
+
+def test_new_documents_brought_by_sync_join_the_selection(sync_env):
+    service: IncrementalSyncService = sync_env["service"]
+    runtime: SourceRuntime = sync_env["runtime"]
+    connector: MockConnector = sync_env["connector"]
+    project: ProjectConfig = sync_env["project"]
+    project.selections = [KnowledgeSelection(source_id="src1", container_id="c1", document_id="doc1")]
+    runtime.selected_page_ids = []
+    connector.docs_meta["c1"] = [_meta("doc1"), _meta("child", parent_id="doc1"), _meta("other")]
+
+    report = service.apply_sync(service.plan_sync([runtime], target_source_id="src1"), [runtime])
+
+    assert report.added_selections == ["src1:c1:child", "src1:c1:doc1"]
+    assert add_to_selection(project, report.added_selections) == 1
+    assert project.selected_keys_for("src1") == {"src1:c1:doc1", "src1:c1:child"}

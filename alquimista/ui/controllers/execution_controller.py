@@ -6,7 +6,8 @@ from PySide6.QtWidgets import QMessageBox
 
 from ...models import KnowledgeSelection, ProjectConfig
 from ...runtime import CancellationToken
-from ...services import ConsolidationService, ExtractionService, SourceRuntime
+from ...selection import SelectionStore
+from ...services import ConsolidationService, ExtractionService, SourceRuntime, add_to_selection
 from ...storage import MANIFEST_NAME, ManifestStore
 from ..components import inform
 from ..i18n import translate_text
@@ -230,6 +231,10 @@ def _open_sync_dialog(
         source_name=source_name,
     )
     dialog.exec()
+    if dialog.report and add_to_selection(window.project, dialog.report.added_selections):
+        window._commit_selection_store(SelectionStore.from_selections(window.project.selections))
+        window.mark_dirty()
+        window._refresh_selection_home()
 
 
 def sync_source(window: Any, source_id: str) -> None:

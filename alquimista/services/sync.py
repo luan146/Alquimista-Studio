@@ -18,6 +18,7 @@ from ..models import (
     now_iso,
 )
 from ..runtime import CancellationToken, LogCallback, ProgressCallback
+from ..selection import SelectionStore
 from ..storage import (
     MANIFEST_NAME,
     FileTransaction,
@@ -131,6 +132,8 @@ class SyncReport:
     failures: list[dict[str, str]]
     consolidated: bool
     generated_at: str = field(default_factory=now_iso)
+    # New documents extracted by this sync; the caller adds them to the project selection.
+    added_selections: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -141,7 +144,22 @@ class SyncReport:
             "failures": self.failures,
             "consolidated": self.consolidated,
             "generated_at": self.generated_at,
+            "added_selections": self.added_selections,
         }
+
+
+def add_to_selection(project: ProjectConfig, keys: list[str]) -> int:
+    """Mark "source:container:document" keys as selected; returns how many were not yet."""
+    store = SelectionStore.from_selections(project.selections)
+    added = 0
+    for key in keys:
+        source_id, container_id, document_id = key.split(":", 2)
+        if not store.is_selected(source_id, container_id, document_id):
+            store.set(source_id, container_id, document_id, True)
+            added += 1
+    if added:
+        project.selections = store.selections()
+    return added
 
 
 SYNC_REPORT_NAME = "sync_report.json"
@@ -314,7 +332,7 @@ class IncrementalSyncService:
                 # selected page; without any selection the configured scope rules.
                 covered = (
                     self._under_selection(source.id, container_id, raw_docs, selected_keys)
-                    if selected_keys
+                    if selected_keys and f"{source.id}:{container_id}" not in self.project.whole_containers
                     else None
                 )
 
@@ -682,6 +700,10 @@ class IncrementalSyncService:
 
         # Handle removals directly if there are any planned removals
         manifest = self.store.load()
+        new_keys = {item.document_key for item in plan.items if item.action == SyncItemAction.NEW}
+        added_selections = sorted(
+            entry.document_key for entry in manifest.entries if entry.active and entry.document_key in new_keys
+        )
         applied_removals = 0
         if plan.removed_count > 0:
             removed_keys = {
@@ -741,6 +763,7 @@ class IncrementalSyncService:
             ],
             failures=plan.failures,
             consolidated=consolidated,
+            added_selections=added_selections,
         )
 
         # Save sync_report.json to output_dir
@@ -768,4 +791,5 @@ __all__ = [
     "SyncPlan",
     "SyncReport",
     "SyncScope",
+    "add_to_selection",
 ]

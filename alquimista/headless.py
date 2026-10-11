@@ -5,8 +5,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from .runtime import CancellationToken
-from .services.sync import IncrementalSyncService, SyncOptions, SyncScope
-from .storage import load_project
+from .services.sync import IncrementalSyncService, SyncOptions, SyncScope, add_to_selection
+from .storage import load_project, save_project
 from .ui.controllers.runtime_controller import RuntimeBuilder, RuntimeSecrets
 
 EXIT_OK, EXIT_WITH_FAILURES, EXIT_ERROR = 0, 1, 2
@@ -28,6 +28,8 @@ def sync_project(project_path: Path, log: Callable[[str], None]) -> int:
         )
         options = SyncOptions(delete_removed_files=project.extraction.delete_removed_files)
         report = service.apply_sync(plan, runtimes, options=options)
+        if add_to_selection(project, report.added_selections):
+            save_project(project_path, project)
     except Exception as exc:
         # Typically an expired browser session or token: the user must log in again.
         log(f"[Agendado] Sincronização de {project_path} não executada: {exc}")

@@ -432,6 +432,8 @@ class ProjectConfig(Model):
     output_dir: str = "ALQuimista_Base"
     sources: list[SourceConfig] = Field(default_factory=list)
     selections: list[KnowledgeSelection] = Field(default_factory=list)
+    # "source_id:container_id" of spaces marked whole: sync also brings their new top-level pages.
+    whole_containers: list[str] = Field(default_factory=list)
     markdown: MarkdownOptions = Field(default_factory=MarkdownOptions)
     extraction: ExtractionOptions = Field(default_factory=ExtractionOptions)
     consolidation: ConsolidationOptions = Field(default_factory=ConsolidationOptions)
