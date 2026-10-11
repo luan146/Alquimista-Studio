@@ -419,6 +419,8 @@ class ConsolidationOptions(Model):
     demote_page_headings: int = Field(0, ge=0, le=5)
     filename_prefix: str = ""
     sort_mode: Literal["path", "title", "updated", "id"] = "path"
+    # Links to other packaged pages become "(ver «Título» em pacote.md)", which an AI can follow.
+    link_references: bool = True
     manual_groups: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("output_subdir")
@@ -511,6 +513,10 @@ class ProjectConfig(Model):
             extraction.setdefault("max_requests_per_second", 4.0)
             extraction.setdefault("proxy_mode", "system")
             extraction.setdefault("proxy_url", "")
+        # Projects saved before "link references" existed keep their original links.
+        consolidation = migrated.get("consolidation")
+        if isinstance(consolidation, dict) and "link_references" not in consolidation:
+            migrated["consolidation"] = {**consolidation, "link_references": False}
         # Projects saved before "images as text" existed keep their image links.
         markdown = migrated.get("markdown")
         if isinstance(markdown, dict) and "images_as_text" not in markdown:

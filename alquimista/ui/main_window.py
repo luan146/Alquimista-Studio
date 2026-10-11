@@ -533,6 +533,7 @@ class MainWindow(
             depth_choice_combo=getattr(self, "con_depth_choice", None),
             prefix_input=getattr(self, "con_prefix", None),
             hierarchy_checkbox=getattr(self, "con_hierarchy", None),
+            links_checkbox=getattr(self, "con_links", None),
             summary_label=getattr(self, "con_summary", None),
             group_help_label=getattr(self, "con_group_help", None),
             depth_example_label=getattr(self, "con_depth_example", None),

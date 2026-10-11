@@ -25,6 +25,7 @@ from ..storage import (
     confined_path,
 )
 from .helpers import demote_headings, sanitize_filename
+from .links import PackageLinkIndex, link_references
 
 
 class ConsolidationService:
@@ -285,21 +286,39 @@ class ConsolidationService:
             if self.project.consolidation.filename_prefix.strip()
             else ""
         )
-        for index, item in enumerate(preview, 1):
-            self.token.check()
+        # Every package name is known up front, so a page can point to one written later.
+        filenames: list[str] = []
+        for item in preview:
             group = item["group"]
             suffix = f"_parte_{item['part']:02d}" if item["parts"] > 1 else ""
             proposed = f"{prefix}{sanitize_filename(group.replace('__', '_'))}{suffix}.md"
-            filename = self._unique_package_filename(
-                proposed,
-                f"{group}:{item['part']}:{item['parts']}",
-                assigned_filenames,
+            filenames.append(
+                self._unique_package_filename(
+                    proposed,
+                    f"{group}:{item['part']}:{item['parts']}",
+                    assigned_filenames,
+                )
             )
+        links = (
+            PackageLinkIndex(
+                (by_key[key], filename)
+                for item, filename in zip(preview, filenames, strict=True)
+                for key in item["document_keys"]
+            )
+            if self.project.consolidation.link_references
+            else None
+        )
+        for index, (item, filename) in enumerate(zip(preview, filenames, strict=True), 1):
+            self.token.check()
+            group = item["group"]
             selected = [by_key[key] for key in item["document_keys"]]
             valid = []
             for entry in selected:
                 self.token.check()
-                valid.append((entry, self._page_text(entry)))
+                text = self._page_text(entry)
+                if links is not None:
+                    text = link_references(text, links, own_key=entry.document_key, own_package=filename)
+                valid.append((entry, text))
             valid = [(entry, text) for entry, text in valid if text]
             lines: list[str] = []
             options = self.project.consolidation

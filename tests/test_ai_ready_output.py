@@ -11,8 +11,14 @@ import pytest
 from alquimista import image_text
 from alquimista.errors import ExtractionCancelledError, PermissionDeniedError
 from alquimista.markdown import KnowledgeDocumentRenderer, images_as_text
-from alquimista.models import KnowledgeDocument, MarkdownOptions, ProjectConfig, SourceConfig
-from alquimista.services import ExtractionService, SourceRuntime
+from alquimista.models import (
+    ConsolidationOptions,
+    KnowledgeDocument,
+    MarkdownOptions,
+    ProjectConfig,
+    SourceConfig,
+)
+from alquimista.services import ConsolidationService, ExtractionService, SourceRuntime
 
 FIND_TESSERACT = image_text.tesseract_path  # the real lookup; conftest hides it during tests
 INSTALLED_TESSERACT = FIND_TESSERACT()
@@ -179,3 +185,60 @@ def test_real_tesseract_reads_printed_text() -> None:
 
     assert INSTALLED_TESSERACT is not None
     assert "ALQUIMISTA" in image_text.read_text(INSTALLED_TESSERACT, buffer.getvalue())
+
+
+# --- Links between extracted pages inside packages ------------------------------------
+
+
+class _LinkedConnector:
+    PAGES = {
+        "1": ("Visão geral", "Leia [o guia](https://docs.example.com/pages/viewpage.action?pageId=2#topo), "
+                             "o [Guia de instalação](https://docs.example.com/pages/2) e [fora](https://outro.com/x)."),
+        "2": ("Guia de instalação", "Passos de instalação."),
+    }
+
+    def get_document(self, document_id: str, container_id: str | None = None) -> KnowledgeDocument:
+        title, content = self.PAGES[document_id]
+        return KnowledgeDocument(
+            id=document_id, container_id="C", title=title, content=content, source_type="generic",
+            original_url=f"https://docs.example.com/pages/viewpage.action?pageId={document_id}",
+        )
+
+    def close(self) -> None:
+        pass
+
+
+def _packages(tmp_path: Path, consolidation: ConsolidationOptions) -> dict[str, str]:
+    source = SourceConfig(id="s", name="Fonte", source_type="generic", base_url="https://docs.example.com")
+    project = ProjectConfig(output_dir="base", sources=[source], consolidation=consolidation)
+    runtime = SourceRuntime(
+        source=source, root={}, pages_by_id={}, selected_page_ids=["s:C:1", "s:C:2"], connector=_LinkedConnector()
+    )
+    ExtractionService(project, [runtime], tmp_path).run()
+    ConsolidationService(project, tmp_path).run()
+    folder = tmp_path / "base" / consolidation.output_subdir
+    return {path.name: path.read_text(encoding="utf-8") for path in folder.glob("*.md")}
+
+
+def test_links_to_packaged_pages_become_references_to_their_titles(tmp_path: Path) -> None:
+    (text,) = _packages(tmp_path, ConsolidationOptions(grouping="single")).values()
+
+    assert "Leia o guia (ver «Guia de instalação»)" in text
+    assert "o «Guia de instalação» e [fora](https://outro.com/x)." in text
+    assert "pageId=2" not in text.split("Leia", 1)[1].split("fora")[0]
+
+
+def test_reference_names_the_package_when_the_page_is_in_another_file(tmp_path: Path) -> None:
+    packages = _packages(tmp_path, ConsolidationOptions(grouping="single", max_pages=1))
+    first = next(text for text in packages.values() if "Leia" in text)
+    other = next(name for name, text in packages.items() if "Passos de instalação" in text)
+
+    assert f"o guia (ver «Guia de instalação» em {other})" in first
+
+
+def test_old_projects_keep_original_links_in_packages(tmp_path: Path) -> None:
+    assert ProjectConfig().consolidation.link_references is True
+    assert ProjectConfig.from_dict({"consolidation": {"grouping": "single"}}).consolidation.link_references is False
+
+    (text,) = _packages(tmp_path, ConsolidationOptions(grouping="single", link_references=False)).values()
+    assert "[o guia](https://docs.example.com/pages/viewpage.action?pageId=2#topo)" in text

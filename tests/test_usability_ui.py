@@ -198,3 +198,13 @@ def test_pages_brought_by_sync_appear_selected(window: MainWindow, monkeypatch: 
 
     assert window.project.selected_keys_for(source.id) == {"wiki:A:nova"}
     assert window.dirty
+
+
+def test_link_references_checkbox_follows_the_project(window: MainWindow) -> None:
+    window._sync_consolidation_ui()
+    assert window.con_links.isChecked()
+
+    window.con_links.setChecked(False)
+    window._sync_consolidation_controls()
+
+    assert window.project.consolidation.link_references is False

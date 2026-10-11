@@ -62,6 +62,15 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
     "Editar": {"en": "Edit", "es": "Editar"},
     "Estado": {"en": "Status", "es": "Estado"},
     "Estrutura": {"en": "Structure", "es": "Estructura"},
+    "Links": {"en": "Links", "es": "Enlaces"},
+    "Links entre páginas viram referências (para IA)": {
+        "en": "Links between pages become references (for AI)",
+        "es": "Los enlaces entre páginas se vuelven referencias (para IA)",
+    },
+    "Troca o link para outra página extraída por «Título» e o pacote onde ela está.": {
+        "en": "Replaces a link to another extracted page with «Title» and the package that holds it.",
+        "es": "Sustituye el enlace a otra página extraída por «Título» y el paquete donde está.",
+    },
     "Expandir tudo": {"en": "Expand all", "es": "Expandir todo"},
     "Formato dos metadados": {"en": "Metadata format", "es": "Formato de los metadatos"},
     "Gerar pacotes": {"en": "Generate packages", "es": "Generar paquetes"},

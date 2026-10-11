@@ -84,6 +84,10 @@ def build_consolidation_page(window: Any) -> QWidget:
     window.con_hierarchy.setToolTip(
         "Inclui os níveis do caminho como títulos antes de cada documento."
     )
+    window.con_links = QCheckBox("Links entre páginas viram referências (para IA)")
+    window.con_links.setToolTip(
+        "Troca o link para outra página extraída por «Título» e o pacote onde ela está."
+    )
 
     def step_frame(number: str, title: str) -> tuple[QFrame, QVBoxLayout]:
         frame = QFrame()
@@ -134,6 +138,7 @@ def build_consolidation_page(window: Any) -> QWidget:
     identity_form = QFormLayout()
     identity_form.addRow("Prefixo", window.con_prefix)
     identity_form.addRow("Estrutura", window.con_hierarchy)
+    identity_form.addRow("Links", window.con_links)
     identity_layout.addLayout(identity_form)
     window.con_filename_preview = QLabel("Exemplo de arquivo: pacote-01.md")
     window.con_filename_preview.setObjectName("subtitle")
@@ -266,6 +271,7 @@ def build_consolidation_page(window: Any) -> QWidget:
     window.con_chars.valueChanged.connect(window._update_consolidation_summary)
     window.con_depth.valueChanged.connect(window._update_consolidation_summary)
     window.con_hierarchy.toggled.connect(window._update_consolidation_summary)
+    window.con_links.toggled.connect(window._update_consolidation_summary)
     window.con_prefix.textChanged.connect(window._update_consolidation_summary)
     return page
 
