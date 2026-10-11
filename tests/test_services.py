@@ -509,6 +509,34 @@ def test_consolidation_rejects_missing_or_empty_manifest_file(
     assert not (base / project.consolidation.output_subdir).exists()
 
 
+def test_one_missing_file_is_skipped_instead_of_aborting_every_package(tmp_path: Path) -> None:
+    project = ProjectConfig(output_dir="base", sources=[SourceConfig(id="s1")])
+    base = tmp_path / "base"
+    (base / "pages").mkdir(parents=True)
+    (base / "pages" / "1.md").write_text("# Presente\n", encoding="utf-8")
+    entries = [
+        ManifestEntry(
+            source_id="s1",
+            page_id=page_id,
+            document_key=f"s1:{page_id}",
+            title=page_id,
+            path=["Manual", page_id],
+            markdown_path=f"pages/{page_id}.md",
+        )
+        for page_id in ("1", "2")  # pages/2.md was deleted by the user
+    ]
+    ManifestStore(base / "manifesto_alquimista.json", project).save(
+        ManifestDocument(project_id=project.project_id, project_name=project.project_name, entries=entries)
+    )
+    log: list[str] = []
+
+    result = ConsolidationService(project, tmp_path, log=log.append).run()
+
+    assert result["pages"] == 1
+    assert result["skipped_documents"] == 1
+    assert any("pages/2.md" in line for line in log)
+
+
 def test_colliding_group_names_generate_distinct_packages(tmp_path: Path) -> None:
     source = SourceConfig(id="s1")
     project = ProjectConfig(output_dir="base", sources=[source])

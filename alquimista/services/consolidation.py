@@ -49,6 +49,7 @@ class ConsolidationService:
             self.base_dir, project.consolidation.output_subdir
         )
         self.selected_keys = selected_keys
+        self.skipped: list[str] = []
         self.token = token or CancellationToken()
         self.log = log or (lambda _message: None)
         self.progress = progress or (lambda _done, _total, _item: None)
@@ -197,6 +198,8 @@ class ConsolidationService:
         if entries is None:
             _manifest, entries = self._entries()
         sizes: dict[str, int] = {}
+        # A missing/empty file (e.g. deleted by hand) skips that document, not every package.
+        self.skipped = []
         groups: dict[str, list[ManifestEntry]] = defaultdict(list)
         for entry in entries:
             self.token.check()
@@ -209,7 +212,12 @@ class ConsolidationService:
             chunks: list[list[ManifestEntry]] = []
             for entry in self._sort(group_entries):
                 self.token.check()
-                size = sizes[entry.document_key] = len(self._page_text(entry))
+                try:
+                    size = sizes[entry.document_key] = len(self._page_text(entry))
+                except ManifestError as exc:
+                    self.skipped.append(str(exc))
+                    self.log(f"[Consolidação] Documento ignorado: {exc}")
+                    continue
                 projected = chars + size + self._estimate_overhead([*current, entry])
                 if current and (
                     len(current) >= self.project.consolidation.max_pages
@@ -237,6 +245,8 @@ class ConsolidationService:
                         "document_keys": [entry.document_key for entry in chunk],
                     }
                 )
+        if not result and self.skipped:
+            raise ManifestError(self.skipped[0])
         return result
 
     def run(self) -> dict[str, Any]:
@@ -370,6 +380,7 @@ class ConsolidationService:
             "output_dir": str(self.output_dir),
             "packages": len(package_records),
             "pages": sum(item["pages"] for item in package_records),
+            "skipped_documents": len(self.skipped),
             "duration_seconds": round(time.monotonic() - started, 2),
         }
         self.log("Consolidação concluída.")
