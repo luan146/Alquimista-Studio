@@ -171,6 +171,7 @@ def test_listing_missing_most_documents_is_not_taken_as_removals(sync_env):
         KnowledgeDocumentMetadata(id=f"doc{n}", container_id="c1", title=f"Doc {n}", updated_at=stamp, etag="v1")
         for n in range(1, 13)
     ]
+    runtime.selected_page_ids = [f"src1:c1:doc{n}" for n in range(1, 13)]
     service.apply_sync(service.plan_sync([runtime], scope=SyncScope.PROJECT), [runtime])
 
     connector.docs_meta["c1"] = connector.docs_meta["c1"][:1]
@@ -217,7 +218,7 @@ def test_sync_detects_updated_new_and_removed(sync_env):
     # Remote changes:
     # - doc1 is updated (new updated_at & etag)
     # - doc2 is removed from remote
-    # - doc3 is added to remote
+    # - doc3 is added to remote under the selected doc1
     connector.docs_meta["c1"] = [
         KnowledgeDocumentMetadata(
             id="doc1",
@@ -229,6 +230,7 @@ def test_sync_detects_updated_new_and_removed(sync_env):
         KnowledgeDocumentMetadata(
             id="doc3",
             container_id="c1",
+            parent_id="doc1",
             title="Doc 3",
             updated_at=datetime(2026, 8, 2, 12, 0, 0, tzinfo=timezone.utc),
             etag="v1",
@@ -370,3 +372,56 @@ def test_sync_scope_handles_sources_rooted_by_id(tmp_path: Path) -> None:
     assert service._matches_source_scope(source, "DOC", "200")
     assert not service._matches_source_scope(source, "DOC", "100")
     assert not service._matches_source_scope(source, "OTHER", "200")
+
+
+def _meta(doc_id: str, parent_id: str | None = None) -> KnowledgeDocumentMetadata:
+    return KnowledgeDocumentMetadata(
+        id=doc_id,
+        container_id="c1",
+        parent_id=parent_id,
+        title=doc_id,
+        updated_at=datetime(2026, 8, 1, 12, 0, 0, tzinfo=timezone.utc),
+        etag="v1",
+    )
+
+
+@pytest.mark.parametrize("scope", [SyncScope.SELECTION, SyncScope.PROJECT, SyncScope.SOURCE])
+def test_sync_only_adds_new_documents_under_selected_pages(sync_env, scope):
+    service: IncrementalSyncService = sync_env["service"]
+    runtime: SourceRuntime = sync_env["runtime"]
+    connector: MockConnector = sync_env["connector"]
+    runtime.selected_page_ids = ["src1:c1:doc1"]
+    connector.docs_meta["c1"] = [
+        _meta("doc1"),
+        _meta("other"),  # same space, never selected
+        _meta("child", parent_id="doc1"),
+        _meta("grandchild", parent_id="child"),
+        _meta("other_child", parent_id="other"),
+    ]
+
+    plan = service.plan_sync([runtime], scope=scope, target_source_id="src1")
+
+    new_ids = {item.document_id for item in plan.items if item.action == SyncItemAction.NEW}
+    assert new_ids == {"doc1", "child", "grandchild"}
+
+
+def test_sync_does_not_remove_extracted_documents_outside_selection(sync_env):
+    service: IncrementalSyncService = sync_env["service"]
+    runtime: SourceRuntime = sync_env["runtime"]
+    service.apply_sync(service.plan_sync([runtime], target_source_id="src1"), [runtime])
+    runtime.selected_page_ids = ["src1:c1:doc1"]
+
+    plan = service.plan_sync([runtime], target_source_id="src1")
+
+    assert plan.removed_count == 0
+    assert plan.unchanged_count == 2
+
+
+def test_sync_without_selection_keeps_whole_configured_scope(sync_env):
+    service: IncrementalSyncService = sync_env["service"]
+    runtime: SourceRuntime = sync_env["runtime"]
+    runtime.selected_page_ids = []
+
+    plan = service.plan_sync([runtime], target_source_id="src1")
+
+    assert plan.new_count == 2

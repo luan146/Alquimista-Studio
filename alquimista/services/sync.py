@@ -199,6 +199,32 @@ class IncrementalSyncService:
                 return False
         return True
 
+    def _selected_keys(self, runtime: SourceRuntime) -> set[str]:
+        """Selected document keys of a source; legacy keys keep only the document id."""
+        keys = self.project.selected_keys_for(runtime.source.id) | set(runtime.selected_page_ids)
+        return {key if key.count(":") == 2 and ":__legacy__:" not in key else key.rsplit(":", 1)[-1] for key in keys}
+
+    @staticmethod
+    def _under_selection(
+        source_id: str,
+        container_id: str,
+        docs: list[KnowledgeDocumentMetadata],
+        selected: set[str],
+    ) -> set[str]:
+        """Ids of documents that are selected or descend from a selected document."""
+        parents = {str(meta.id): str(meta.parent_id) if meta.parent_id else None for meta in docs}
+        covered: set[str] = set()
+        for doc_id in parents:
+            current: str | None = doc_id
+            seen: set[str] = set()
+            while current is not None and current not in seen:
+                if current in covered or current in selected or f"{source_id}:{container_id}:{current}" in selected:
+                    covered.add(doc_id)
+                    break
+                seen.add(current)
+                current = parents.get(current)
+        return covered
+
     def plan_sync(
         self,
         runtimes: list[SourceRuntime],
@@ -244,6 +270,7 @@ class IncrementalSyncService:
                 continue
 
             source = runtime.source
+            selected_keys = self._selected_keys(runtime)
             self.log(f"[{r_idx}/{total_runtimes}] Inspecionando estado remoto da fonte: {source.name}...")
 
             # 1. Discover target containers according to SourceConfig
@@ -283,6 +310,14 @@ class IncrementalSyncService:
                     self.log(f"Aviso: Erro ao listar documentos no contêiner {container_id}: {exc}")
                     continue
 
+                # A new document joins only when it is selected or sits under a
+                # selected page; without any selection the configured scope rules.
+                covered = (
+                    self._under_selection(source.id, container_id, raw_docs, selected_keys)
+                    if selected_keys
+                    else None
+                )
+
                 # Process remote metadata items
                 for meta in raw_docs:
                     self.token.check()
@@ -294,6 +329,9 @@ class IncrementalSyncService:
                     discovered_keys.add(doc_key)
 
                     old_entry = existing_by_key.get(doc_key) or existing_by_alias.get(doc_key)
+                    is_new = old_entry is None or not old_entry.active
+                    if is_new and covered is not None and doc_id not in covered:
+                        continue
                     change = self._classify_document(
                         runtime=runtime,
                         container_id=container_id,
