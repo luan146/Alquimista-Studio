@@ -486,6 +486,7 @@ class SegmentedControl(QFrame):
         layout.setSpacing(8 if tiles else 2)
         self._group = QButtonGroup(self)
         self._values: list[Any] = []
+        self._icons: list[QIcon | None] = []
         for index, option in enumerate(options):
             label, value = option[0], option[1]
             icon = option[2] if len(option) > 2 else None
@@ -504,6 +505,7 @@ class SegmentedControl(QFrame):
             self._group.addButton(segment, index)
             layout.addWidget(segment)
             self._values.append(value)
+            self._icons.append(icon)
         if vertical:
             layout.addStretch()
         self._group.idClicked.connect(lambda index: self.changed.emit(self._values[index]))
@@ -544,6 +546,29 @@ class SegmentedControl(QFrame):
             row = combo.findData(value)
             item = model.item(row) if hasattr(model, "item") and row >= 0 else None
             segment.setHidden(item is not None and not item.isEnabled())
+        self._fit_icons()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._fit_icons()
+
+    def _fit_icons(self) -> None:
+        """Too narrow for icon + text in every pill (e.g. auth modes at 1050 px): drop the icons, keep the text."""
+        layout = self.layout()
+        if layout is None or self.property("vertical") or self.property("tiles"):
+            return
+        shown = [(segment, icon) for segment, icon in zip(self.buttons(), self._icons, strict=True)
+                 if not segment.isHidden()]
+        margins = layout.contentsMargins()
+        needed = margins.left() + margins.right() + layout.spacing() * max(len(shown) - 1, 0)
+        for segment, icon in shown:
+            # sizeHint without the icon when it is currently dropped; add it back to measure the full pill.
+            missing = icon is not None and segment.icon().isNull()
+            needed += segment.sizeHint().width() + (segment.iconSize().width() + 4 if missing else 0)
+        fits = needed <= self.width()
+        for segment, icon in shown:
+            if icon is not None:
+                segment.setIcon(icon if fits else QIcon())
 
 
 def page_header(title: str, subtitle: str, emoji: str) -> tuple[QWidget, QVBoxLayout]:

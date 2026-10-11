@@ -207,6 +207,8 @@ class WorkflowMixin(WindowBase):
         self._refresh_execute_blocker()
         if current == "dashboard":
             self._refresh_home()
+        if hasattr(self, "_refresh_accounts"):
+            self._refresh_accounts()
 
     def _schedule_workflow_refresh(self) -> None:
         # Edits fire many signals; refresh the sidebar once they settle.

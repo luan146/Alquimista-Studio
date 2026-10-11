@@ -93,7 +93,7 @@ def build_sources_page(window: Any) -> QWidget:
 
         listing, listing_layout = card()
         listing_title = QLabel("Fontes do projeto")
-        listing_title.setStyleSheet("font-size: 13pt; font-weight: 700;")
+        listing_title.setObjectName("sectionTitle")
         listing_layout.addWidget(listing_title)
         window.source_table = QTableWidget(0, 6)
         window.source_table.setHorizontalHeaderLabels(
@@ -104,6 +104,8 @@ def build_sources_page(window: Any) -> QWidget:
         window.source_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         window.source_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         window.source_table.verticalHeader().setVisible(False)
+        window.source_table.verticalHeader().setDefaultSectionSize(40)
+        window.source_table.setShowGrid(False)
         window.source_table.horizontalHeader().setStretchLastSection(False)
         source_header = window.source_table.horizontalHeader()
         source_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)

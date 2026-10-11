@@ -2,19 +2,31 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from PySide6.QtCore import QSignalBlocker, QTimer
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtCore import QSignalBlocker, Qt, QTimer
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout
 
 from ...auth import browser_login, delete_session
-from ...client import session_path
 from ...models import AuthMode, SourceConfig
 from ...runtime import CancellationToken
-from ...session_store import delete_secret, save_secret
+from ...session_store import delete_secret, save_secret, session_exists, session_path
 from ..components import inform
 from ..i18n import translate_text
+from ..icons import svg_icon
 from . import WindowBase
+
+
+def initials(text: str) -> str:
+    """'luan@empresa.com' -> 'LU', 'Wiki de Suporte' -> 'WS' (short words are skipped)."""
+    words = [word for word in re.split(r"[^\w]+", text.split("@")[0]) if word]
+    long_words = [word for word in words if len(word) > 2] or words
+    if not long_words:
+        return "?"
+    if len(long_words) == 1:
+        return long_words[0][:2].upper()
+    return (long_words[0][0] + long_words[1][0]).upper()
 
 
 class ConnectionMixin(WindowBase):
@@ -37,6 +49,14 @@ class ConnectionMixin(WindowBase):
     connection_form: Any
     login_button: Any
     remove_session_button: Any
+    auth_mode_pills: Any
+    account_card: Any
+    account_avatar: Any
+    account_name: Any
+    account_status: Any
+    accounts_list_layout: Any
+    _source_connection_badge: Any
+    _refresh_workflow_state: Any
     session_status: Any
     src_root_mode: Any
     current_source: Any
@@ -93,6 +113,9 @@ class ConnectionMixin(WindowBase):
             label = self.connection_form.labelForField(field)
             if label:
                 label.setVisible(visible)
+        if hasattr(self, "auth_mode_pills"):
+            # Callers change auth_mode under QSignalBlocker, which bypasses the pills' binding.
+            self.auth_mode_pills.set_value(self.auth_mode.currentData())
 
 
 
@@ -206,26 +229,109 @@ class ConnectionMixin(WindowBase):
 
     def remove_session(self) -> None:
         source = self.source_by_combo(self.connection_source)
-        if not source:
+        if source:
+            self._sign_out(source.id)
+
+    def _sign_out(self, source_id: str) -> None:
+        source = next((item for item in self.project.sources if item.id == source_id), None)
+        if source is None:
             return
         if (
             QMessageBox.question(
                 self,
-                translate_text("Apagar sessão"),
-                translate_text("Apagar os cookies salvos para esta fonte?"),
+                translate_text("Sair da conta"),
+                translate_text(
+                    "Sair de {name}? A sessão do navegador e o token lembrado serão apagados deste computador."
+                ).format(name=source.name),
             )
             != QMessageBox.StandardButton.Yes
         ):
             return
         delete_session(source)
+        delete_secret(source.id)
         self.secrets.pop(source.id)
         self.connected_sources.discard(source.id)
-        self.connection_states[source.id] = translate_text(
-            "○ Sessão removida — escolha um modo de acesso"
-        )
-        self.auth_secret.clear()
-        self._connection_source_changed()
+        self.connection_states[source.id] = translate_text("○ Você saiu — escolha um modo de acesso")
+        current = self.source_by_combo(self.connection_source)
+        if current is not None and current.id == source.id:
+            self.auth_secret.clear()
+            self._connection_source_changed()
+        self._refresh_workflow_state()
 
+    def _account_identity(self, source: SourceConfig) -> tuple[str, str]:
+        if source.source_type == "local_files":
+            return "📁", translate_text("Pasta local")
+        if source.auth_mode == AuthMode.PUBLIC:
+            return "🌐", translate_text("Acesso público")
+        if source.username:
+            return initials(source.username), source.username
+        if source.auth_mode == AuthMode.BROWSER:
+            return initials(source.name), translate_text("Sessão do navegador")
+        return initials(source.name), translate_text("Token salvo")
+
+    def _has_saved_login(self, source: SourceConfig) -> bool:
+        # File existence only: this runs on every workflow refresh, so no DPAPI decrypt here.
+        return (
+            source.id in self.connected_sources
+            or bool(self.secrets.get(source.id, ""))
+            or session_exists(source.id)
+            or session_path(source.id, "secret").exists()
+        )
+
+    def _avatar_style(self, label: QLabel, text: str) -> None:
+        from ..space_cards import tile_colors
+
+        background, foreground = tile_colors(text)
+        label.setText(text)
+        label.setStyleSheet(
+            f"background: {background}; color: {foreground}; border-radius: 18px; font-weight: 700;"
+        )
+
+    def _refresh_accounts(self) -> None:
+        if not hasattr(self, "account_card"):
+            return
+        source = self.source_by_combo(self.connection_source)
+        connected = source is not None and source.id in self.connected_sources
+        self.account_card.setVisible(connected)
+        self.login_button.setVisible(not connected)
+        if source is not None and connected:
+            badge, name = self._account_identity(source)
+            self._avatar_style(self.account_avatar, badge)
+            self.account_name.setText(name)
+            self.account_status.setText(translate_text("● Conectado agora"))
+        layout = self.accounts_list_layout
+        while layout.count():
+            widget = layout.takeAt(0).widget()
+            if widget is not None:
+                widget.hide()  # deleteLater only runs back in the event loop; don't paint stale rows
+                widget.deleteLater()
+        for each in self.project.sources:
+            row = QFrame()
+            row.setObjectName("optionRow")
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(2, 6, 2, 6)
+            avatar = QLabel()
+            avatar.setFixedSize(36, 36)
+            avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            badge, name = self._account_identity(each)
+            self._avatar_style(avatar, badge)
+            row_layout.addWidget(avatar)
+            text = QVBoxLayout()
+            text.setSpacing(0)
+            title = QLabel(name)
+            title.setObjectName("optionTitle")
+            detail = QLabel(f"{each.name} · {self._source_connection_badge(each)}")
+            detail.setObjectName("subtitle")
+            text.addWidget(title)
+            text.addWidget(detail)
+            row_layout.addLayout(text, 1)
+            if each.auth_mode != AuthMode.PUBLIC and each.source_type != "local_files" and self._has_saved_login(each):
+                leave = QPushButton(translate_text("Sair"))
+                leave.setProperty("ghost", True)
+                leave.setProperty("danger", True)
+                leave.clicked.connect(lambda _checked=False, sid=each.id: self._sign_out(sid))
+                row_layout.addWidget(leave)
+            layout.addWidget(row)
 
     def _connection_source_changed(self) -> None:
         """Load a source without converting public access into browser login."""
@@ -297,7 +403,14 @@ class ConnectionMixin(WindowBase):
                     name=descriptor.display_name
                 )
             )
-            self.remove_session_button.setEnabled(session_path(source.id).exists())
+            icon_name = {
+                AuthMode.PUBLIC: "publico", AuthMode.BROWSER: "navegador",
+                AuthMode.BASIC: "usuario", AuthMode.BEARER: "token",
+            }.get(source.auth_mode, "chave")
+            self.login_button.setIcon(svg_icon("token" if bearer_only else icon_name, 22))
+        if hasattr(self, "auth_mode_pills"):
+            self.auth_mode_pills.sync_enabled_from(self.auth_mode)
+        self._refresh_accounts()
 
     def enter_confluence(self) -> None:
         """Dispatch the action according to the currently selected auth mode."""

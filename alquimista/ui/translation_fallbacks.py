@@ -960,6 +960,20 @@ SUPPLEMENTAL_TRANSLATIONS: dict[str, dict[str, str]] = {
     "Cancelado": {"en": "Cancelled", "es": "Cancelado"},
     "Registro copiado.": {"en": "Log copied.", "es": "Registro copiado."},
     "Se você cancelar ou fechar o programa, o que já foi extraído fica salvo e a próxima execução continua do resto.": {"en": "If you cancel or close the program, what was already extracted is kept and the next run continues from there.", "es": "Si cancela o cierra el programa, lo ya extraído se conserva y la próxima ejecución continúa desde ahí."},
+    "Público": {"en": "Public", "es": "Público"},
+    "Navegador": {"en": "Browser", "es": "Navegador"},
+    "Usuário e token": {"en": "User and token", "es": "Usuario y token"},
+    "Token pessoal": {"en": "Personal token", "es": "Token personal"},
+    "Sair": {"en": "Sign out", "es": "Salir"},
+    "Sair da conta": {"en": "Sign out", "es": "Cerrar sesión"},
+    "Sair de {name}? A sessão do navegador e o token lembrado serão apagados deste computador.": {"en": "Sign out of {name}? The browser session and the remembered token will be deleted from this computer.", "es": "¿Salir de {name}? La sesión del navegador y el token recordado se borrarán de este equipo."},
+    "○ Você saiu — escolha um modo de acesso": {"en": "○ Signed out — choose an access mode", "es": "○ Sesión cerrada — elija un modo de acceso"},
+    "Pasta local": {"en": "Local folder", "es": "Carpeta local"},
+    "Acesso público": {"en": "Public access", "es": "Acceso público"},
+    "Token salvo": {"en": "Saved token", "es": "Token guardado"},
+    "● Conectado agora": {"en": "● Connected now", "es": "● Conectado ahora"},
+    "Contas conectadas": {"en": "Connected accounts", "es": "Cuentas conectadas"},
+    "Apaga a sessão do navegador e o token lembrado deste computador.": {"en": "Deletes the browser session and the remembered token from this computer.", "es": "Borra la sesión del navegador y el token recordado de este equipo."},
 }
 
 

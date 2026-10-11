@@ -9,7 +9,7 @@ import pytest
 from PySide6.QtCore import QPoint, QSettings, Qt
 from PySide6.QtWidgets import QApplication, QComboBox, QPushButton, QStackedWidget, QWidget
 
-from alquimista.models import MarkdownOptions, SourceConfig
+from alquimista.models import AuthMode, MarkdownOptions, SourceConfig
 from alquimista.ui.components import AlchemistIconAtlas, SegmentedControl, chip
 from alquimista.ui.controllers.operation_controller import log_level
 from alquimista.ui.i18n import LanguageManager
@@ -23,6 +23,7 @@ from alquimista.ui.icons import (
     svg_pixmap,
 )
 from alquimista.ui.main_window import MainWindow
+from alquimista.ui.mixins.connection_mixin import initials
 from alquimista.ui.space_cards import SpaceCardDelegate
 from alquimista.ui.theme import DARK, LIGHT, apply_theme, current_colors, stylesheet
 from alquimista.ui.tree_models import relative_timestamp
@@ -372,3 +373,78 @@ def test_other_jobs_do_not_touch_a_finished_run(window: MainWindow, monkeypatch:
     assert window.execute_stack.currentIndex() == 1
     assert window.run_count.text() == "3 de 18" and "15" in window.run_left_chip.text()
     assert window.log_text.toPlainText() == before
+
+
+def test_initials() -> None:
+    assert initials("luan@empresa.com") == "LU"
+    assert initials("Wiki de Suporte") == "WS"
+    assert initials("") == "?"
+
+
+def _token_source(window: MainWindow) -> SourceConfig:
+    source = SourceConfig(id="notion", name="Notion RH", source_type="notion_api", base_url="https://api.notion.com",
+                          auth_mode=AuthMode.BEARER, remember_secret=True)
+    window.project.sources = [source]
+    window._refresh_source_widgets()
+    return source
+
+
+def test_bearer_only_source_shows_only_the_token_pill(window: MainWindow) -> None:
+    _token_source(window)
+    window._show_page("sources")
+    visible = [b.text() for b in window.auth_mode_pills.buttons() if b.isVisibleTo(window)]
+    checked = [b.text() for b in window.auth_mode_pills.buttons() if b.isChecked()]
+    assert visible == ["Token pessoal"] and checked == ["Token pessoal"]
+    assert window.auth_mode_pills.value() == window.auth_mode.currentData()
+
+
+def test_connected_account_card_replaces_the_login_button(window: MainWindow) -> None:
+    source = _token_source(window)
+    window._show_page("sources")
+    assert window.login_button.isVisibleTo(window) and not window.account_card.isVisibleTo(window)
+    window.connected_sources.add(source.id)
+    window._refresh_accounts()
+    assert window.account_card.isVisibleTo(window) and not window.login_button.isVisibleTo(window)
+    assert window.account_name.text() == "Token salvo"
+    assert window.account_avatar.text() == "NO"
+
+
+def test_accounts_list_shows_every_source(window: MainWindow) -> None:
+    _token_source(window)
+    window.project.sources.append(SourceConfig(id="docs", name="Docs", source_type="confluence_rest",
+                                               base_url="https://docs.example.com", auth_mode=AuthMode.PUBLIC))
+    window._refresh_source_widgets()
+    window._refresh_accounts()
+    rows = [window.accounts_list_layout.itemAt(i).widget() for i in range(window.accounts_list_layout.count())]
+    assert len([row for row in rows if row is not None]) == 2
+
+
+def test_sign_out_deletes_remembered_token(window: MainWindow, monkeypatch: pytest.MonkeyPatch,
+                                           tmp_path: Path) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    from alquimista import session_store
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = _token_source(window)
+    session_store.save_secret(source.id, "segredo-falso")
+    window.secrets.set(source.id, "segredo-falso")
+    window.connected_sources.add(source.id)
+    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Yes)
+    window._sign_out(source.id)
+    assert session_store.load_secret(source.id) == ""
+    assert window.secrets.get(source.id, "") == ""
+    assert source.id not in window.connected_sources
+
+
+def test_segmented_control_drops_icons_before_clipping_text(qapp) -> None:
+    from alquimista.ui.icons import svg_icon
+    holder = QWidget()  # a child (not a window) can be squeezed below its layout's minimum
+    control = SegmentedControl([(f"Opção longa {n}", n, svg_icon("token", 18)) for n in range(4)], parent=holder)
+    holder.show()
+    control.resize(control.sizeHint().width() - 20, 40)
+    qapp.processEvents()
+    assert all(b.icon().isNull() for b in control.buttons())
+    assert all(b.text().startswith("Opção longa") for b in control.buttons())
+    control.resize(control.sizeHint().width() + 200, 40)
+    qapp.processEvents()
+    assert not any(b.icon().isNull() for b in control.buttons())

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
@@ -14,7 +15,14 @@ from PySide6.QtWidgets import (
 )
 
 from ...models import AuthMode
-from ..components import AlchemistIconAtlas, VisibleArrowComboBox, animated_button
+from ..components import (
+    AlchemistIconAtlas,
+    SegmentedControl,
+    VisibleArrowComboBox,
+    button,
+    section_title,
+)
+from ..icons import svg_icon
 
 
 def build_connection_panel(window: Any) -> QFrame:
@@ -27,7 +35,7 @@ def build_connection_panel(window: Any) -> QFrame:
     panel_layout.setSpacing(14)
 
     title = QLabel("Conexão")
-    title.setStyleSheet("font-size: 13pt; font-weight: 700;")
+    title.setObjectName("sectionTitle")
     panel_layout.addWidget(title)
     window.connection_title = QLabel("Selecione uma fonte na lista.")
     window.connection_title.setObjectName("subtitle")
@@ -47,6 +55,7 @@ def build_connection_panel(window: Any) -> QFrame:
     window.auth_mode = VisibleArrowComboBox()
     window.auth_mode.setObjectName("connectionCombo")
     window.auth_mode.setMinimumHeight(50)
+    window.auth_mode.setVisible(False)
     for label, mode, icon_index in [
         ("Acesso público", AuthMode.PUBLIC, 0),
         ("Login pelo navegador (recomendado)", AuthMode.BROWSER, 1),
@@ -60,6 +69,15 @@ def build_connection_panel(window: Any) -> QFrame:
         lambda: window._auth_mode_changed(str(window.auth_mode.currentData()))
     )
     panel_layout.addWidget(window.auth_mode)
+    window.auth_mode_pills = SegmentedControl(
+        [
+            ("Público", AuthMode.PUBLIC.value, svg_icon("publico", 18)),
+            ("Navegador", AuthMode.BROWSER.value, svg_icon("navegador", 18)),
+            ("Usuário e token", AuthMode.BASIC.value, svg_icon("usuario", 18)),
+            ("Token pessoal", AuthMode.BEARER.value, svg_icon("token", 18)),
+        ]
+    ).bind_combo(window.auth_mode)
+    panel_layout.addWidget(window.auth_mode_pills)
 
     form = QFormLayout()
     form.setVerticalSpacing(10)
@@ -75,21 +93,10 @@ def build_connection_panel(window: Any) -> QFrame:
     )
     window.session_status = QLabel("○ Nenhuma sessão salva")
     window.session_status.setObjectName("subtitle")
-    def auth_field_label(icon_index: int, text: str) -> QWidget:
-        label = QWidget()
-        label_layout = QHBoxLayout(label)
-        label_layout.setContentsMargins(0, 0, 8, 0)
-        label_layout.setSpacing(6)
-        icon = QLabel()
-        icon.setPixmap(AlchemistIconAtlas.auth_pixmap(icon_index, 20))
-        label_layout.addWidget(icon)
-        label_layout.addWidget(QLabel(text))
-        return label
-
-    form.addRow(auth_field_label(2, "Usuário ou e-mail"), window.auth_user)
-    form.addRow(auth_field_label(4, "Senha, token ou PAT"), window.auth_secret)
+    form.addRow("Usuário ou e-mail", window.auth_user)
+    form.addRow("Senha, token ou PAT", window.auth_secret)
     form.addRow("", window.remember_secret)
-    form.addRow(auth_field_label(6, "Sessão do navegador"), window.session_status)
+    form.addRow("Sessão do navegador", window.session_status)
     panel_layout.addLayout(form)
 
     window.connection_state = QLabel("● Modo de acesso não selecionado")
@@ -97,34 +104,36 @@ def build_connection_panel(window: Any) -> QFrame:
     window.connection_state.setAccessibleName("Estado atual da conexão")
     window.connection_state.setWordWrap(True)
 
-    window.login_button = animated_button(
-        "🔐 Entrar na fonte",
-        window.enter_confluence,
-        primary=True,
-        accent="#42B8BE",
-    )
-    window.remove_session_button = animated_button(
-        "🗑 Apagar sessão",
-        window.remove_session,
-        danger=True,
-        accent="#F17882",
-    )
-    connection_actions = QVBoxLayout()
-    connection_actions.setContentsMargins(0, 4, 0, 4)
-    connection_actions.setSpacing(12)
-    # Keep authentication actions together and reserve the destructive action
-    # for the saved browser session.
-    for action in (
-        window.login_button,
-        window.remove_session_button,
-    ):
-        action.setMinimumWidth(0)
-        action.setMinimumHeight(48)
-        connection_actions.addWidget(action)
-    panel_layout.addLayout(connection_actions)
+    window.login_button = button("🔐 Entrar na fonte", window.enter_confluence)
+    window.login_button.setObjectName("googleButton")
+    window.login_button.setIconSize(QSize(22, 22))
+    window.login_button.setMinimumHeight(48)
+    panel_layout.addWidget(window.login_button)
 
-    # Spacer to prevent overlap with connection state label
-    panel_layout.addSpacing(12)
+    window.account_card = QFrame()
+    window.account_card.setObjectName("accountCard")
+    account = QHBoxLayout(window.account_card)
+    account.setContentsMargins(12, 10, 12, 10)
+    window.account_avatar = QLabel()
+    window.account_avatar.setFixedSize(36, 36)
+    window.account_avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    account.addWidget(window.account_avatar)
+    who = QVBoxLayout()
+    who.setSpacing(0)
+    window.account_name = QLabel()
+    window.account_name.setObjectName("optionTitle")
+    window.account_status = QLabel()
+    window.account_status.setObjectName("subtitle")
+    who.addWidget(window.account_name)
+    who.addWidget(window.account_status)
+    account.addLayout(who, 1)
+    window.remove_session_button = button("Sair", window.remove_session, danger=True)
+    window.remove_session_button.setProperty("ghost", True)
+    window.remove_session_button.setToolTip("Apaga a sessão do navegador e o token lembrado deste computador.")
+    account.addWidget(window.remove_session_button)
+    window.account_card.setVisible(False)
+    panel_layout.addWidget(window.account_card)
+
     panel_layout.addWidget(window.connection_state)
 
     notice = QLabel(
@@ -134,5 +143,14 @@ def build_connection_panel(window: Any) -> QFrame:
     notice.setObjectName("subtitle")
     notice.setWordWrap(True)
     panel_layout.addWidget(notice)
+
+    accounts_title = section_title("Contas conectadas")
+    panel_layout.addSpacing(8)
+    panel_layout.addWidget(accounts_title)
+    accounts_holder = QWidget()
+    window.accounts_list_layout = QVBoxLayout(accounts_holder)
+    window.accounts_list_layout.setContentsMargins(0, 0, 0, 0)
+    window.accounts_list_layout.setSpacing(0)
+    panel_layout.addWidget(accounts_holder)
     panel_layout.addStretch(1)
     return panel

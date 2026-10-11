@@ -83,6 +83,8 @@ class UxMixin(WindowBase):
         self.ui_settings.setValue("preferences/theme", value)
         self.ui_settings.sync()
         apply_theme(QApplication.instance(), value)
+        if hasattr(self, "_refresh_accounts"):
+            self._refresh_accounts()  # avatar colours are fixed per theme
 
     def _ui_scale_preference(self) -> float:
         try:
